@@ -108,7 +108,7 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
                             skip_reason = None
                             break
                 
-                # NEW: Dtype filtering - skip unsupported dtypes
+                # Dtype filtering - skip unsupported dtypes
                 if test_enabled:
                     dtype_str = cls._extract_dtype_from_name(method_name)
                     if dtype_str:
@@ -150,11 +150,21 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
     def _parse_dtype(dtype_str):
         """Convert dtype string to torch.dtype"""
         dtype_map = {
-            'float16': torch.float16, 'float32': torch.float32, 'float64': torch.float64,
+            'float16': torch.float16,
+            'float32': torch.float32, 
+            'float64': torch.float64,
             'bfloat16': torch.bfloat16,
-            'int8': torch.int8, 'int16': torch.int16, 'int32': torch.int32, 'int64': torch.int64,
-            'uint8': torch.uint8, 'uint16': torch.uint16, 'uint32': torch.uint32, 'uint64': torch.uint64,
-            'complex32': torch.complex32, 'complex64': torch.complex64, 'complex128': torch.complex128,
+            'int8': torch.int8,
+            'int16': torch.int16,
+            'int32': torch.int32,
+            'int64': torch.int64,
+            'uint8': torch.uint8,
+            'uint16': torch.uint16,
+            'uint32': torch.uint32,
+            'uint64': torch.uint64,
+            'complex32': torch.complex32,
+            'complex64': torch.complex64,
+            'complex128': torch.complex128,
             'bool': torch.bool,
         }
         
