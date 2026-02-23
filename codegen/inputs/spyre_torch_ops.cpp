@@ -493,6 +493,18 @@ at::Tensor &spyre__fill_Scalar(at::Tensor &self, const at::Scalar &other) {
   return self;
 }
 
+at::Tensor& spyre__normal_(at::Tensor& self, double mean, double std) {
+  DEBUGINFO("Fallback normal_ for Spyre");
+
+  // Generate on CPU
+  at::Tensor cpu = at::empty(self.sizes(), self.options().device(at::kCPU));
+  cpu.normal_(mean, std);
+
+  // Copy to Spyre
+  self.copy_(cpu.to(self.device()));
+  return self;
+}
+
 TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   m.impl("view", TORCH_FN(spyre__view));
   m.impl("_local_scalar_dense", TORCH_FN(spyre___local_scalar_dense));
@@ -509,6 +521,8 @@ TORCH_LIBRARY_IMPL(aten, PrivateUse1, m) {
   m.impl("cumsum", TORCH_FN(spyre__cumsum_default));
   m.impl("clone", TORCH_FN(spyre__clone_default));
   m.impl("fill_.Scalar", TORCH_FN(spyre__fill_Scalar));
+  m.impl("normal_", TORCH_FN(spyre__normal_));
+
 }
 
 }  // namespace
