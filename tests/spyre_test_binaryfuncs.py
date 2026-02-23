@@ -5,11 +5,11 @@ from functools import wraps
 
 DEFAULT_FLOATING_PRECISION = 1e-3
 
-# START SMALL - Enable just 2 tests initially
 ENABLED_TESTS = {
     "TestBinaryUfuncs": {
-        "test_add",
-        "test_bitwise_ops",
+        # "test_add", 
+        # "test_bitwise_ops",
+        "test_pow",
         # "test_add_broadcast_empty",                 
         # "test_reference_numerics",
         # "test_lcm", # lcm.out not supported in spyre
@@ -44,12 +44,14 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
     device_type = "privateuse1"
     precision = DEFAULT_FLOATING_PRECISION
     
-    # Unsupported dtypes - will be automatically skipped
+    # Unsupported dtypes 
     unsupported_dtypes = {
         torch.complex32,
         torch.complex64,
         torch.complex128,
+        
         torch.bfloat16,
+
         torch.int16,
         torch.int32,
 
