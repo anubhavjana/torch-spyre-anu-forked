@@ -11,7 +11,8 @@ ENABLED_TESTS = {
         # "test_add",
         # "test_add_broadcast_empty",                 
         # "test_reference_numerics",
-        "test_lcm",
+        # "test_lcm",
+        "test_cdiv",
     }
 }
 
