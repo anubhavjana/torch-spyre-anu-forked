@@ -49,6 +49,8 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
         torch.complex128,
         torch.bfloat16,
         torch.int16,
+        torch.int32,
+
     }
 
     @classmethod
