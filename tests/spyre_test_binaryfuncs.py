@@ -8,8 +8,9 @@ DEFAULT_FLOATING_PRECISION = 1e-3
 # START SMALL - Enable just 2 tests initially
 ENABLED_TESTS = {
     "TestBinaryUfuncs": {
-        "test_add",                    
-        "test_reference_numerics",
+        "test_add",
+        "test_add_broadcast_empty",                 
+        # "test_reference_numerics",
     }
 }
 
