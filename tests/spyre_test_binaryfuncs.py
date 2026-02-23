@@ -9,10 +9,11 @@ DEFAULT_FLOATING_PRECISION = 1e-3
 ENABLED_TESTS = {
     "TestBinaryUfuncs": {
         "test_add",
+        "test_bitwise_ops",
         # "test_add_broadcast_empty",                 
         # "test_reference_numerics",
-        # "test_lcm", # lcm.out not supported
-        # "test_cdiv", # removing, only for CPU
+        # "test_lcm", # lcm.out not supported in spyre
+        # "test_cdiv", # only for CPU
     }
 }
 
