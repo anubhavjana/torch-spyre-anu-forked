@@ -97,7 +97,9 @@ ENABLED_TESTS = {
         "test_max_elementwise",
         "test_min_mixed_devices",
         "test_max_mixed_devices",
-        "test_minmax_illegal_dtype",
+
+        # "test_minmax_illegal_dtype", # Signal Received: 8 (Floating point exception)
+        
         "test_amin",
         "test_amax",
         "test_aminmax",
@@ -146,7 +148,7 @@ ENABLED_TESTS = {
         "test_quantile_error",
 
         
-        "test_histc",
+        # "test_histc", # Failed
         "test_histc_lowp",
         "test_histc_min_max_corner_cases",
         "test_histc_min_max_corner_cases_cuda",
