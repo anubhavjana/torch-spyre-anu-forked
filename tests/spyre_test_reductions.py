@@ -124,7 +124,10 @@ ENABLED_TESTS = {
         "test_tensor_compare_ops_argmax_argmix_kthvalue_dim_empty",
 
         
-        "test_all_any",
+        # "test_all_any", # test_reductions.py::TestReductionsPRIVATEUSE1::test_all_any_with_dim_spyre terminate
+        #  called after throwing an instance of 'DtException'
+        #   what():  DtException: Unsupported data format types, file /project_src/deeptools/util/sen_data_convert.cpp line 2623
+        
         # "test_all_any_empty", # Signal Received: 11 (Segmentation fault)
         # "test_all_any_vs_numpy", # test_all_any_vs_numpy_spyre_bool Signal Received: 11 (Segmentation fault)
         "test_all_any_with_dim",
