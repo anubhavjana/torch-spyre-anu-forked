@@ -223,7 +223,7 @@ def spyre__unsqueeze(self: torch.Tensor, dim: int) -> torch.Tensor:
     return result
 
 
-# # INSERT_CODEGEN_HERE
+# INSERT_CODEGEN_HERE
 # @torch.library.register_kernel("aten::abs", ["spyre"])
 # def spyre__abs_default(self: torch.Tensor) -> torch.Tensor:
 #     # Standard variant
