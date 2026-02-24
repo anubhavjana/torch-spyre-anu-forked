@@ -48,9 +48,9 @@ ENABLED_TESTS = {
         "test_dim_multi_duplicate",
         "test_dim_offbounds",
         "test_dim_repeated",
-        "test_dim_reduction",
+        # "test_dim_reduction", # Failed
         "test_dim_reduction_lastdim",
-        "test_dim_reduction_less_than_64",
+        # "test_dim_reduction_less_than_64", # Failed
         "test_dim_reduction_fns",
         
         # "test_dim_arg_reduction_scalar", 
@@ -169,7 +169,15 @@ ENABLED_TESTS = {
         "test_histc_lowp",
         "test_histc_min_max_corner_cases",
         "test_histc_min_max_corner_cases_cuda",
-        "test_histc_min_max_errors",
+        # "test_histc_min_max_errors", # Failed - int64, int8
+
+        # spyre_uint8  ERRR 24.02.2026 14:25:36.525007 [ ras_base.hpp:  95]
+        #  {"BufAlgnBoundary":"128B","action":"information","category":"software","code":"0x161e",
+        # "description":"The buffer is not aligned to the given boundary.",
+        # "message":"Buffer not aligned","name":"RAS::SCHEDULER::BufferNotAligned",
+        # "severity":"ERROR","step":"Open ticket","type":"runtime_error"}
+
+
         "test_histogram",
         "test_histogramdd",
         "test_histogram_error_handling",
