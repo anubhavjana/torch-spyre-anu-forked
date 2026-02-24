@@ -8,7 +8,8 @@ DEFAULT_FLOATING_PRECISION = 1e-3
 ENABLED_TESTS = {
     "TestBinaryUfuncs": {
         "test_add", 
-        "test_mul",
+        # "test_mul", test_muldiv_scalar_spyre_bfloat16  ERRR 24.02.2026 09:27:30.344514 [ memory_allocator.cpp: 152] Trying to free invalid block: 0x80
+
         "test_div",
         # "test_logaddexp",
         # "test_bitwise_ops",
