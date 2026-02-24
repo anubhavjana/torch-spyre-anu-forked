@@ -28,14 +28,12 @@ ENABLED_TESTS = {
 ENABLED_TESTS = {
     "TestReductions": {
 
-        # --- Previously failing (uniform_/var_mean.correction) ---
-        # Uncomment once implemented
         # NotImplementedError: Could not run 'aten::uniform_' with arguments from the 'spyre' backend
         # # Even after hack around the above ->  NotImplementedError: Could not run 'aten::var_mean.correction' 
         # "test_var_mean", 
         # "test_var_mean_correction",
 
-        # --- Dim tests ---
+        
         "test_dim_default_keepdim",
         "test_dim_none",
         "test_dim_none_keepdim",
@@ -60,7 +58,7 @@ ENABLED_TESTS = {
         "test_dim_none",
         "test_dim_multi_unsupported",
 
-        # --- Core reductions ---
+        
         "test_sum_all",
         "test_sum_dim",
         "test_sum_out",
@@ -102,7 +100,7 @@ ENABLED_TESTS = {
         "test_cumsum_integer_upcast",
         "test_cumprod_integer_upcast",
 
-        # --- Min / Max ---
+        
         "test_min",
         "test_max",
         "test_min_with_inf",
@@ -119,21 +117,21 @@ ENABLED_TESTS = {
         "test_amin_amax_some_dims",
         "test_invalid_0dim_aminmax",
 
-        # --- Arg reductions ---
+        
         "test_argminmax_multiple",
         "test_argminmax_large_axis",
         "test_argminmax_axis_with_dim_one",
         "test_tensor_compare_ops_argmax_argmix_kthvalue_dim_empty",
 
-        # --- All / Any ---
+        
         "test_all_any",
-        "test_all_any_empty",
+        "test_all_any_empty", # Signal Received: 11 (Segmentation fault)
         "test_all_any_vs_numpy",
         "test_all_any_with_dim",
         "test_all_issue117215",
         "test_reduction_empty_any_all",
 
-        # --- NaN reductions ---
+        
         "test_nansum",
         "test_nansum_complex",
         "test_nansum_vs_numpy",
@@ -185,7 +183,7 @@ ENABLED_TESTS = {
         # --- Misc ---
         "test_reduce_dtype",
         "test_result_dtype",
-        "test_accreal_type",
+        # "test_accreal_type", # Only runs on cpu
         "test_numpy_named_args",
         "test_identity",
         "test_tensor_reduce_ops_empty",
