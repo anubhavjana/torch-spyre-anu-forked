@@ -126,7 +126,7 @@ ENABLED_TESTS = {
         
         "test_all_any",
         # "test_all_any_empty", # Signal Received: 11 (Segmentation fault)
-        "test_all_any_vs_numpy", # test_all_any_vs_numpy_spyre_bool Signal Received: 11 (Segmentation fault)
+        # "test_all_any_vs_numpy", # test_all_any_vs_numpy_spyre_bool Signal Received: 11 (Segmentation fault)
         "test_all_any_with_dim",
         "test_all_issue117215",
         "test_reduction_empty_any_all",
