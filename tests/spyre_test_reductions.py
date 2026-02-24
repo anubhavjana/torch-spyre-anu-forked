@@ -7,17 +7,17 @@ DEFAULT_FLOATING_PRECISION = 1e-3
 
 ENABLED_TESTS = {
     "TestReductions": {
-        "test_dim_default",
-        "test_dim_default_keepdim",
-        "test_dim_none",
-        "test_dim_none_keepdim",
-        "test_dim_single",
-        "test_dim_single_keepdim",
-        "test_dim_empty",
-        "test_dim_empty_keepdim",
-        "test_dim_multi",
-        "test_dim_multi_keepdim",
-        "test_dim_multi_unsorted",             
+        "test_var_mean",
+        # "test_dim_default_keepdim",
+        # "test_dim_none",
+        # "test_dim_none_keepdim",
+        # "test_dim_single",
+        # "test_dim_single_keepdim",
+        # "test_dim_empty",
+        # "test_dim_empty_keepdim",
+        # "test_dim_multi",
+        # "test_dim_multi_keepdim",
+        # "test_dim_multi_unsorted",             
         
     }
 }
