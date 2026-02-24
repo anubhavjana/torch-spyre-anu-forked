@@ -222,6 +222,13 @@ def spyre__unsqueeze(self: torch.Tensor, dim: int) -> torch.Tensor:
     )
     return result
 
+@torch.library.register_kernel("aten::normal_", ["spyre"])
+def spyre__normal_(self, mean=0, std=1):
+    # Generate on CPU, copy to Spyre
+    cpu_tensor = torch.empty_like(self, device='cpu').normal_(mean, std)
+    self.copy_(cpu_tensor)
+    return self
+
 
 # INSERT_CODEGEN_HERE
 # @torch.library.register_kernel("aten::abs", ["spyre"])
