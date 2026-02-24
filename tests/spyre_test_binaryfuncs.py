@@ -8,6 +8,8 @@ DEFAULT_FLOATING_PRECISION = 1e-3
 ENABLED_TESTS = {
     "TestBinaryUfuncs": {
         "test_add", 
+        "test_mul",
+        "test_div",
         # "test_logaddexp",
         # "test_bitwise_ops",
         # "test_pow",
