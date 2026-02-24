@@ -7,7 +7,10 @@ DEFAULT_FLOATING_PRECISION = 1e-3
 
 ENABLED_TESTS = {
     "TestReductions": {
-        "test_var_mean", # NotImplementedError: Could not run 'aten::uniform_' with arguments from the 'spyre' backend
+        # "test_var_mean", # NotImplementedError: Could not run 'aten::uniform_' with arguments from the 'spyre' backend
+        # # Even after hack around the above ->  NotImplementedError: Could not run 'aten::var_mean.correction' 
+        
+        
         # "test_dim_default_keepdim",
         # "test_dim_none",
         # "test_dim_none_keepdim",
@@ -19,6 +22,187 @@ ENABLED_TESTS = {
         # "test_dim_multi_keepdim",
         # "test_dim_multi_unsorted",             
         
+    }
+}
+
+ENABLED_TESTS = {
+    "TestReductions": {
+
+        # --- Previously failing (uniform_/var_mean.correction) ---
+        # Uncomment once implemented
+        # NotImplementedError: Could not run 'aten::uniform_' with arguments from the 'spyre' backend
+        # # Even after hack around the above ->  NotImplementedError: Could not run 'aten::var_mean.correction' 
+        # "test_var_mean", 
+        # "test_var_mean_correction",
+
+        # --- Dim tests ---
+        "test_dim_default_keepdim",
+        "test_dim_none",
+        "test_dim_none_keepdim",
+        "test_dim_single",
+        "test_dim_single_keepdim",
+        "test_dim_empty",
+        "test_dim_empty_keepdim",
+        "test_dim_multi",
+        "test_dim_multi_keepdim",
+        "test_dim_multi_unsorted",
+        "test_dim_multi_unsorted_keepdim",
+        "test_dim_multi_duplicate",
+        "test_dim_offbounds",
+        "test_dim_repeated",
+        "test_dim_reduction",
+        "test_dim_reduction_lastdim",
+        "test_dim_reduction_less_than_64",
+        "test_dim_reduction_fns",
+        "test_dim_arg_reduction_scalar",
+        "test_dim_ndim_limit",
+        "test_dim_default",
+        "test_dim_none",
+        "test_dim_multi_unsupported",
+
+        # --- Core reductions ---
+        "test_sum_all",
+        "test_sum_dim",
+        "test_sum_out",
+        "test_sum_vs_numpy",
+        "test_sum_parallel",
+        "test_sum_noncontig",
+        "test_sum_noncontig_lowp",
+        "test_sum_integer_upcast",
+        "test_sum_dim_reduction_uint8_overflow",
+
+        "test_mean_dim",
+        "test_mean_int_with_optdtype",
+
+        "test_std",
+        "test_std_dim",
+        "test_std_vs_numpy",
+        "test_std_mean",
+        "test_std_mean_some_dims",
+        "test_std_mean_all_dims",
+        "test_std_mean_correction",
+        "test_std_correction_vs_numpy",
+
+        "test_var",
+        "test_var_dim",
+        "test_var_unbiased",
+        "test_var_vs_numpy",
+        "test_var_stability",
+        "test_var_stability2",
+        "test_var_large_input",
+        "test_var_mean_all_dims",
+        "test_var_mean_some_dims",
+        "test_var_correction_vs_numpy",
+
+        "test_prod",
+        "test_prod_lowp",
+        "test_prod_integer_upcast",
+        "test_prod_gpu",
+
+        "test_cumsum_integer_upcast",
+        "test_cumprod_integer_upcast",
+
+        # --- Min / Max ---
+        "test_min",
+        "test_max",
+        "test_min_with_inf",
+        "test_max_with_inf",
+        "test_min_max_nan",
+        "test_min_elementwise",
+        "test_max_elementwise",
+        "test_min_mixed_devices",
+        "test_max_mixed_devices",
+        "test_minmax_illegal_dtype",
+        "test_amin",
+        "test_amax",
+        "test_aminmax",
+        "test_amin_amax_some_dims",
+        "test_invalid_0dim_aminmax",
+
+        # --- Arg reductions ---
+        "test_argminmax_multiple",
+        "test_argminmax_large_axis",
+        "test_argminmax_axis_with_dim_one",
+        "test_tensor_compare_ops_argmax_argmix_kthvalue_dim_empty",
+
+        # --- All / Any ---
+        "test_all_any",
+        "test_all_any_empty",
+        "test_all_any_vs_numpy",
+        "test_all_any_with_dim",
+        "test_all_issue117215",
+        "test_reduction_empty_any_all",
+
+        # --- NaN reductions ---
+        "test_nansum",
+        "test_nansum_complex",
+        "test_nansum_vs_numpy",
+        "test_nansum_out_dtype",
+        "test_nanmean_integral_types",
+        "test_nan_policy_omit",
+        "test_nan_policy_propagate",
+
+        # --- Log reductions ---
+        "test_logsumexp",
+        "test_logsumexp_dim",
+        "test_logsumexp_integral_promotion",
+        "test_logcumsumexp_complex",
+
+        # --- Quantile ---
+        "test_quantile",
+        "test_quantile_backward",
+        "test_quantile_error",
+
+        # --- Histogram / Binning ---
+        "test_histc",
+        "test_histc_lowp",
+        "test_histc_min_max_corner_cases",
+        "test_histc_min_max_corner_cases_cuda",
+        "test_histc_min_max_errors",
+        "test_histogram",
+        "test_histogramdd",
+        "test_histogram_error_handling",
+        "test_bucketization",
+        "test_bincount",
+
+        # --- Mode ---
+        "test_mode",
+        "test_mode_large",
+        "test_mode_boolean",
+        "test_mode_wrong_device",
+        "test_mode_wrong_dtype",
+
+        # --- Reference / correctness ---
+        "test_ref_small_input",
+        "test_ref_large_input_1D",
+        "test_ref_large_input_2D",
+        "test_ref_large_input_64bit_indexing",
+        "test_ref_duplicate_values",
+        "test_ref_extremal_values",
+        "test_ref_scalar_input",
+        "test_reference_masked",
+
+        # --- Misc ---
+        "test_reduce_dtype",
+        "test_result_dtype",
+        "test_accreal_type",
+        "test_numpy_named_args",
+        "test_identity",
+        "test_tensor_reduce_ops_empty",
+        "test_tensor_compare_ops_empty",
+        "test_empty_tensor_empty_slice",
+        "test_empty_tensor_nonempty_slice",
+        "test_noncontiguous_all",
+        "test_noncontiguous_outermost",
+        "test_noncontiguous_innermost",
+        "test_noncontiguous_transposed",
+        "test_noncontiguous_expanded",
+        "test_noncontiguous_all",
+        "test_reduction_split",
+        "test_reduction_vectorize_along_input_corner",
+        "test_reduction_vectorize_along_output",
+        "test_reductions_large_half_tensors",
+        "test_warn_invalid_degrees_of_freedom",
     }
 }
 
