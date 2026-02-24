@@ -7,7 +7,7 @@ DEFAULT_FLOATING_PRECISION = 1e-3
 
 ENABLED_TESTS = {
     "TestReductions": {
-        "test_var_mean",
+        "test_var_mean", # NotImplementedError: Could not run 'aten::uniform_' with arguments from the 'spyre' backend
         # "test_dim_default_keepdim",
         # "test_dim_none",
         # "test_dim_none_keepdim",

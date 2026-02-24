@@ -229,6 +229,18 @@ def spyre__normal_(self, mean=0, std=1):
     self.copy_(cpu_tensor)
     return self
 
+@torch.library.register_kernel("aten::uniform_", ["spyre"])
+def spyre__uniform_(self, from_=0.0, to=1.0, *, generator=None):
+    # Create CPU tensor with same shape/dtype
+    cpu_tensor = torch.empty_like(self, device="cpu")
+
+    # Run CPU uniform_ in-place
+    cpu_tensor.uniform_(from_, to, generator=generator)
+
+    # Copy result back to Spyre tensor
+    self.copy_(cpu_tensor)
+
+    return self
 
 # INSERT_CODEGEN_HERE
 # @torch.library.register_kernel("aten::abs", ["spyre"])
