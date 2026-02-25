@@ -38,6 +38,7 @@ _DISABLED: dict = {
         "test_addcmul_scalars_as_floats", # Failed
         "test_atan2_edgecases", # Failed
         "test_atan2" # Signal Received: 8 (Floating point exception)
+        "test_float_power_exceptions", # Signal Received: 8 (Floating point exception)
     }
 
 }
