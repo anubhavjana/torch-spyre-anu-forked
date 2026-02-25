@@ -10,7 +10,7 @@ Usage
 """
 
 import torch
-from spyre_test_base_common import SpyreTestBase
+from .spyre_test_base_common import SpyreTestBase
 
 _ENABLED: dict = {
     "TestReductions": {
@@ -164,7 +164,7 @@ _ENABLED: dict = {
         # "test_bincount",                   # Failed
 
         # "test_mode", # ERRR 25.02.2026 07:24:53.195157 memory_allocator.cpp: 152] Trying to free invalid block: 0x80
-        
+
         #test_mode_spyre_int64 /dev/shm/dt-inductor/pytorch/test/test_reductions.py:969: 
         # FallbackWarning: aten.arange.start_step is falling back to cpu
         #   x = torch.arange(1., SIZE * SIZE + 1, device=device, dtype=dtype).clone().resize_(SIZE, SIZE)
