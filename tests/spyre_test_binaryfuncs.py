@@ -202,15 +202,17 @@ _ENABLED: dict = {
         # "test_logaddexp",
         # "test_bitwise_ops",
         # "test_pow",
-        "test_add_broadcast_empty",
+        # "test_add_broadcast_empty",
         # "test_reference_numerics",
         # "test_lcm",          # lcm.out not supported in spyre
         # "test_cdiv",         # only for CPU
+
     }
 }
 
 _DISABLED: dict = {
     # Populate when switching to blacklist mode
+    test_add_broadcast_empty # Signal Received: 11 (Segmentation fault)
 }
 
 # Remove the built-in PrivateUse1TestBase so SpyreTestBase is the sole handler.
