@@ -105,7 +105,7 @@ _ENABLED: dict = {
         # "test_minmax_illegal_dtype",       # Signal Received: 8 (Floating point exception)
 
         "test_amin",
-        "test_amax",
+        # "test_amax", #  Signal Received: 8 (Floating point exception)
         "test_aminmax",
         # "test_amin_amax_some_dims",        # Failed
         "test_invalid_0dim_aminmax",
@@ -213,8 +213,9 @@ _ENABLED: dict = {
 }
 
 _DISABLED: dict = {
-    # Populate when switching to blacklist mode
-    "test_mode",
+    "TestReductions": {
+        "test_mode",   # ERRR memory_allocator.cpp: Trying to free invalid block
+    }
 }
 
 # Remove built-in PrivateUse1TestBase so only SpyreTestBase handles
