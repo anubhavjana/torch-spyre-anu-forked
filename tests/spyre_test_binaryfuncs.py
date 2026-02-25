@@ -39,6 +39,13 @@ _DISABLED: dict = {
         "test_atan2_edgecases", # Failed
         "test_atan2", # Signal Received: 8 (Floating point exception)
         "test_float_power_exceptions", # Signal Received: 8 (Floating point exception)
+        
+        "test_gcd", # ERRR 25.02.2026 09:25:16.914306 ras_base.hpp:  95] 
+        # {"BufAlgnBoundary":"128B","action":"information","category":"software",
+        # "code":"0x161e","description":"The buffer is not aligned to the given boundary.",
+        # "message":"Buffer not aligned","name":"RAS::SCHEDULER::BufferNotAligned","severity":"ERROR",
+        # "step":"Open ticket","type":"runtime_error"}
+
     }
 
 }
