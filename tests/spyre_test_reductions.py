@@ -10,7 +10,7 @@ Usage
 """
 
 import torch
-from spyre_test_base_common import SpyreTestBase
+from .spyre_test_base_common import SpyreTestBase
 
 _ENABLED: dict = {
     "TestReductions": {
