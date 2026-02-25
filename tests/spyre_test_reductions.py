@@ -3,7 +3,7 @@ Spyre test override for test_reductions.py
 Usage
 -----
     export PYTORCH_TESTING_DEVICE_ONLY_FOR="privateuse1"
-    export TORCH_TEST_DEVICES=".../spyre_test_reductions.py"
+    export TORCH_TEST_DEVICES="$DTI_PROJECT_ROOT/torch-spyre/tests/spyre_test_reductions.py"
     export PYTHONPATH="$DTI_PROJECT_ROOT/torch-spyre/tests:$PYTHONPATH"
     export SPYRE_TEST_MODE=whitelist    # or: blacklist
     cd $DTI_PROJECT_ROOT/pytorch/test/
