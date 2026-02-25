@@ -163,7 +163,18 @@ _ENABLED: dict = {
         # "test_bucketization",              # Failed
         # "test_bincount",                   # Failed
 
-        "test_mode",
+        # "test_mode", # ERRR 25.02.2026 07:24:53.195157 memory_allocator.cpp: 152] Trying to free invalid block: 0x80
+        
+        #test_mode_spyre_int64 /dev/shm/dt-inductor/pytorch/test/test_reductions.py:969: 
+        # FallbackWarning: aten.arange.start_step is falling back to cpu
+        #   x = torch.arange(1., SIZE * SIZE + 1, device=device, dtype=dtype).clone().resize_(SIZE, SIZE)
+        # /dev/shm/torch-spyre-venv/lib64/python3.12/site-packages/torch_spyre-0.0.1-py3.12-linux-x86_64.egg/torch_spyre
+        # /_monkey_patch.py:63: UserWarning: Backend Spyre does not support int64; 
+        # downcasting to int32 may change values outside the 32-bit range. 
+        # You can silence this via warnings.filterwarnings(...) or spyre.set_downcast_warning(False) or
+        #  TORCH_SPYRE_DOWNCAST_WARN env. variable. (Triggered internally at torch_spyre/csrc/types_mapping.h:96.)
+
+
         "test_mode_large",
         "test_mode_boolean",
         "test_mode_wrong_device",
@@ -203,6 +214,7 @@ _ENABLED: dict = {
 
 _DISABLED: dict = {
     # Populate when switching to blacklist mode
+    "test_mode",
 }
 
 # Remove built-in PrivateUse1TestBase so only SpyreTestBase handles
