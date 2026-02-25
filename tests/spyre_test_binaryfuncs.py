@@ -180,16 +180,14 @@
 # TEST_CLASS = SpyreTestBase
 
 """
-spyre_test_binaryfuncs.py
-=========================
 Spyre test override for test_binary_ufuncs.py
-
 Usage
 -----
     export PYTORCH_TESTING_DEVICE_ONLY_FOR="privateuse1"
     export TORCH_TEST_DEVICES=".../spyre_test_binaryfuncs.py"
     export SPYRE_TEST_MODE=whitelist    # or: blacklist
-    cd $PYTORCH_ROOT/test/
+    export PYTHONPATH="$DTI_PROJECT_ROOT/torch-spyre/tests:$PYTHONPATH"
+    cd $DTI_PROJECT_ROOT/pytorch/test/
     python3 -m pytest test_binary_ufuncs.py -v
 """
 

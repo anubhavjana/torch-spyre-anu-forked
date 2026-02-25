@@ -4,8 +4,9 @@ Usage
 -----
     export PYTORCH_TESTING_DEVICE_ONLY_FOR="privateuse1"
     export TORCH_TEST_DEVICES=".../spyre_test_reductions.py"
+    export PYTHONPATH="$DTI_PROJECT_ROOT/torch-spyre/tests:$PYTHONPATH"
     export SPYRE_TEST_MODE=whitelist    # or: blacklist
-    cd $PYTORCH_ROOT/test/
+    cd $DTI_PROJECT_ROOT/pytorch/test/
     python3 -m pytest test_reductions.py -v
 """
 
