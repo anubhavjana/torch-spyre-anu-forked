@@ -20,9 +20,6 @@ Usage as we already had apart from a new environment variable that got added
     export SPYRE_TEST_MODE=whitelist          # or blacklist
     python3 -m pytest test_binary_ufuncs.py -v
 """
-
-# from __future__ import annotations
-
 import os
 import re
 import unittest
