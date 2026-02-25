@@ -239,7 +239,6 @@ def spyre__uniform_(self, from_=0.0, to=1.0, *, generator=None):
 
     # Copy result back to Spyre tensor
     self.copy_(cpu_tensor)
-
     return self
 
 # INSERT_CODEGEN_HERE
