@@ -214,6 +214,7 @@ _ENABLED: dict = {
 }
 
 _DISABLED: dict = {
+    # will be used when explicitely set to blacklist mode
     "TestReductions": {
         "test_mode",   # ERRR memory_allocator.cpp: Trying to free invalid block
     }

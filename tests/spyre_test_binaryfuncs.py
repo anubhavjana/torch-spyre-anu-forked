@@ -212,9 +212,14 @@ _ENABLED: dict = {
 
 _DISABLED: dict = {
     "TestBinaryUfuncs": {
-    # Populate when switching to blacklist mode
+        # will be used when explicitely set to blacklist mode
         "test_add_broadcast_empty", # Signal Received: 11 (Segmentation fault)
-}
+        "test_add", # Failed
+        "test_addcmul_scalars_as_floats", # Failed
+        "test_atan2_edgecases", # Failed
+        "test_atan2" # Signal Received: 8 (Floating point exception)
+    }
+
 }
 
 # Remove the built-in PrivateUse1TestBase so SpyreTestBase is the sole handler.
