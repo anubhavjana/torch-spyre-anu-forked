@@ -211,8 +211,10 @@ _ENABLED: dict = {
 }
 
 _DISABLED: dict = {
+    "TestBinaryUfuncs": {
     # Populate when switching to blacklist mode
-    test_add_broadcast_empty # Signal Received: 11 (Segmentation fault)
+        "test_add_broadcast_empty", # Signal Received: 11 (Segmentation fault)
+}
 }
 
 # Remove the built-in PrivateUse1TestBase so SpyreTestBase is the sole handler.
