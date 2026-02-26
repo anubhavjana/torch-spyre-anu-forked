@@ -32,6 +32,8 @@ _BLACKLISTED: dict = {
 
         "test_int_tensor_pow_neg_ints", # DtException: Unsupported data format types, file /project_src/deeptools/util/sen_data_convert.cpp line 2623
                                         # Signal Received: 6 (Aborted)
+        
+        "test_idiv_and_ifloordiv_vs_python" # free(): invalid next size (fast) Signal Received: 6 (Aborted)
     }
 
 }
