@@ -11,7 +11,7 @@ Usage
 """
 
 import torch
-from spyre_test_base_common import SpyreTestBase
+from spyre_test_base_common import SpyreTestBase,remove_privateuse1_test_base
 
 _WHITELISTED: dict = {
     "TestReductions": {
