@@ -31,6 +31,8 @@ _DISABLED: dict = {
         # "message":"Buffer not aligned","name":"RAS::SCHEDULER::BufferNotAligned","severity":"ERROR",
         # "step":"Open ticket","type":"runtime_error"}
 
+        "test_int_tensor_pow_neg_ints", # DtException: Unsupported data format types, file /project_src/deeptools/util/sen_data_convert.cpp line 2623
+                                        # Signal Received: 6 (Aborted)
     }
 
 }

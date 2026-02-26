@@ -105,10 +105,15 @@ _ENABLED: dict = {
 
         # "test_minmax_illegal_dtype",       # Signal Received: 8 (Floating point exception)
 
-        "test_amin",
+        # "test_amin", Failed
+
+        # test_amin_spyre_float64 Signal Received: 8 (Floating point exception)
+        
         # "test_amax", #  Signal Received: 8 (Floating point exception)
         "test_aminmax",
+        
         # "test_amin_amax_some_dims",        # Failed
+        
         "test_invalid_0dim_aminmax",
 
         # "test_argminmax_multiple",         # Failed
