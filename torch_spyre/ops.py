@@ -268,6 +268,3 @@ def spyre__mish_out(self: torch.Tensor, out: torch.Tensor = None) -> torch.Tenso
     # Out variant
     compiled_mish = torch.compile(torch.ops.aten.mish.out, dynamic=False)
     return compiled_mish(self, out=out)
-
-
-# INSERT_CODEGEN_HERE
