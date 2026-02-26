@@ -175,10 +175,6 @@ class SpyreTestBase:
         """Return compiled MatchSets for whichever dict is active."""
         mode = cls._resolve_mode()
         cache_attr = f"_cached_msets_{mode}"
-        # if not hasattr(cls, cache_attr) or getattr(cls, cache_attr) is None:
-        #     source = cls.ENABLED_TESTS if mode == _MODE_WHITELIST else cls.DISABLED_TESTS
-        #     setattr(cls, cache_attr, _build_match_sets(source))
-        # return getattr(cls, cache_attr)
         if cache_attr not in cls.__dict__ or cls.__dict__[cache_attr] is None:
             source = cls.ENABLED_TESTS if mode == _MODE_WHITELIST else cls.DISABLED_TESTS
             setattr(cls, cache_attr, _build_match_sets(source))

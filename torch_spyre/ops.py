@@ -244,28 +244,6 @@ def spyre__unsqueeze(self: torch.Tensor, dim: int) -> torch.Tensor:
     )
     return result
 
-## Following has been added as a fallback for tests to pass through
-## this till this is implemented for spyre # Author: Anubhav.Jana97@ibm.com
-@torch.library.register_kernel("aten::normal_", ["spyre"])
-def spyre__normal_(self, mean=0, std=1):
-    # Generate on CPU, copy to Spyre
-    cpu_tensor = torch.empty_like(self, device='cpu').normal_(mean, std)
-    self.copy_(cpu_tensor)
-    return self
-
-@torch.library.register_kernel("aten::uniform_", ["spyre"])
-def spyre__uniform_(self, from_=0.0, to=1.0, *, generator=None):
-    # Create CPU tensor with same shape/dtype
-    cpu_tensor = torch.empty_like(self, device="cpu")
-
-    # Run CPU uniform_ in-place
-    cpu_tensor.uniform_(from_, to, generator=generator)
-
-    # Copy result back to Spyre tensor
-    self.copy_(cpu_tensor)
-    return self
-#######################################################################
-
 # INSERT_CODEGEN_HERE
 @torch.library.register_kernel("aten::zero_", ["spyre"])  # type:ignore
 def spyre__zero_(self: torch.Tensor) -> torch.Tensor:
@@ -283,6 +261,5 @@ def spyre__silu_out(self: torch.Tensor, out: torch.Tensor = None) -> torch.Tenso
     # Out variant
     compiled_silu = torch.compile(torch.ops.aten.silu.out, dynamic=False)
     return compiled_silu(self, out=out)
-
 
 # INSERT_CODEGEN_HERE
