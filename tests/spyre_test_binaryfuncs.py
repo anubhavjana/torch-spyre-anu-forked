@@ -44,7 +44,7 @@ device_type_test_bases[:] = [  # type: ignore[name-defined] # noqa: F821
 
 class SpyreBinaryUfuncsTestBase(SpyreTestBase, PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: F821
 
-    ENABLED_TESTS  = _ENABLED
+    # ENABLED_TESTS  = _ENABLED
     DISABLED_TESTS = _DISABLED
 
     PRECISION_OVERRIDES = {

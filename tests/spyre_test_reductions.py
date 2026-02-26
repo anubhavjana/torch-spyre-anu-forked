@@ -226,7 +226,7 @@ device_type_test_bases[:] = [  # type: ignore[name-defined] # noqa: F821
 class SpyreReductionsTestBase(SpyreTestBase, PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: F821
 
     ENABLED_TESTS  = _ENABLED
-    DISABLED_TESTS = _DISABLED
+    # DISABLED_TESTS = _DISABLED
 
     PRECISION_OVERRIDES = {
         "test_sum":        1e-2,
