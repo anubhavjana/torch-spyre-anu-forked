@@ -2,13 +2,13 @@
 Shared class and methods for all Spyre PyTorch test overrides.
 
 Each per-suite file (e.g. spyre_test_binaryfuncs.py) imports
-SpyreTestBase from here and declares ENABLED_TESTS and/or DISABLED_TESTS
+SpyreTestBase from here and declares WHITELISTED_TESTS and/or BLACKLISTED_TESTS
 as class attributes.  A single environment variable selects which dict
 is active at runtime.
 
 # New ENV VAR introduced 
-SPYRE_TEST_MODE=whitelist --> use ENABLED_TESTS  (default when it exists)
-SPYRE_TEST_MODE=blacklist --> use DISABLED_TESTS (default when only that exists)
+SPYRE_TEST_MODE=whitelist --> use WHITELISTED_TESTS  (default when it exists)
+SPYRE_TEST_MODE=blacklist --> use BLACKLISTED_TESTS (default when only that exists)
 
 If a suite file defines BOTH dicts, set SPYRE_TEST_MODE explicitly to
 choose which one governs the run.  When only one dict is defined the
@@ -116,13 +116,41 @@ class MatchSet:
 def _build_match_sets(d: Dict[str, list]) -> Dict[str, MatchSet]:
     return {k: MatchSet.from_iterable(v) for k, v in d.items()}
 
+# ---------------------------------------------------------------------------
+# PrivateUse1TestBase filter
+#
+# Called once at the top of each suite file, immediately after imports.
+# Removes the built-in PrivateUse1TestBase so that SpyreTestBase is the sole
+# handler for the privateuse1 device type, preventing nondeterministic
+# overwrites when list(set(...)) randomises ordering.
+#
+# TODO: investigate whether this filter will still be needed once the upstream
+#       PrivateUse1TestBase correctly defers to registered custom backends.
+# ---------------------------------------------------------------------------
+
+def remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase) -> None:
+    """Remove the built-in PrivateUse1TestBase from the global list.
+
+    PyTorch injects both arguments into each suite file's namespace via
+    runpy.run_path().  They are not available in this module's own namespace,
+    so the suite file must forward them here explicitly:
+
+        remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase)
+                                     # type: ignore[name-defined] # noqa: F821
+    """
+    device_type_test_bases[:] = [
+        b for b in device_type_test_bases
+        if b is not PrivateUse1TestBase
+    ]
+
+
 
 class SpyreTestBase:
     """
     Base class for Spyre device-type tests.
 
     You will need to inherit this class + PrivateUse1TestBase in each per-suite
-    file.  Declare ENABLED_TESTS, DISABLED_TESTS, or both as class
+    file.  Declare WHITELISTED_TESTS, BLACKLISTED_TESTS, or both as class
     attributes (which will be controlled by SPYRE_TEST_MODE env variable).
     """
 
@@ -130,8 +158,8 @@ class SpyreTestBase:
     precision: float = DEFAULT_FLOATING_PRECISION
 
     # Override in per-suite subclasses.
-    ENABLED_TESTS:      Dict[str, set] = {}
-    DISABLED_TESTS:     Dict[str, set] = {}
+    WHITELISTED_TESTS:   Dict[str, set] = {}
+    BLACKLISTED_TESTS:   Dict[str, set] = {}
     PRECISION_OVERRIDES: Dict[str, float] = {}
 
     # Extend in per-suite subclasses for backend-specific dtype gaps.
@@ -156,12 +184,12 @@ class SpyreTestBase:
                 f"Use 'whitelist' or 'blacklist'."
             )
 
-        # Prefer whitelist if ENABLED_TESTS is populated (priority)
-        if cls.ENABLED_TESTS:
+        # Prefer whitelist if WHITELISTED_TESTS is populated (priority)
+        if cls.WHITELISTED_TESTS:
             return _MODE_WHITELIST
         
-        # Prefer blacklist if DISABLED_TESTS is populated
-        if cls.DISABLED_TESTS:
+        # Prefer blacklist if BLACKLISTED_TESTS is populated
+        if cls.BLACKLISTED_TESTS:
             return _MODE_BLACKLIST
 
         # Nothing is defined ->  blacklist mode (run everything by default)
@@ -176,7 +204,7 @@ class SpyreTestBase:
         mode = cls._resolve_mode()
         cache_attr = f"_cached_msets_{mode}"
         if cache_attr not in cls.__dict__ or cls.__dict__[cache_attr] is None:
-            source = cls.ENABLED_TESTS if mode == _MODE_WHITELIST else cls.DISABLED_TESTS
+            source = cls.WHITELISTED_TESTS if mode == _MODE_WHITELIST else cls.BLACKLISTED_TESTS
             setattr(cls, cache_attr, _build_match_sets(source))
         return cls.__dict__[cache_attr]
 
@@ -192,16 +220,16 @@ class SpyreTestBase:
         """
         
         Whitelist mode
-        -> Test is in ENABLED_TESTS for this class then RUN
+        -> Test is in WHITELISTED_TESTS for this class then RUN
         -> Otherwise SKIP
 
         Blacklist mode
-        -> Test is in DISABLED_TESTS for this class then SKIP
+        -> Test is in BLACKLISTED_TESTS for this class then SKIP
         -> Otherwise RUN with dtype filter applied
 
         Dtype filtering (blacklist mode only)
           Tests with unsupported dtype are skipped even if
-          not explicitly listed in DISABLED_TESTS.  
+          not explicitly listed in BLACKLISTED_TESTS.  
           In whitelist mode, we assume that the 
           user is aware of the supported dtype.
         """
@@ -217,7 +245,7 @@ class SpyreTestBase:
         if mode == _MODE_WHITELIST:
             if _name_matches(mset):
                 return True, None
-            return False, "Not in ENABLED_TESTS"
+            return False, "Not in WHITELISTED_TESTS"
 
         else:  # blacklist
             if _name_matches(mset):

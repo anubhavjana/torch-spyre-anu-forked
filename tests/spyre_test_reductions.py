@@ -13,7 +13,7 @@ Usage
 import torch
 from spyre_test_base_common import SpyreTestBase
 
-_ENABLED: dict = {
+_WHITELISTED: dict = {
     "TestReductions": {
 
         # NotImplementedError: Could not run 'aten::uniform_' with arguments from the 'spyre' backend
@@ -218,20 +218,15 @@ _ENABLED: dict = {
     }
 }
 
-# Remove built-in PrivateUse1TestBase so only SpyreTestBase handles
-# the privateuse1 device type.  This prevents the nondeterministic
-# overwrite when list(set(...)) randomizes order.
-# TODO: figure out why this filter is needed - expected to use default PrivateUse1TestBase
-device_type_test_bases[:] = [  # type: ignore[name-defined] # noqa: F821
-    b for b in device_type_test_bases  # type: ignore[name-defined] # noqa: F821
-    if b is not PrivateUse1TestBase  # type: ignore[name-defined] # noqa: F821
-]
+# Remove the built-in PrivateUse1TestBase so SpyreTestBase is the sole handler.
+# device_type_test_bases and PrivateUse1TestBase are injected into this file's
+# namespace by PyTorch via runpy.run_path() and must be forwarded explicitly.
+remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase)  # type: ignore[name-defined] # noqa: F821
 
 
 class SpyreReductionsTestBase(SpyreTestBase, PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: F821
 
-    ENABLED_TESTS  = _ENABLED
-    # DISABLED_TESTS = _DISABLED
+    WHITELISTED_TESTS = _WHITELISTED
 
     PRECISION_OVERRIDES = {
         "test_sum":        1e-2,

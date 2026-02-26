@@ -12,10 +12,9 @@ Usage
 """
 
 import torch
-from spyre_test_base_common import SpyreTestBase
+from spyre_test_base_common import SpyreTestBase, remove_privateuse1_test_base
 
-
-_DISABLED: dict = {
+_BLACKLISTED: dict = {
     "TestBinaryUfuncs": {
         # will be used when explicitely set to blacklist mode
         "test_add_broadcast_empty", # Signal Received: 11 (Segmentation fault)
@@ -38,17 +37,14 @@ _DISABLED: dict = {
 }
 
 # Remove the built-in PrivateUse1TestBase so SpyreTestBase is the sole handler.
-device_type_test_bases[:] = [  # type: ignore[name-defined] # noqa: F821
-    b for b in device_type_test_bases  # type: ignore[name-defined] # noqa: F821
-    if b is not PrivateUse1TestBase  # type: ignore[name-defined] # noqa: F821
-]
+# device_type_test_bases and PrivateUse1TestBase are injected into this file's
+# namespace by PyTorch via runpy.run_path() and must be forwarded explicitly.
+remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase)  # type: ignore[name-defined] # noqa: F821
 
 
 class SpyreBinaryUfuncsTestBase(SpyreTestBase, PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: F821
 
-    # ENABLED_TESTS  = _ENABLED
-    DISABLED_TESTS = _DISABLED
-
+    BLACKLISTED_TESTS = _BLACKLISTED
     PRECISION_OVERRIDES = {
         "test_sum":        1e-2,
         "test_softmax":    1e-3,
