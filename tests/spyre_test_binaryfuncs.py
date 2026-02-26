@@ -14,21 +14,6 @@ Usage
 import torch
 from spyre_test_base_common import SpyreTestBase
 
-_ENABLED: dict = {
-    "TestBinaryUfuncs": {
-        # "test_add",          # NotImplementedError: as_strided not implemented for Spyre tensors, implement the caller using as_strided_with_layout with the proper semantics
-        # "test_mul",          # test_muldiv_scalar_spyre_bfloat16  ERRR 24.02.2026 09:27:30.344514 [ memory_allocator.cpp: 152] Trying to free invalid block: 0x80
-        # "test_div",
-        # "test_logaddexp",
-        # "test_bitwise_ops",
-        # "test_pow",
-        # "test_add_broadcast_empty",
-        # "test_reference_numerics",
-        # "test_lcm",          # lcm.out not supported in spyre
-        # "test_cdiv",         # only for CPU
-
-    }
-}
 
 _DISABLED: dict = {
     "TestBinaryUfuncs": {

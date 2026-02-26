@@ -213,13 +213,6 @@ _ENABLED: dict = {
     }
 }
 
-_DISABLED: dict = {
-    # will be used when explicitely set to blacklist mode
-    "TestReductions": {
-        "test_mode",   # ERRR memory_allocator.cpp: Trying to free invalid block
-    }
-}
-
 # Remove built-in PrivateUse1TestBase so only SpyreTestBase handles
 # the privateuse1 device type.  This prevents the nondeterministic
 # overwrite when list(set(...)) randomizes order.
