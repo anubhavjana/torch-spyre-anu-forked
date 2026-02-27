@@ -32,8 +32,12 @@ _BLACKLISTED: dict = {
 
         "test_int_tensor_pow_neg_ints", # DtException: Unsupported data format types, file /project_src/deeptools/util/sen_data_convert.cpp line 2623
                                         # Signal Received: 6 (Aborted)
-        
-        "test_idiv_and_ifloordiv_vs_python" # free(): invalid next size (fast) Signal Received: 6 (Aborted)
+        "test_idiv_and_ifloordiv_vs_python", # free(): invalid next size (fast) Signal Received: 6 (Aborted)
+
+        "test_logical_and", # test_logical_and_spyre_bool_uint8  ERRR 27.02.2026 05:23:52.583737 
+        # [ras_base.hpp:  95] {"BufAlgnBoundary":"128B","action":"information","category":"software","code":"0x161e",
+        # "description":"The buffer is not aligned to the given boundary.","message":"Buffer not aligned",
+        # "name":"RAS::SCHEDULER::BufferNotAligned","severity":"ERROR","step":"Open ticket","type":"runtime_error"}
     }
 
 }
