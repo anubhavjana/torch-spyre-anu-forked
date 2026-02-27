@@ -14,6 +14,12 @@ Usage
 import torch
 from spyre_test_base_common import SpyreTestBase, remove_privateuse1_test_base
 
+_WHITELISTED: dict = {
+    "TestBinaryUfuncs": {
+        "test_scalar_support",
+    }
+}
+
 _BLACKLISTED: dict = {
     "TestBinaryUfuncs": {
         # will be used when explicitely set to blacklist mode
@@ -55,6 +61,15 @@ _BLACKLISTED: dict = {
 
 }
 
+_EXTRA_ALLOWED_DTYPES: dict = {
+    "test_scalar_support":              {torch.float16},
+    # "test_reference_numerics_normal":   {torch.float16},
+    # "test_reference_numerics_small":    {torch.float16},
+    # "test_reference_numerics_large":    {torch.float16},
+    # "test_reference_numerics_extremal": {torch.float16},
+    # # Add further entries as Spyre float16 coverage grows
+}
+
 # Remove the built-in PrivateUse1TestBase so SpyreTestBase is the sole handler.
 # device_type_test_bases and PrivateUse1TestBase are injected into this file's
 # namespace by PyTorch via runpy.run_path() and must be forwarded explicitly.
@@ -63,6 +78,7 @@ remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase)  # typ
 
 class SpyreBinaryUfuncsTestBase(SpyreTestBase, PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: F821
 
+    WHITELISTED_TESTS = _WHITELISTED
     BLACKLISTED_TESTS = _BLACKLISTED
     PRECISION_OVERRIDES = {
         "test_sum":        1e-2,
@@ -74,7 +90,7 @@ class SpyreBinaryUfuncsTestBase(SpyreTestBase, PrivateUse1TestBase):  # type: ig
         torch.bfloat16,
         torch.int16,
         torch.int32,
-        torch.float16,
+        # torch.float16,
         torch.float32,
         torch.float64,
         
