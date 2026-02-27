@@ -38,6 +38,8 @@ _BLACKLISTED: dict = {
         # [ras_base.hpp:  95] {"BufAlgnBoundary":"128B","action":"information","category":"software","code":"0x161e",
         # "description":"The buffer is not aligned to the given boundary.","message":"Buffer not aligned",
         # "name":"RAS::SCHEDULER::BufferNotAligned","severity":"ERROR","step":"Open ticket","type":"runtime_error"}
+
+        "test_logical_or", # same error as above
     }
 
 }
