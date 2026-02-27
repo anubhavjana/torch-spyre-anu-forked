@@ -80,6 +80,8 @@ class SpyreBinaryUfuncsTestBase(SpyreTestBase, PrivateUse1TestBase):  # type: ig
 
     WHITELISTED_TESTS = _WHITELISTED
     BLACKLISTED_TESTS = _BLACKLISTED
+    EXTRA_ALLOWED_DTYPES = _EXTRA_ALLOWED_DTYPES
+
     PRECISION_OVERRIDES = {
         "test_sum":        1e-2,
         "test_softmax":    1e-3,
