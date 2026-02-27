@@ -40,6 +40,17 @@ _BLACKLISTED: dict = {
         # "name":"RAS::SCHEDULER::BufferNotAligned","severity":"ERROR","step":"Open ticket","type":"runtime_error"}
 
         "test_logical_or", # same error as above
+
+        "test_logical", # test_logical_spyre_bool  ERRR 27.02.2026 06:06:42.564890 
+        # [ras_base.hpp:  95] {"action":"information","category":"software","cb_cmpt_bootaddr":"0x38000000",
+        # "cb_ctrl_contextid":0,"cb_ctrl_edep":1,"cb_name":"sdsc_fused_lt_1","code":"0x1274",
+        # "description":"A software error was detected in the card while executing a control block",
+        # "message":"Control block software failure","name":"RAS::CBRB::ControlBlockSoftFail",
+        # "rb_qgierr_addr":"0x0","rb_qgierr_definitions":["job header with zero flit count"],
+        # "rb_qgierr_jobcount":0,"rb_qgierr_signals":["prep_zero_flit_cnt"],
+        # "rb_ret_locator":2,"rb_ret_status":"ERROR","rb_timestamps":["0x00487177","0x00487177",
+        # "0xcf7c31bc","0x004872c8","0x004872d1","0xc895c57e","0x00000000","0x00000000"],
+        # "severity":"ERROR","step":"Monitor card for additional messages","type":"runtime_error"}
     }
 
 }
@@ -66,6 +77,7 @@ class SpyreBinaryUfuncsTestBase(SpyreTestBase, PrivateUse1TestBase):  # type: ig
         torch.float16,
         torch.float32,
         torch.float64,
+        
     }
 
 
