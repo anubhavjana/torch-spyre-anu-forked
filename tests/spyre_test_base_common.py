@@ -28,7 +28,9 @@ from typing import Dict, Optional, Set
 import copy
 
 import torch
-from torch.testing._internal.common_device_type import ops as _ops_parametrizer
+# from torch.testing._internal.common_device_type import ops as _ops_parametrizer
+# common_device_type.py is the one running our suite file via runpy, so it's not fully initialized yet when we try to import from it.
+# The fix is to do a lazy import inside the function, not at module level:
 
 
 # ------------
@@ -146,22 +148,28 @@ def remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase) ->
         if b is not PrivateUse1TestBase
     ]
 
-class _SpyreOpsParametrizer(_ops_parametrizer):
-    """Wraps an existing ops parametrizer, unioning in extra_dtypes at runtime."""
-    def __init__(self, wrapped, extra_dtypes):
-        # Copy all attributes from the original ops instance
-        self.__dict__.update(wrapped.__dict__)
-        self._extra_dtypes = extra_dtypes
 
-    def _parametrize_test(self, test, generic_cls, device_cls):
-        # Temporarily extend allowed_dtypes just for this call
-        original = self.allowed_dtypes
-        if original is not None:
-            self.allowed_dtypes = original | self._extra_dtypes
-        try:
-            yield from super()._parametrize_test(test, generic_cls, device_cls)
-        finally:
-            self.allowed_dtypes = original  # restore
+# wirte the class definition within a factory
+
+def _make_spyre_ops_parametrizer(wrapped, extra_dtypes):
+    from torch.testing._internal.common_device_type import ops as _ops_cls
+
+    class _SpyreOpsParametrizer(_ops_cls):
+        def __init__(self):
+            self.__dict__.update(wrapped.__dict__)
+            self._extra_dtypes = extra_dtypes
+
+        def _parametrize_test(self, test, generic_cls, device_cls):
+            original = self.allowed_dtypes
+            if original is not None:
+                self.allowed_dtypes = original | self._extra_dtypes
+            try:
+                yield from super()._parametrize_test(test, generic_cls, device_cls)
+            finally:
+                self.allowed_dtypes = original
+
+    return _SpyreOpsParametrizer()
+
 
 class SpyreTestBase:
     """
@@ -290,13 +298,16 @@ class SpyreTestBase:
     @classmethod
     def instantiate_test(cls, name, test, *, generic_cls):
         # Per-test precision override
-        cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
 
+        from torch.testing._internal.common_device_type import ops as _ops_cls
+        
+        cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
         extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
+        
         if extra_dtypes and hasattr(test, "parametrize_fn"):
             p = test.parametrize_fn
-            if isinstance(p, _ops_parametrizer):
-                test.parametrize_fn = _SpyreOpsParametrizer(p, extra_dtypes)
+            if isinstance(p, _ops_cls):
+                test.parametrize_fn = _make_spyre_ops_parametrizer(test.parametrize_fn, extra_dtypes)
 
         # Let the parent class generate all variant methods first
         existing_methods = set(cls.__dict__.keys())
