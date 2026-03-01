@@ -298,10 +298,21 @@ class SpyreTestBase:
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
 
-        # patch extra dtypes into @ops parametrizer before super() runs 
+
+        # ── Inject extra dtypes into @ops parametrizer ──────────────────────────────
+        # `test` is already a deepcopy made by upstream instantiate_device_type_tests,
+        # so patching it here is safe and won't affect CUDA/CPU runs.
+        # parametrize_fn is set by _TestParametrizer.__call__ as: fn.parametrize_fn = self
         extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
-        if extra_dtypes:
-            test = _inject_extra_dtypes(test, extra_dtypes)
+        if extra_dtypes and hasattr(test, "parametrize_fn"):
+            p = test.parametrize_fn
+            if hasattr(p, "allowed_dtypes") and p.allowed_dtypes is not None:
+                p.allowed_dtypes = set(p.allowed_dtypes) | extra_dtypes
+
+        # # patch extra dtypes into @ops parametrizer before super() runs 
+        # extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
+        # if extra_dtypes:
+        #     test = _inject_extra_dtypes(test, extra_dtypes)
 
         # Let the parent class generate all variant methods first
         existing_methods = set(cls.__dict__.keys())
