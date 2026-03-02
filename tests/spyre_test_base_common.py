@@ -6,7 +6,7 @@ SpyreTestBase from here and declares WHITELISTED_TESTS and/or BLACKLISTED_TESTS
 as class attributes.  A single environment variable selects which dict
 is active at runtime.
 
-# New ENV VAR introduced 
+# New ENV VAR introduced
 SPYRE_PYTORCH_TEST_FILTER_TYPE=whitelist --> use WHITELISTED_TESTS  (default when it exists)
 SPYRE_PYTORCH_TEST_FILTER_TYPE=blacklist --> use BLACKLISTED_TESTS (default when only that exists)
 
@@ -14,18 +14,18 @@ If a suite file defines BOTH dicts, set SPYRE_PYTORCH_TEST_FILTER_TYPE explicitl
 choose which one governs the run.  When only one dict is defined the
 mode is inferred automatically and SPYRE_PYTORCH_TEST_FILTER_TYPE need not be set.
 
-Usage as we already had apart from a new environment variable that got added 
+Usage as we already had apart from a new environment variable that got added
     export PYTORCH_TESTING_DEVICE_ONLY_FOR="privateuse1"
     export TORCH_TEST_DEVICES=".../spyre_test_binaryfuncs.py"
     export SPYRE_PYTORCH_TEST_FILTER_TYPE=whitelist          # or blacklist
     python3 -m pytest test_binary_ufuncs.py -v
 """
+
 import os
 import re
 import unittest
 from functools import wraps
 from typing import Dict, Optional, Set
-import copy
 
 import torch
 # from torch.testing._internal.common_device_type import ops as _ops_parametrizer
@@ -55,22 +55,22 @@ _MODE_BLACKLIST = "blacklist"
 # ----------------------------
 
 _DTYPE_STR_MAP: Dict[str, torch.dtype] = {
-    "float16":    torch.float16,
-    "float32":    torch.float32,
-    "float64":    torch.float64,
-    "bfloat16":   torch.bfloat16,
-    "int8":       torch.int8,
-    "int16":      torch.int16,
-    "int32":      torch.int32,
-    "int64":      torch.int64,
-    "uint8":      torch.uint8,
-    "uint16":     torch.uint16,
-    "uint32":     torch.uint32,
-    "uint64":     torch.uint64,
-    "complex32":  torch.complex32,
-    "complex64":  torch.complex64,
+    "float16": torch.float16,
+    "float32": torch.float32,
+    "float64": torch.float64,
+    "bfloat16": torch.bfloat16,
+    "int8": torch.int8,
+    "int16": torch.int16,
+    "int32": torch.int32,
+    "int64": torch.int64,
+    "uint8": torch.uint8,
+    "uint16": torch.uint16,
+    "uint32": torch.uint32,
+    "uint64": torch.uint64,
+    "complex32": torch.complex32,
+    "complex64": torch.complex64,
     "complex128": torch.complex128,
-    "bool":       torch.bool,
+    "bool": torch.bool,
 }
 
 # Ordered longest-first so "complex128" matches before "complex12"
@@ -92,8 +92,9 @@ def parse_dtype(dtype_str: str) -> torch.dtype:
 
 
 # -------------------
-# Match-set helpers 
+# Match-set helpers
 # -------------------
+
 
 class MatchSet:
     """Holds exact names and regex patterns for fast membership tests."""
@@ -121,6 +122,7 @@ class MatchSet:
 def _build_match_sets(d: Dict[str, list]) -> Dict[str, MatchSet]:
     return {k: MatchSet.from_iterable(v) for k, v in d.items()}
 
+
 # ---------------------------------------------------------------------------
 # PrivateUse1TestBase filter
 #
@@ -133,6 +135,7 @@ def _build_match_sets(d: Dict[str, list]) -> Dict[str, MatchSet]:
 #       PrivateUse1TestBase correctly defers to registered custom backends.
 # ---------------------------------------------------------------------------
 
+
 def remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase) -> None:
     """Remove the built-in PrivateUse1TestBase from the global list.
 
@@ -144,9 +147,9 @@ def remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase) ->
                                      # type: ignore[name-defined] # noqa: F821
     """
     device_type_test_bases[:] = [
-        b for b in device_type_test_bases
-        if b is not PrivateUse1TestBase
+        b for b in device_type_test_bases if b is not PrivateUse1TestBase
     ]
+
 
 class _SpyreDtypePatcher:
     """Patches @ops allowed_dtypes on a bound test method before instantiation.
@@ -159,19 +162,26 @@ class _SpyreDtypePatcher:
 
     def __init__(self, test, extra_dtypes: set):
         from torch.testing._internal.common_device_type import ops as _ops_cls
+
         # @ops instance lives at test.__func__.parametrize_fn.__self__
         underlying_fn = test.__func__ if hasattr(test, "__func__") else test
         p = getattr(underlying_fn, "parametrize_fn", None)
         self._ops_instance = (
             p.__self__
-            if p is not None and hasattr(p, "__self__") and isinstance(p.__self__, _ops_cls)
+            if p is not None
+            and hasattr(p, "__self__")
+            and isinstance(p.__self__, _ops_cls)
             else None
         )
         self._extra_dtypes = extra_dtypes
 
     def patch(self) -> None:
-        if self._ops_instance is not None and self._ops_instance.allowed_dtypes is not None:
+        if (
+            self._ops_instance is not None
+            and self._ops_instance.allowed_dtypes is not None
+        ):
             self._ops_instance.allowed_dtypes |= self._extra_dtypes
+
 
 class SpyreTestBase:
     """
@@ -186,8 +196,8 @@ class SpyreTestBase:
     precision: float = DEFAULT_FLOATING_PRECISION
 
     # Override in per-suite subclasses.
-    WHITELISTED_TESTS:   Dict[str, set] = {}
-    BLACKLISTED_TESTS:   Dict[str, set] = {}
+    WHITELISTED_TESTS: Dict[str, set] = {}
+    BLACKLISTED_TESTS: Dict[str, set] = {}
     PRECISION_OVERRIDES: Dict[str, float] = {}
     # Maps base test name --> set of torch.dtype to inject into @ops `allowed_dtypes``.
     # This is to add the capability when upstream @ops(..., allowed_dtypes=...) omits dtypes Spyre supports.
@@ -201,7 +211,7 @@ class SpyreTestBase:
         """
         Return the active mode: 'whitelist' or 'blacklist'.
         Priority:
-          1. SPYRE_PYTORCH_TEST_FILTER_TYPE env var 
+          1. SPYRE_PYTORCH_TEST_FILTER_TYPE env var
           2. Inferred from which dicts are populated on the class
         """
         env = os.environ.get("SPYRE_PYTORCH_TEST_FILTER_TYPE", "").strip().lower()
@@ -216,7 +226,7 @@ class SpyreTestBase:
         # Prefer whitelist if WHITELISTED_TESTS is populated (priority)
         if cls.WHITELISTED_TESTS:
             return _MODE_WHITELIST
-        
+
         # Prefer blacklist if BLACKLISTED_TESTS is populated
         if cls.BLACKLISTED_TESTS:
             return _MODE_BLACKLIST
@@ -233,11 +243,14 @@ class SpyreTestBase:
         mode = cls._resolve_mode()
         cache_attr = f"_cached_msets_{mode}"
         if cache_attr not in cls.__dict__ or cls.__dict__[cache_attr] is None:
-            source = cls.WHITELISTED_TESTS if mode == _MODE_WHITELIST else cls.BLACKLISTED_TESTS
+            source = (
+                cls.WHITELISTED_TESTS
+                if mode == _MODE_WHITELIST
+                else cls.BLACKLISTED_TESTS
+            )
             setattr(cls, cache_attr, _build_match_sets(source))
         return cls.__dict__[cache_attr]
 
-   
     # Decide whether an instantiated test method should run
     @classmethod
     def _should_run(
@@ -247,7 +260,7 @@ class SpyreTestBase:
         generic_cls_name: str,
     ) -> tuple[bool, Optional[str]]:
         """
-        
+
         Whitelist mode
         -> Test is in WHITELISTED_TESTS for this class then RUN
         -> Otherwise SKIP
@@ -258,8 +271,8 @@ class SpyreTestBase:
 
         Dtype filtering (blacklist mode only)
           Tests with unsupported dtype are skipped even if
-          not explicitly listed in BLACKLISTED_TESTS.  
-          In whitelist mode, we assume that the 
+          not explicitly listed in BLACKLISTED_TESTS.
+          In whitelist mode, we assume that the
           user is aware of the supported dtype.
         """
         mode = cls._resolve_mode()
@@ -308,7 +321,6 @@ class SpyreTestBase:
             # so extra dtype variants are generated in the normal flow.
             # Safe to mutate since `test` is already a deepcopy from upstream.
             _SpyreDtypePatcher(test, extra_dtypes).patch()
-        
 
         # Let the parent class generate all variant methods first
         existing_methods = set(cls.__dict__.keys())
