@@ -254,7 +254,7 @@ def spyre__unsqueeze(self: torch.Tensor, dim: int) -> torch.Tensor:
     )
     return result
 
-# INSERT_CODEGEN_HERE
+
 @torch.library.register_kernel("aten::zero_", ["spyre"])  # type:ignore
 def spyre__zero_(self: torch.Tensor) -> torch.Tensor:
     """Zero out the tensor in-place."""

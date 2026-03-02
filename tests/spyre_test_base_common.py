@@ -309,17 +309,6 @@ class SpyreTestBase:
             # Safe to mutate since `test` is already a deepcopy from upstream.
             _SpyreDtypePatcher(test, extra_dtypes).patch()
         
-        # if extra_dtypes and hasattr(test, "parametrize_fn"):
-        #     from torch.testing._internal.common_device_type import ops as _ops_cls
-
-            
-        #     underlying_fn = test.__func__ if hasattr(test, "__func__") else test
-        #     p = getattr(underlying_fn, "parametrize_fn", None)
-        #     if p is not None and hasattr(p, "__self__") and isinstance(p.__self__, _ops_cls):
-        #         ops_instance = p.__self__
-        #         if ops_instance.allowed_dtypes is not None:
-        #             ops_instance.allowed_dtypes = ops_instance.allowed_dtypes | extra_dtypes
-
         # Let the parent class generate all variant methods first
         existing_methods = set(cls.__dict__.keys())
         super().instantiate_test(name, test, generic_cls=generic_cls)
