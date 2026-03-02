@@ -7,17 +7,17 @@ as class attributes.  A single environment variable selects which dict
 is active at runtime.
 
 # New ENV VAR introduced 
-SPYRE_TEST_MODE=whitelist --> use WHITELISTED_TESTS  (default when it exists)
-SPYRE_TEST_MODE=blacklist --> use BLACKLISTED_TESTS (default when only that exists)
+SPYRE_PYTORCH_TEST_FILTER_TYPE=whitelist --> use WHITELISTED_TESTS  (default when it exists)
+SPYRE_PYTORCH_TEST_FILTER_TYPE=blacklist --> use BLACKLISTED_TESTS (default when only that exists)
 
-If a suite file defines BOTH dicts, set SPYRE_TEST_MODE explicitly to
+If a suite file defines BOTH dicts, set SPYRE_PYTORCH_TEST_FILTER_TYPE explicitly to
 choose which one governs the run.  When only one dict is defined the
-mode is inferred automatically and SPYRE_TEST_MODE need not be set.
+mode is inferred automatically and SPYRE_PYTORCH_TEST_FILTER_TYPE need not be set.
 
 Usage as we already had apart from a new environment variable that got added 
     export PYTORCH_TESTING_DEVICE_ONLY_FOR="privateuse1"
     export TORCH_TEST_DEVICES=".../spyre_test_binaryfuncs.py"
-    export SPYRE_TEST_MODE=whitelist          # or blacklist
+    export SPYRE_PYTORCH_TEST_FILTER_TYPE=whitelist          # or blacklist
     python3 -m pytest test_binary_ufuncs.py -v
 """
 import os
@@ -46,7 +46,7 @@ DEFAULT_UNSUPPORTED_DTYPES: Set[torch.dtype] = {
     torch.complex128,
 }
 
-# Valid values for SPYRE_TEST_MODE
+# Valid values for SPYRE_PYTORCH_TEST_FILTER_TYPE
 _MODE_WHITELIST = "whitelist"
 _MODE_BLACKLIST = "blacklist"
 
@@ -179,7 +179,7 @@ class SpyreTestBase:
 
     You will need to inherit this class + PrivateUse1TestBase in each per-suite
     file.  Declare WHITELISTED_TESTS, BLACKLISTED_TESTS, or both as class
-    attributes (which will be controlled by SPYRE_TEST_MODE env variable).
+    attributes (which will be controlled by SPYRE_PYTORCH_TEST_FILTER_TYPE env variable).
     """
 
     device_type: str = "privateuse1"
@@ -201,15 +201,15 @@ class SpyreTestBase:
         """
         Return the active mode: 'whitelist' or 'blacklist'.
         Priority:
-          1. SPYRE_TEST_MODE env var 
+          1. SPYRE_PYTORCH_TEST_FILTER_TYPE env var 
           2. Inferred from which dicts are populated on the class
         """
-        env = os.environ.get("SPYRE_TEST_MODE", "").strip().lower()
+        env = os.environ.get("SPYRE_PYTORCH_TEST_FILTER_TYPE", "").strip().lower()
         if env in (_MODE_WHITELIST, _MODE_BLACKLIST):
             return env
         if env:
             raise ValueError(
-                f"SPYRE_TEST_MODE={env!r} is invalid. "
+                f"SPYRE_PYTORCH_TEST_FILTER_TYPE={env!r} is invalid. "
                 f"Use 'whitelist' or 'blacklist'."
             )
 
@@ -309,6 +309,7 @@ class SpyreTestBase:
             # Safe to mutate since `test` is already a deepcopy from upstream.
             _SpyreDtypePatcher(test, extra_dtypes).patch()
         
+
         # Let the parent class generate all variant methods first
         existing_methods = set(cls.__dict__.keys())
         super().instantiate_test(name, test, generic_cls=generic_cls)
