@@ -148,6 +148,31 @@ def remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase) ->
         if b is not PrivateUse1TestBase
     ]
 
+class _SpyreDtypePatcher:
+    """Patches @ops allowed_dtypes on a bound test method before instantiation.
+
+    Needed because upstream @ops(..., allowed_dtypes=(...)) restricts which dtype
+    variants are generated -- dtypes absent here are never instantiated, so they
+    cannot be whitelisted. We inject extra dtypes before
+    super().instantiate_test() calls _parametrize_test.
+    """
+
+    def __init__(self, test, extra_dtypes: set):
+        from torch.testing._internal.common_device_type import ops as _ops_cls
+        # @ops instance lives at test.__func__.parametrize_fn.__self__
+        underlying_fn = test.__func__ if hasattr(test, "__func__") else test
+        p = getattr(underlying_fn, "parametrize_fn", None)
+        self._ops_instance = (
+            p.__self__
+            if p is not None and hasattr(p, "__self__") and isinstance(p.__self__, _ops_cls)
+            else None
+        )
+        self._extra_dtypes = extra_dtypes
+
+    def patch(self) -> None:
+        if self._ops_instance is not None and self._ops_instance.allowed_dtypes is not None:
+            self._ops_instance.allowed_dtypes |= self._extra_dtypes
+
 class SpyreTestBase:
     """
     Base class for Spyre device-type tests.
@@ -276,20 +301,24 @@ class SpyreTestBase:
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
         extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
-        
-        if extra_dtypes and hasattr(test, "parametrize_fn"):
-            from torch.testing._internal.common_device_type import ops as _ops_cls
 
+        if extra_dtypes:
             # test is a bound method; @ops instance is at test.__func__.parametrize_fn.__self__
             # We patch allowed_dtypes directly on it before super() calls _parametrize_test,
             # so extra dtype variants are generated in the normal flow.
             # Safe to mutate since `test` is already a deepcopy from upstream.
-            underlying_fn = test.__func__ if hasattr(test, "__func__") else test
-            p = getattr(underlying_fn, "parametrize_fn", None)
-            if p is not None and hasattr(p, "__self__") and isinstance(p.__self__, _ops_cls):
-                ops_instance = p.__self__
-                if ops_instance.allowed_dtypes is not None:
-                    ops_instance.allowed_dtypes = ops_instance.allowed_dtypes | extra_dtypes
+            _SpyreDtypePatcher(test, extra_dtypes).patch()
+        
+        # if extra_dtypes and hasattr(test, "parametrize_fn"):
+        #     from torch.testing._internal.common_device_type import ops as _ops_cls
+
+            
+        #     underlying_fn = test.__func__ if hasattr(test, "__func__") else test
+        #     p = getattr(underlying_fn, "parametrize_fn", None)
+        #     if p is not None and hasattr(p, "__self__") and isinstance(p.__self__, _ops_cls):
+        #         ops_instance = p.__self__
+        #         if ops_instance.allowed_dtypes is not None:
+        #             ops_instance.allowed_dtypes = ops_instance.allowed_dtypes | extra_dtypes
 
         # Let the parent class generate all variant methods first
         existing_methods = set(cls.__dict__.keys())
