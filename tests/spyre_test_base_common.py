@@ -314,10 +314,18 @@ class SpyreTestBase:
             
         if extra_dtypes and hasattr(test, "parametrize_fn"):
             from torch.testing._internal.common_device_type import ops as _ops_cls
-            p = test.parametrize_fn
-            if isinstance(p, _ops_cls):
-                test.parametrize_fn = _make_spyre_ops_parametrizer(test.parametrize_fn, extra_dtypes)
-
+            
+            # test is a bound method; parametrize_fn is also a bound method.
+            # The actual ops instance is on the underlying function.
+            underlying_fn = test.__func__ if hasattr(test, "__func__") else test
+            p = getattr(underlying_fn, "parametrize_fn", None)
+            
+            print(f"[DEBUG] underlying_fn type={type(underlying_fn)}")
+            print(f"[DEBUG] p type={type(p)}")
+            print(f"[DEBUG] isinstance ops check={isinstance(p, _ops_cls)}")
+            
+            if p is not None and isinstance(p, _ops_cls):
+                underlying_fn.parametrize_fn = _make_spyre_ops_parametrizer(p, extra_dtypes)
         # Let the parent class generate all variant methods first
         existing_methods = set(cls.__dict__.keys())
         super().instantiate_test(name, test, generic_cls=generic_cls)
