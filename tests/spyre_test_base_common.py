@@ -151,24 +151,24 @@ def remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase) ->
 
 # wirte the class definition within a factory
 
-def _make_spyre_ops_parametrizer(wrapped, extra_dtypes):
-    from torch.testing._internal.common_device_type import ops as _ops_cls
+# def _make_spyre_ops_parametrizer(wrapped, extra_dtypes):
+#     from torch.testing._internal.common_device_type import ops as _ops_cls
 
-    class _SpyreOpsParametrizer(_ops_cls):
-        def __init__(self):
-            self.__dict__.update(wrapped.__dict__)
-            self._extra_dtypes = extra_dtypes
+#     class _SpyreOpsParametrizer(_ops_cls):
+#         def __init__(self):
+#             self.__dict__.update(wrapped.__dict__)
+#             self._extra_dtypes = extra_dtypes
 
-        def _parametrize_test(self, test, generic_cls, device_cls):
-            original = self.allowed_dtypes
-            if original is not None:
-                self.allowed_dtypes = original | self._extra_dtypes
-            try:
-                yield from super()._parametrize_test(test, generic_cls, device_cls)
-            finally:
-                self.allowed_dtypes = original
+#         def _parametrize_test(self, test, generic_cls, device_cls):
+#             original = self.allowed_dtypes
+#             if original is not None:
+#                 self.allowed_dtypes = original | self._extra_dtypes
+#             try:
+#                 yield from super()._parametrize_test(test, generic_cls, device_cls)
+#             finally:
+#                 self.allowed_dtypes = original
 
-    return _SpyreOpsParametrizer()
+#     return _SpyreOpsParametrizer()
 
 
 class SpyreTestBase:
@@ -311,28 +311,21 @@ class SpyreTestBase:
                 from torch.testing._internal.common_device_type import ops as _ops_cls
                 print(f"[DEBUG] type(test.parametrize_fn)={type(test.parametrize_fn)}")
                 print(f"[DEBUG] isinstance check={isinstance(test.parametrize_fn, _ops_cls)}")
-            
+        
+        
         if extra_dtypes and hasattr(test, "parametrize_fn"):
             from torch.testing._internal.common_device_type import ops as _ops_cls
-            
-            # test is a bound method; parametrize_fn is also a bound method.
-            # The actual ops instance is on the underlying function.
+
+            # test is a bound method; @ops instance is at test.__func__.parametrize_fn.__self__
+            # We patch allowed_dtypes directly on it before super() calls _parametrize_test,
+            # so extra dtype variants are generated in the normal flow.
+            # Safe to mutate since `test` is already a deepcopy from upstream.
             underlying_fn = test.__func__ if hasattr(test, "__func__") else test
             p = getattr(underlying_fn, "parametrize_fn", None)
-            
-            print(f"[DEBUG] underlying_fn type={type(underlying_fn)}")
-            print(f"[DEBUG] p type={type(p)}")
-            print(f"[DEBUG] isinstance ops check={isinstance(p, _ops_cls)}")
-
-            print(f"[DEBUG] p.__self__ type={type(p.__self__) if hasattr(p, '__self__') else 'N/A'}")
-            print(f"[DEBUG] isinstance p.__self__={isinstance(p.__self__, _ops_cls) if hasattr(p, '__self__') else 'N/A'}")
-            
-            if p is not None and isinstance(p, _ops_cls):
-                underlying_fn.parametrize_fn = _make_spyre_ops_parametrizer(p, extra_dtypes)
-            
-            # if p is not None and hasattr(p, "__self__") and isinstance(p.__self__, _ops_cls):
-            #     p.__self__.allowed_dtypes = (p.__self__.allowed_dtypes or set()) | extra_dtypes
-            #     print(f"[DEBUG] patched allowed_dtypes={p.__self__.allowed_dtypes}")
+            if p is not None and hasattr(p, "__self__") and isinstance(p.__self__, _ops_cls):
+                ops_instance = p.__self__
+                if ops_instance.allowed_dtypes is not None:
+                    ops_instance.allowed_dtypes = ops_instance.allowed_dtypes | extra_dtypes
 
         # Let the parent class generate all variant methods first
         existing_methods = set(cls.__dict__.keys())
