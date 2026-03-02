@@ -148,29 +148,6 @@ def remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase) ->
         if b is not PrivateUse1TestBase
     ]
 
-
-# wirte the class definition within a factory
-
-# def _make_spyre_ops_parametrizer(wrapped, extra_dtypes):
-#     from torch.testing._internal.common_device_type import ops as _ops_cls
-
-#     class _SpyreOpsParametrizer(_ops_cls):
-#         def __init__(self):
-#             self.__dict__.update(wrapped.__dict__)
-#             self._extra_dtypes = extra_dtypes
-
-#         def _parametrize_test(self, test, generic_cls, device_cls):
-#             original = self.allowed_dtypes
-#             if original is not None:
-#                 self.allowed_dtypes = original | self._extra_dtypes
-#             try:
-#                 yield from super()._parametrize_test(test, generic_cls, device_cls)
-#             finally:
-#                 self.allowed_dtypes = original
-
-#     return _SpyreOpsParametrizer()
-
-
 class SpyreTestBase:
     """
     Base class for Spyre device-type tests.
@@ -193,8 +170,6 @@ class SpyreTestBase:
 
     # Extend in per-suite subclasses for backend-specific dtype gaps.
     unsupported_dtypes: Set[torch.dtype] = DEFAULT_UNSUPPORTED_DTYPES
-
-    
 
     @classmethod
     def _resolve_mode(cls) -> str:
@@ -301,17 +276,6 @@ class SpyreTestBase:
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
         extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
-
-        if name == "test_scalar_support":  # guard so it's not too noisy
-            print(f"\n[DEBUG] name={name}")
-            print(f"[DEBUG] extra_dtypes={extra_dtypes}")
-            print(f"[DEBUG] hasattr(test, 'parametrize_fn')={hasattr(test, 'parametrize_fn')}")
-            print(f"[DEBUG] test attrs={[a for a in dir(test) if not a.startswith('__')]}")
-            if hasattr(test, "parametrize_fn"):
-                from torch.testing._internal.common_device_type import ops as _ops_cls
-                print(f"[DEBUG] type(test.parametrize_fn)={type(test.parametrize_fn)}")
-                print(f"[DEBUG] isinstance check={isinstance(test.parametrize_fn, _ops_cls)}")
-        
         
         if extra_dtypes and hasattr(test, "parametrize_fn"):
             from torch.testing._internal.common_device_type import ops as _ops_cls
