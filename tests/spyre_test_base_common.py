@@ -302,16 +302,16 @@ class SpyreTestBase:
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
         extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
 
-        # if name == "test_scalar_support":  # guard so it's not too noisy
-        print(f"\n[DEBUG] name={name}")
-        print(f"[DEBUG] extra_dtypes={extra_dtypes}")
-        print(f"[DEBUG] hasattr(test, 'parametrize_fn')={hasattr(test, 'parametrize_fn')}")
-        print(f"[DEBUG] test attrs={[a for a in dir(test) if not a.startswith('__')]}")
-        if hasattr(test, "parametrize_fn"):
-            from torch.testing._internal.common_device_type import ops as _ops_cls
-            print(f"[DEBUG] type(test.parametrize_fn)={type(test.parametrize_fn)}")
-            print(f"[DEBUG] isinstance check={isinstance(test.parametrize_fn, _ops_cls)}")
-        
+        if name == "test_scalar_support":  # guard so it's not too noisy
+            print(f"\n[DEBUG] name={name}")
+            print(f"[DEBUG] extra_dtypes={extra_dtypes}")
+            print(f"[DEBUG] hasattr(test, 'parametrize_fn')={hasattr(test, 'parametrize_fn')}")
+            print(f"[DEBUG] test attrs={[a for a in dir(test) if not a.startswith('__')]}")
+            if hasattr(test, "parametrize_fn"):
+                from torch.testing._internal.common_device_type import ops as _ops_cls
+                print(f"[DEBUG] type(test.parametrize_fn)={type(test.parametrize_fn)}")
+                print(f"[DEBUG] isinstance check={isinstance(test.parametrize_fn, _ops_cls)}")
+            
         if extra_dtypes and hasattr(test, "parametrize_fn"):
             from torch.testing._internal.common_device_type import ops as _ops_cls
             p = test.parametrize_fn
