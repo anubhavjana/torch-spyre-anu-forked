@@ -326,6 +326,13 @@ class SpyreTestBase:
             
             if p is not None and isinstance(p, _ops_cls):
                 underlying_fn.parametrize_fn = _make_spyre_ops_parametrizer(p, extra_dtypes)
+                print(f"[DEBUG] p.__self__ type={type(p.__self__) if hasattr(p, '__self__') else 'N/A'}")
+                print(f"[DEBUG] isinstance p.__self__={isinstance(p.__self__, _ops_cls) if hasattr(p, '__self__') else 'N/A'}")
+            
+            # if p is not None and hasattr(p, "__self__") and isinstance(p.__self__, _ops_cls):
+            #     p.__self__.allowed_dtypes = (p.__self__.allowed_dtypes or set()) | extra_dtypes
+            #     print(f"[DEBUG] patched allowed_dtypes={p.__self__.allowed_dtypes}")
+
         # Let the parent class generate all variant methods first
         existing_methods = set(cls.__dict__.keys())
         super().instantiate_test(name, test, generic_cls=generic_cls)
