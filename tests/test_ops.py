@@ -214,15 +214,6 @@ class TestOps(TestCase):
         torch.testing.assert_close(y, torch.relu(x), rtol=self.rtol, atol=self.atol)
 
     def test_silu(self):
-        x = torch.rand([2, 32, 256], dtype=self.dtype)
-        x_spyre = x.to("spyre")
-        y = torch.nn.functional.silu(x_spyre).to("cpu")
-        torch.testing.assert_close(
-            y, torch.nn.functional.silu(x), rtol=self.rtol, atol=self.atol
-        )
-
-    @unittest.expectedFailure
-    def test_silu_larger_input(self):
         x = torch.rand([2, 100, 12800], dtype=self.dtype)
         x_spyre = x.to("spyre")
         y = torch.nn.functional.silu(x_spyre).to("cpu")
@@ -231,7 +222,7 @@ class TestOps(TestCase):
         )
 
     def test_mish(self):
-        x = torch.rand([2, 32, 256], dtype=self.dtype)
+        x = torch.rand([2, 100, 12800], dtype=self.dtype)
         x_spyre = x.to("spyre")
         y = torch.nn.functional.mish(x_spyre).to("cpu")
         torch.testing.assert_close(
@@ -738,6 +729,32 @@ class TestOps(TestCase):
         x = torch.rand(512, dtype=self.dtype).to("spyre")
         with self.assertRaisesRegex(RuntimeError, "elems_per_stick"):
             x.view(16, 32)
+
+    def test_uniform_(self):
+        x_spyre = torch.tensor([[1, 2, 3], [4, 5, 6]], dtype=self.dtype, device="spyre")
+        x_spyre.uniform_()
+        x_cpu = x_spyre.to("cpu")
+        self.assertTrue(
+            torch.all(x_cpu >= 0.0) and torch.all(x_cpu < 1.0),
+            f"uniform_ values out of range [0, 1): {x_cpu}",
+        )
+        self.assertFalse(
+            torch.all(x_cpu == x_cpu[0, 0]), "uniform_ produced all identical values"
+        )
+
+    def test_uniform_custom_range(self):
+        x_spyre = torch.tensor(
+            [1.0, 2.0, 3.0, 4.0, 5.0], dtype=self.dtype, device="spyre"
+        )
+        x_spyre.uniform_(-5.0, 5.0)
+        x_cpu = x_spyre.to("cpu")
+        self.assertTrue(
+            torch.all(x_cpu >= -5.0) and torch.all(x_cpu < 5.0),
+            f"uniform_ values out of range [-5, 5): {x_cpu}",
+        )
+        self.assertFalse(
+            torch.all(x_cpu == x_cpu[0]), "uniform_ produced all identical values"
+        )
 
     # NOTE: embedding / indirect indexing / index_select are not supported yet
     @pytest.mark.filterwarnings("ignore::torch_spyre.fallbacks.FallbackWarning")
