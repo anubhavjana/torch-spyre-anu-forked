@@ -363,7 +363,6 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
     # ---------------------------
     @classmethod
     def instantiate_test(cls, name, test, *, generic_cls=None):
-
         # Load test-suite config
         cls._load_test_suite_config()
 
