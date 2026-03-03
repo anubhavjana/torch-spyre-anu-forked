@@ -306,7 +306,6 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
     # ---------------------------
     @classmethod
     def instantiate_test(cls, name, test, *, generic_cls=None):
-
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
         extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
