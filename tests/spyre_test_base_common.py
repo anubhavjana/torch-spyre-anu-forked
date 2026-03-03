@@ -135,20 +135,15 @@ def _build_match_sets(d: Dict[str, list]) -> Dict[str, MatchSet]:
 #       PrivateUse1TestBase correctly defers to registered custom backends.
 # ---------------------------------------------------------------------------
 
-
-def remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase) -> None:
-    """Remove the built-in PrivateUse1TestBase from the global list.
-
-    PyTorch injects both arguments into each suite file's namespace via
-    runpy.run_path().  They are not available in this module's own namespace,
-    so the suite file must forward them here explicitly:
-
-        remove_privateuse1_test_base(device_type_test_bases, PrivateUse1TestBase)
-                                     # type: ignore[name-defined] # noqa: F821
-    """
-    device_type_test_bases[:] = [
-        b for b in device_type_test_bases if b is not PrivateUse1TestBase
-    ]
+# Remove built-in PrivateUse1TestBase so only SpyreTestBase handles
+# the privateuse1 device type.  This prevents the nondeterministic
+# overwrite when list(set(...)) randomizes order.
+# TODO: figure out why this filter is needed - expected to use default PrivateUse1TestBase
+device_type_test_bases[:] = [  # type: ignore[name-defined] # noqa: F821
+    b
+    for b in device_type_test_bases  # type: ignore[name-defined] # noqa: F821
+    if b is not PrivateUse1TestBase  # type: ignore[name-defined] # noqa: F821
+]
 
 
 class _SpyreDtypePatcher:
@@ -183,7 +178,8 @@ class _SpyreDtypePatcher:
             self._ops_instance.allowed_dtypes |= self._extra_dtypes
 
 
-class SpyreTestBase:
+# PrivateUse1TestBase injected via globals()
+class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: F821
     """
     Base class for Spyre device-type tests.
 
@@ -342,3 +338,6 @@ class SpyreTestBase:
                     raise unittest.SkipTest(_reason)
 
                 setattr(cls, method_name, _skip)
+
+
+TEST_CLASS = SpyreTestBase
