@@ -23,7 +23,7 @@ Usage as we already had apart from a new environment variable that got added
 """
 
 import os
-import re
+import regex as re
 import unittest
 from functools import wraps
 from typing import Dict, Optional, Set
@@ -242,17 +242,18 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
         # --------------------------
         cls.PRECISION_OVERRIDES = data.get("_PRECISION_OVERRIDES", {})
 
-        # --------------------------
         # EXTRA ALLOWED DTYPES
-        # --------------------------
-        extra = {}
-        for test_name, dtype_list in data.get("_EXTRA_ALLOWED_DTYPES", {}).items():
-            extra[test_name] = {parse_dtype(dt) for dt in dtype_list}
+        extra: Dict[str, set] = {}
+        for _, tests in data.get("_WHITELISTED", {}).items():
+            for test_name, test_cfg in (tests or {}).items():
+                if test_cfg and "extra_allowed_dtypes" in test_cfg:
+                    extra[test_name] = {
+                        parse_dtype(dt) for dt in test_cfg["extra_allowed_dtypes"]
+                    }
         cls.EXTRA_ALLOWED_DTYPES = extra
 
-        # --------------------------
-        # UNSUPPORTED DTYPES
-        # --------------------------
+        # PRECISION OVERRIDES / UNSUPPORTED DTYPES
+        cls.PRECISION_OVERRIDES = data.get("_PRECISION_OVERRIDES", {})
         unsupported = data.get("_UNSUPPORTED_DTYPES")
         if unsupported:
             cls.unsupported_dtypes = {parse_dtype(dt) for dt in unsupported}
