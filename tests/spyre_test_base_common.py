@@ -119,7 +119,7 @@ class MatchSet:
         return any(re.match(pattern, name) for pattern in self.regex)
 
 
-def _build_match_sets(d: Dict[str, list]) -> Dict[str, MatchSet]:
+def _build_match_sets(d: Dict[str, set]) -> Dict[str, MatchSet]:
     return {k: MatchSet.from_iterable(v) for k, v in d.items()}
 
 
@@ -306,6 +306,7 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
     # ---------------------------
     @classmethod
     def instantiate_test(cls, name, test, *, generic_cls=None):
+
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
         extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
