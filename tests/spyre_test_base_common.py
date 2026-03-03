@@ -18,6 +18,7 @@ Usage as we already had apart from a new environment variable that got added
     export PYTORCH_TESTING_DEVICE_ONLY_FOR="privateuse1"
     export TORCH_TEST_DEVICES=".../spyre_test_binaryfuncs.py"
     export SPYRE_PYTORCH_TEST_FILTER_TYPE=whitelist          # or blacklist
+    export SPYRE_PYTORCH_TEST_CONFIG=tests/test_binary_ufuncs.yaml
     python3 -m pytest test_binary_ufuncs.py -v
 """
 
@@ -26,6 +27,8 @@ import re
 import unittest
 from functools import wraps
 from typing import Dict, Optional, Set
+import yaml
+from pathlib import Path
 
 import torch
 # from torch.testing._internal.common_device_type import ops as _ops_parametrizer
@@ -203,6 +206,60 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
     unsupported_dtypes: Set[torch.dtype] = DEFAULT_UNSUPPORTED_DTYPES
 
     @classmethod
+    def _load_test_suite_config(cls) -> None:
+        """
+        Load YAML config pointed to by SPYRE_PYTORCH_TEST_CONFIG
+        and populate class attributes dynamically.
+        """
+        path = os.environ.get("SPYRE_PYTORCH_TEST_CONFIG")
+        if not path:
+            return
+
+        # Avoid reloading multiple times
+        if getattr(cls, "_yaml_loaded", False):
+            return
+
+        config_path = Path(path)
+        if not config_path.exists():
+            raise FileNotFoundError(f"Spyre config file not found: {config_path}")
+
+        with open(config_path, "r") as f:
+            data = yaml.safe_load(f) or {}
+
+        # --------------------------
+        # WHITELIST / BLACKLIST
+        # --------------------------
+        cls.WHITELISTED_TESTS = {
+            k: set(v) for k, v in data.get("_WHITELISTED", {}).items()
+        }
+
+        cls.BLACKLISTED_TESTS = {
+            k: set(v) for k, v in data.get("_BLACKLISTED", {}).items()
+        }
+
+        # --------------------------
+        # PRECISION OVERRIDES
+        # --------------------------
+        cls.PRECISION_OVERRIDES = data.get("_PRECISION_OVERRIDES", {})
+
+        # --------------------------
+        # EXTRA ALLOWED DTYPES
+        # --------------------------
+        extra = {}
+        for test_name, dtype_list in data.get("_EXTRA_ALLOWED_DTYPES", {}).items():
+            extra[test_name] = {parse_dtype(dt) for dt in dtype_list}
+        cls.EXTRA_ALLOWED_DTYPES = extra
+
+        # --------------------------
+        # UNSUPPORTED DTYPES
+        # --------------------------
+        unsupported = data.get("_UNSUPPORTED_DTYPES")
+        if unsupported:
+            cls.unsupported_dtypes = {parse_dtype(dt) for dt in unsupported}
+
+        cls._yaml_loaded = True
+
+    @classmethod
     def _resolve_mode(cls) -> str:
         """
         Return the active mode: 'whitelist' or 'blacklist'.
@@ -306,6 +363,9 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
     # ---------------------------
     @classmethod
     def instantiate_test(cls, name, test, *, generic_cls=None):
+
+        # Load test-suite config
+        cls._load_test_suite_config()
 
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
