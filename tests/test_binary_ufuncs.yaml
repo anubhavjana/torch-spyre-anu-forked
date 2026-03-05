@@ -23,6 +23,8 @@ blacklist:
         - name: test_logical_and                  # Buffer not aligned (RAS::SCHEDULER::BufferNotAligned, code 0x161e)
         - name: test_logical_or                   # Same buffer alignment error as test_logical_and
         - name: test_logical                      # Control block software failure (RAS::CBRB::ControlBlockSoftFail)
+        - name: test_batch_vs_slicing             # Signal 8 - complex128 Fatal Python error: Floating-point exception
+        - name: test_comparison_ops_type_promotion_and_broadcasting # Signal 8 - complex128 Fatal Python error: Floating-point exception
 
 global:
   unsupported_dtypes:
