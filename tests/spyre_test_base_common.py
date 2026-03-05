@@ -16,10 +16,16 @@ mode is inferred automatically and SPYRE_PYTORCH_TEST_FILTER_TYPE need not be se
 
 Usage as we already had apart from a new environment variable that got added
     export PYTORCH_TESTING_DEVICE_ONLY_FOR="privateuse1"
-    export TORCH_TEST_DEVICES=".../spyre_test_binaryfuncs.py"
-    export SPYRE_PYTORCH_TEST_FILTER_TYPE=whitelist          # or blacklist
+
+    # Clone pytorch
+    $DTI_PROJECT_ROOT/torch-spyre-docs/scripts/checkout-pytorch-src.sh
+
+    export TORCH_TEST_DEVICES="$DTI_PROJECT_ROOT/torch-spyre/tests/spyre_test_base_common.py"
+    export SPYRE_PYTORCH_TEST_FILTER_TYPE=whitelist  # or blacklist
     export SPYRE_PYTORCH_TEST_CONFIG=tests/test_binary_ufuncs.yaml
-    python3 -m pytest test_binary_ufuncs.py -v
+
+    cd $DTI_PROJECT_ROOT/pytorch/test/
+    python3 -m pytest test_binary_ufuncs.py -v (Example upstream test)
 """
 
 import os
