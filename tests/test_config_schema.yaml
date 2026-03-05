@@ -1,0 +1,59 @@
+# =============================================================================
+# Spyre PyTorch Test Configuration — YAML Schema
+# =============================================================================
+# This file documents the schema for Spyre test config files.
+# All fields are optional unless marked required.
+# =============================================================================
+
+# ── whitelist ─────────────────────────────────────────────────────────────────
+# When SPYRE_PYTORCH_TEST_FILTER_TYPE=whitelist (or auto-inferred),
+# ONLY tests listed here will run. Everything else is skipped.
+
+whitelist:
+  files:
+    - class_name: <str>             # required: PyTorch generic test class name
+                                    # e.g. TestBinaryUfuncs, TestReductions
+      tests:
+        - name: <str>               # required: exact test method name
+                                    # e.g. test_scalar_support
+
+          extra_allowed_dtypes:     # optional: inject dtypes that upstream @ops(allowed_dtypes=(...))
+            - <dtype_str>           # omits. Without this, those dtype variants are never instantiated
+                                    # and cannot be whitelisted.
+
+          precision_override: <float> # optional: per-test numeric precision threshold
+                                    # e.g. 1e-3, 1e-5
+                                    # if omitted, DEFAULT_FLOATING_PRECISION (1e-3) is used
+
+          unsupported_dtypes:       # optional: per-test override of global unsupported_dtypes
+            - <dtype_str>           # takes precedence over global.unsupported_dtypes for this test only
+
+
+# ── blacklist ─────────────────────────────────────────────────────────────────
+# When SPYRE_PYTORCH_TEST_FILTER_TYPE=blacklist (or auto-inferred),
+# tests listed here are skipped. Everything else runs (subject to dtype filtering).
+# Use inline YAML comments for failure reasons -- no dedicated reason field.
+
+blacklist:
+  files:
+    - class_name: <str>             # required: PyTorch generic test class name
+      tests:
+        - name: <str>               # required: exact test method name
+                                    # e.g. - name: test_add
+
+
+# ── global ────────────────────────────────────────────────────────────────────
+# Global defaults applied across all tests.
+
+global:
+  unsupported_dtypes:               # optional: dtype variants skipped automatically in blacklist mode
+    - <dtype_str>                   # matched by suffix in generated test method names
+                                    # e.g. test_foo_spyre_float32 is skipped if float32 is listed here
+                                    # per-test unsupported_dtypes (above) overrides this per test
+
+
+# ── valid dtype strings ───────────────────
+# int8    | int16   | int32   | int64
+# uint8   | uint16  | uint32  | uint64
+# complex32 | complex64 | complex128
+# bool

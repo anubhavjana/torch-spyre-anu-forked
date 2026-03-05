@@ -48,7 +48,7 @@ import torch
 
 DEFAULT_FLOATING_PRECISION: float = 1e-3
 
-# Default set of unsupported dtypes on spyre (Per-suite subclasses may extend this set)
+# Default set of unsupported dtypes on spyre (Per-suite subclasses config may extend this set)
 DEFAULT_UNSUPPORTED_DTYPES: Set[torch.dtype] = {
     torch.complex32,
     torch.complex64,
@@ -133,6 +133,90 @@ def _build_match_sets(d: Dict[str, set]) -> Dict[str, MatchSet]:
 
 
 # ---------------------------------------------------------------------------
+# YAML config parsers
+# ---------------------------------------------------------------------------
+
+
+def _load_yaml_config(path: str) -> dict:
+    """Load and return the raw YAML config dict from *path*."""
+    config_path = Path(path)
+    if not config_path.exists():
+        raise FileNotFoundError(f"Spyre config file not found: {config_path}")
+    with open(config_path) as f:
+        return yaml.safe_load(f) or {}
+
+
+def _parse_whitelist(
+    data: dict,
+) -> tuple[Dict[str, set], Dict[str, set], Dict[str, float], Dict[str, set]]:
+    """
+    Parse whitelist section into:
+      - WHITELISTED_TESTS:              {class_name -> set of test names}
+      - EXTRA_ALLOWED_DTYPES:           {test_name  -> set of torch.dtype}
+      - PRECISION_OVERRIDES:            {test_name  -> float}
+      - PER_TEST_UNSUPPORTED_DTYPES:     {test_name  -> set of torch.dtype}
+    """
+    whitelisted: Dict[str, set] = {}
+    extra_dtypes: Dict[str, set] = {}
+    precision_overrides: Dict[str, float] = {}
+    per_test_unsupported_dtypes: Dict[str, set] = {}
+
+    for file_entry in data.get("whitelist", {}).get("files", []):
+        class_name = file_entry["class_name"]
+        test_names: set = set()
+
+        for test_cfg in file_entry.get("tests", []):
+            name = test_cfg["name"]
+            test_names.add(name)
+
+            # optional: inject dtypes missing from upstream @ops(allowed_dtypes=(...))
+            if "extra_allowed_dtypes" in test_cfg:
+                extra_dtypes[name] = {
+                    parse_dtype(dt) for dt in test_cfg["extra_allowed_dtypes"]
+                }
+
+            # optional: per-test precision threshold
+            if "precision_override" in test_cfg:
+                precision_overrides[name] = float(test_cfg["precision_override"])
+
+            # optional: per-test unsupported dtypes (overrides global for this test)
+            if "unsupported_dtypes" in test_cfg:
+                per_test_unsupported_dtypes[name] = {
+                    parse_dtype(dt) for dt in test_cfg["unsupported_dtypes"]
+                }
+
+        whitelisted[class_name] = test_names
+
+    return whitelisted, extra_dtypes, precision_overrides, per_test_unsupported_dtypes
+
+
+def _parse_blacklist(data: dict) -> Dict[str, set]:
+    """
+    Parse blacklist section into:
+      - BLACKLISTED_TESTS: {class_name -> set of test names}
+    Failure reasons are captured as inline YAML comments, not parsed.
+    """
+    blacklisted: Dict[str, set] = {}
+    for file_entry in data.get("blacklist", {}).get("files", []):
+        class_name = file_entry["class_name"]
+        blacklisted[class_name] = {
+            test_cfg["name"] for test_cfg in file_entry.get("tests", [])
+        }
+    return blacklisted
+
+
+def _parse_global(data: dict) -> Set[torch.dtype]:
+    """
+    Parse global section into unsupported_dtypes.
+    Per-test unsupported_dtypes (in whitelist) takes precedence over this.
+    """
+    global_cfg = data.get("global", {})
+    if "unsupported_dtypes" in global_cfg:
+        return {parse_dtype(dt) for dt in global_cfg["unsupported_dtypes"]}
+    return DEFAULT_UNSUPPORTED_DTYPES.copy()
+
+
+# ---------------------------------------------------------------------------
 # PrivateUse1TestBase filter
 #
 # Called once at the top of each suite file, immediately after imports.
@@ -190,81 +274,49 @@ class _SpyreDtypePatcher:
 # PrivateUse1TestBase injected via globals()
 class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: F821
     """
-    Base class for Spyre device-type tests.
+    Base class for all Spyre PyTorch test overrides.
 
-    You will need to inherit this class + PrivateUse1TestBase in each per-suite
-    file.  Declare WHITELISTED_TESTS, BLACKLISTED_TESTS, or both as class
-    attributes (which will be controlled by SPYRE_PYTORCH_TEST_FILTER_TYPE env variable).
+    All configuration is loaded from the YAML file at SPYRE_PYTORCH_TEST_CONFIG.
+    See tests/spyre_test_config_schema.yaml for the full schema.
     """
 
     device_type: str = "privateuse1"
     precision: float = DEFAULT_FLOATING_PRECISION
 
-    # Override in per-suite subclasses.
     WHITELISTED_TESTS: Dict[str, set] = {}
     BLACKLISTED_TESTS: Dict[str, set] = {}
     PRECISION_OVERRIDES: Dict[str, float] = {}
-    # Maps base test name --> set of torch.dtype to inject into @ops `allowed_dtypes``.
-    # This is to add the capability when upstream @ops(..., allowed_dtypes=...) omits dtypes Spyre supports.
     EXTRA_ALLOWED_DTYPES: Dict[str, set] = {}
-
-    # Extend in per-suite subclasses for backend-specific dtype gaps.
+    PER_TEST_UNSUPPORTED_DTYPES: Dict[str, set] = {}
     unsupported_dtypes: Set[torch.dtype] = DEFAULT_UNSUPPORTED_DTYPES
+
+    # ------------------------------------------------------------------
+    # Config loading
+    # ------------------------------------------------------------------
 
     @classmethod
     def _load_test_suite_config(cls) -> None:
-        """
-        Load YAML config pointed to by SPYRE_PYTORCH_TEST_CONFIG
-        and populate class attributes dynamically.
-        """
+        """Load YAML config from SPYRE_PYTORCH_TEST_CONFIG and populate class attributes."""
         path = os.environ.get("SPYRE_PYTORCH_TEST_CONFIG")
-        if not path:
+        if not path or getattr(cls, "_yaml_loaded", False):
             return
 
-        # Avoid reloading multiple times
-        if getattr(cls, "_yaml_loaded", False):
-            return
+        data = _load_yaml_config(path)
 
-        config_path = Path(path)
-        if not config_path.exists():
-            raise FileNotFoundError(f"Spyre config file not found: {config_path}")
+        (
+            cls.WHITELISTED_TESTS,
+            cls.EXTRA_ALLOWED_DTYPES,
+            cls.PRECISION_OVERRIDES,
+            cls.PER_TEST_UNSUPPORTED_DTYPES,
+        ) = _parse_whitelist(data)
 
-        with open(config_path, "r") as f:
-            data = yaml.safe_load(f) or {}
-
-        # --------------------------
-        # WHITELIST / BLACKLIST
-        # --------------------------
-        cls.WHITELISTED_TESTS = {
-            k: set(v) for k, v in data.get("_WHITELISTED", {}).items()
-        }
-
-        cls.BLACKLISTED_TESTS = {
-            k: set(v) for k, v in data.get("_BLACKLISTED", {}).items()
-        }
-
-        # --------------------------
-        # PRECISION OVERRIDES
-        # --------------------------
-        cls.PRECISION_OVERRIDES = data.get("_PRECISION_OVERRIDES", {})
-
-        # EXTRA ALLOWED DTYPES
-        extra: Dict[str, set] = {}
-        for _, tests in data.get("_WHITELISTED", {}).items():
-            for test_name, test_cfg in (tests or {}).items():
-                if test_cfg and "extra_allowed_dtypes" in test_cfg:
-                    extra[test_name] = {
-                        parse_dtype(dt) for dt in test_cfg["extra_allowed_dtypes"]
-                    }
-        cls.EXTRA_ALLOWED_DTYPES = extra
-
-        # PRECISION OVERRIDES / UNSUPPORTED DTYPES
-        cls.PRECISION_OVERRIDES = data.get("_PRECISION_OVERRIDES", {})
-        unsupported = data.get("_UNSUPPORTED_DTYPES")
-        if unsupported:
-            cls.unsupported_dtypes = {parse_dtype(dt) for dt in unsupported}
-
+        cls.BLACKLISTED_TESTS = _parse_blacklist(data)
+        cls.unsupported_dtypes = _parse_global(data)
         cls._yaml_loaded = True
+
+    # ------------------------------------------------------------------
+    # Mode resolution
+    # ------------------------------------------------------------------
 
     @classmethod
     def _resolve_mode(cls) -> str:
