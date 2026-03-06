@@ -11,6 +11,8 @@ tests:
               - float16
               - int64
             precision_override: 1e-3
+            unsupported_dtypes:
+              - bfloat16
 
         - test: TestBinaryUfuncs::test_broadcasting
           mode: xfail
