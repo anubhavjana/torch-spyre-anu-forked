@@ -421,9 +421,26 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
 
         data = _load_yaml_config(path)
 
-        # Determine which file entry applies by matching against the running test file.
-        # __file__ is injected into this module's globals by runpy when loaded via TORCH_TEST_DEVICES.
-        current_file = os.path.abspath(__file__)  # noqa: F821 -- injected by runpy
+        # The YAML rel_path entries refer to the upstream test file being run.
+        # Since pytest is always invoked from the pytorch/test/ directory
+        # (cd $SPYRE_PYTORCH_ROOT/test/ && python3 -m pytest test_foo.py),
+        # we can match by comparing resolved rel_paths against all .py files
+        # in the current working directory.
+
+        cwd = os.getcwd()
+        matched_file = None
+        for file_entry in data.get("tests", {}).get("files", []):
+            resolved = _resolve_rel_path(file_entry["rel_path"])
+            # Match if the resolved path lives in the current working directory
+            if os.path.dirname(os.path.abspath(resolved)) == os.path.abspath(cwd):
+                matched_file = resolved
+                break
+
+        if not matched_file:
+            raise EnvironmentError(
+                f"No rel_path in {path} matches the current working directory {cwd!r}. "
+                f"Make sure you are running pytest from the correct directory."
+            )
 
         (
             cls.WHITELISTED_TESTS,
@@ -432,7 +449,7 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
             cls.EXTRA_ALLOWED_DTYPES,
             cls.PRECISION_OVERRIDES,
             cls.PER_TEST_UNSUPPORTED_DTYPES,
-        ) = _parse_tests(data, current_file)
+        ) = _parse_tests(data, matched_file)
 
         cls.unsupported_dtypes = _parse_global(data)
         cls._yaml_loaded = True
