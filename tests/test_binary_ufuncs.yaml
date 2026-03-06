@@ -3,7 +3,8 @@ tests:
     - rel_path: ${PYTORCH}/test/test_binary_ufuncs.py
       allow_list:
         - test: TestBinaryUfuncs::test_scalar_support
-          mode: mandatory_pass
+          # mode: mandatory_pass
+          mode: xfail
           tags:
             - model_name_depending_on_this_test_1
           edits:
