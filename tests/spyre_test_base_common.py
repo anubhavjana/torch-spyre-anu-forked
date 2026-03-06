@@ -29,6 +29,7 @@ Usage as we already had apart from a new environment variable that got added
 """
 
 import os
+import sys
 import regex as re
 import unittest
 from functools import wraps
@@ -151,86 +152,6 @@ def _load_yaml_config(path: str) -> dict:
         return yaml.safe_load(f) or {}
 
 
-# def _parse_whitelist(
-#     data: dict,
-# ) -> tuple[Dict[str, set], Dict[str, set], Dict[str, float], Dict[str, set]]:
-#     """
-#     Parse whitelist section into:
-#       - WHITELISTED_TESTS:              {class_name -> set of test names}
-#       - EXTRA_ALLOWED_DTYPES:           {test_name  -> set of torch.dtype}
-#       - PRECISION_OVERRIDES:            {test_name  -> float}
-#       - PER_TEST_UNSUPPORTED_DTYPES:     {test_name  -> set of torch.dtype}
-#     """
-#     whitelisted: Dict[str, set] = {}
-#     extra_dtypes: Dict[str, set] = {}
-#     precision_overrides: Dict[str, float] = {}
-#     per_test_unsupported_dtypes: Dict[str, set] = {}
-
-#     for file_entry in data.get("whitelist", {}).get("files", []):
-#         class_name = file_entry["class_name"]
-#         test_names: set = set()
-
-#         for test_cfg in file_entry.get("tests", []):
-#             name = test_cfg["name"]
-#             test_names.add(name)
-
-#             # optional: inject dtypes missing from upstream @ops(allowed_dtypes=(...))
-#             if "extra_allowed_dtypes" in test_cfg:
-#                 extra_dtypes[name] = {
-#                     parse_dtype(dt) for dt in test_cfg["extra_allowed_dtypes"]
-#                 }
-
-#             # optional: per-test precision threshold
-#             if "precision_override" in test_cfg:
-#                 precision_overrides[name] = float(test_cfg["precision_override"])
-
-#             # optional: per-test unsupported dtypes (overrides global for this test)
-#             if "unsupported_dtypes" in test_cfg:
-#                 per_test_unsupported_dtypes[name] = {
-#                     parse_dtype(dt) for dt in test_cfg["unsupported_dtypes"]
-#                 }
-
-#         whitelisted[class_name] = test_names
-
-#     return whitelisted, extra_dtypes, precision_overrides, per_test_unsupported_dtypes
-
-
-# def _parse_blacklist(data: dict) -> Dict[str, set]:
-#     """
-#     Parse blacklist section into:
-#       - BLACKLISTED_TESTS: {class_name -> set of test names}
-#     Failure reasons are captured as inline YAML comments, not parsed.
-#     """
-#     blacklisted: Dict[str, set] = {}
-#     for file_entry in data.get("blacklist", {}).get("files", []):
-#         class_name = file_entry["class_name"]
-#         blacklisted[class_name] = {
-#             test_cfg["name"] for test_cfg in file_entry.get("tests", [])
-#         }
-#     return blacklisted
-
-
-# def _parse_xfail(data: dict) -> Dict[str, set]:
-#     """
-#     Parse xfail section into:
-#       - XFAIL_TESTS: {class_name -> set of (test_name, strict)}
-
-#     xfail tests still run but are marked with pytest.mark.xfail:
-#       - fail --> xfail  (expected, not a CI failure)
-#       - pass --> xpass  (unexpected pass)
-#     strict=True will turn an unexpected pass into a CI failure.
-#     """
-#     xfail: Dict[str, set] = {}
-#     for file_entry in data.get("xfail", {}).get("files", []):
-#         class_name = file_entry["class_name"]
-#         xfail[class_name] = {
-#             # strict defaults to False -- xpass is noted but does not fail CI
-#             (test_cfg["name"], test_cfg.get("strict", False))
-#             for test_cfg in file_entry.get("tests", [])
-#         }
-#     return xfail
-
-
 def _parse_global(data: dict) -> Set[torch.dtype]:
     """
     Parse global section into unsupported_dtypes.
@@ -306,6 +227,13 @@ def _parse_tests(
                 xfail.setdefault(class_name, set()).add((method_name, strict))
 
             # for now, tags are informational only -- stored for future reporting, not parsed here
+            # Print tags for traceability -- useful for tracking which models depend on each test
+            tags = entry.get("tags", [])
+            if tags:
+                tag_list = ", ".join(tags)
+                # pytest does not capture stderr by default - so will be available in logs without -s flag
+                print(f"[SpyreTestBase] {class_name}::{method_name} tags: [{tag_list}]", file=sys.stderr)
+
 
             edits = entry.get("edits", {}) or {}
             if "extra_allowed_dtypes" in edits:
