@@ -35,7 +35,7 @@ from functools import wraps
 from typing import Dict, Optional, Set
 import yaml
 from pathlib import Path
-
+import pytest
 import torch
 # from torch.testing._internal.common_device_type import ops as _ops_parametrizer
 # common_device_type.py is the one running our suite file via runpy, so it's not fully initialized yet when we try to import from it.
@@ -205,6 +205,27 @@ def _parse_blacklist(data: dict) -> Dict[str, set]:
     return blacklisted
 
 
+def _parse_xfail(data: dict) -> Dict[str, set]:
+    """
+    Parse xfail section into:
+      - XFAIL_TESTS: {class_name -> set of (test_name, strict)}
+
+    xfail tests still run but are marked with pytest.mark.xfail:
+      - fail --> xfail  (expected, not a CI failure)
+      - pass --> xpass  (unexpected pass)
+    strict=True will turn an unexpected pass into a CI failure.
+    """
+    xfail: Dict[str, set] = {}
+    for file_entry in data.get("xfail", {}).get("files", []):
+        class_name = file_entry["class_name"]
+        xfail[class_name] = {
+            # strict defaults to False -- xpass is noted but does not fail CI
+            (test_cfg["name"], test_cfg.get("strict", False))
+            for test_cfg in file_entry.get("tests", [])
+        }
+    return xfail
+
+
 def _parse_global(data: dict) -> Set[torch.dtype]:
     """
     Parse global section into unsupported_dtypes.
@@ -285,6 +306,7 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
 
     WHITELISTED_TESTS: Dict[str, set] = {}
     BLACKLISTED_TESTS: Dict[str, set] = {}
+    XFAIL_TESTS: Dict[str, set] = {}
     PRECISION_OVERRIDES: Dict[str, float] = {}
     EXTRA_ALLOWED_DTYPES: Dict[str, set] = {}
     PER_TEST_UNSUPPORTED_DTYPES: Dict[str, set] = {}
@@ -311,6 +333,7 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
         ) = _parse_whitelist(data)
 
         cls.BLACKLISTED_TESTS = _parse_blacklist(data)
+        cls.XFAIL_TESTS = _parse_xfail(data)
         cls.unsupported_dtypes = _parse_global(data)
         cls._yaml_loaded = True
 
@@ -362,6 +385,24 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
             )
             setattr(cls, cache_attr, _build_match_sets(source))
         return cls.__dict__[cache_attr]
+
+    # -----------------------
+    # xfail lookup helper
+    # -----------------------
+
+    @classmethod
+    def _get_xfail_entry(
+        cls, method_name: str, base_test_name: str, generic_cls_name: str
+    ) -> Optional[tuple[bool]]:
+        """
+        Return (strict,) if the test is in XFAIL_TESTS, else None.
+        Matches on either the instantiated method name or the base test name.
+        """
+        entries = cls.XFAIL_TESTS.get(generic_cls_name, set())
+        for xfail_name, strict in entries:
+            if xfail_name in (method_name, base_test_name):
+                return (strict,)
+        return None
 
     # Decide whether an instantiated test method should run
     @classmethod
@@ -456,6 +497,18 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
                     raise unittest.SkipTest(_reason)
 
                 setattr(cls, method_name, _skip)
+                continue
+
+            # Check xfail -- applied after skip so blacklisted tests are not
+            # also marked xfail. xfail tests still run; pytest reports them as
+            # xfail on failure and xpass on unexpected success.
+            xfail_entry = cls._get_xfail_entry(method_name, name, generic_cls.__name__)
+            if xfail_entry is not None:
+                (strict,) = xfail_entry
+                existing_fn = cls.__dict__.get(method_name)
+                if existing_fn is not None:
+                    marked = pytest.mark.xfail(strict=strict)(existing_fn)
+                    setattr(cls, method_name, marked)
 
 
 TEST_CLASS = SpyreTestBase

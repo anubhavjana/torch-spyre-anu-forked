@@ -41,6 +41,31 @@ blacklist:
         - name: <str>               # required: exact test method name
                                     # e.g. - name: test_add
 
+# ── xfail ─────────────────────────────────────────────────────────────────────
+# Tests that are expected to fail -- typically ops not yet implemented on Spyre.
+# These tests still run but are marked xfail via pytest.mark.xfail:
+#   - If the test fails   -> reported as xfail (expected, not a CI failure)
+#   - If the test passes  -> reported as xpass (unexpected pass)
+#
+# strict (optional, default: false):
+#   false -> xpass is reported but does not fail CI
+#   true  -> xpass fails CI (use when an op is believed to be fully implemented
+#             and any passing result should be promoted out of xfail)
+
+# Which mode to run xfail in: Use blacklist mode. 
+
+# Whitelist = run ONLY listed tests. If test_pow is not in the whitelist, it gets skipped entirely — 
+# the xfail marker never gets applied and you never see it run.
+
+# Blacklist = run everything except listed tests. e.g. test_pow runs, gets marked xfail, 
+# and pytest reports it as xfail when it fails or xpass when it unexpectedly passes.
+
+xfail:
+  files:
+    - class_name: <str>               # required: PyTorch generic test class name
+      tests:
+        - name: <str>                 # required: exact test method name
+          strict: <bool>              # optional: default false
 
 # ── global ────────────────────────────────────────────────────────────────────
 # Global defaults applied across all tests.

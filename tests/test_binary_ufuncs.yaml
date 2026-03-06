@@ -5,6 +5,7 @@ whitelist:
         - name: test_scalar_support
           extra_allowed_dtypes:   # float16 missing from upstream @ops(allowed_dtypes=(long, float32, complex64))
             - float16
+            - int64
           precision_override: 1e-3
 
 blacklist:
@@ -25,6 +26,14 @@ blacklist:
         - name: test_logical                      # Control block software failure (RAS::CBRB::ControlBlockSoftFail)
         - name: test_batch_vs_slicing             # Signal 8 - complex128 Fatal Python error: Floating-point exception
         - name: test_comparison_ops_type_promotion_and_broadcasting # Signal 8 - complex128 Fatal Python error: Floating-point exception
+
+xfail:
+  files:
+    - class_name: TestBinaryUfuncs
+      tests:
+        - name: test_pow                          # assuming: pow not yet implemented for spyre
+        - name: test_remainder                    # assuming: remainder not yet implemented for spyre
+          strict: true                            # fail the test if it unexpectedly passes
 
 global:
   unsupported_dtypes:
