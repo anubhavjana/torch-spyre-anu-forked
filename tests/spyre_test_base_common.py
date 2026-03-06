@@ -48,6 +48,11 @@ import torch
 
 DEFAULT_FLOATING_PRECISION: float = 1e-3
 
+# Mode constants for allow_list entries
+_MODE_MANDATORY_PASS = "mandatory_pass"
+_MODE_XFAIL          = "xfail"
+_MODE_XFAIL_STRICT   = "xfail_strict"
+
 # Default set of unsupported dtypes on spyre (Per-suite subclasses config may extend this set)
 DEFAULT_UNSUPPORTED_DTYPES: Set[torch.dtype] = {
     torch.complex32,
@@ -146,84 +151,84 @@ def _load_yaml_config(path: str) -> dict:
         return yaml.safe_load(f) or {}
 
 
-def _parse_whitelist(
-    data: dict,
-) -> tuple[Dict[str, set], Dict[str, set], Dict[str, float], Dict[str, set]]:
-    """
-    Parse whitelist section into:
-      - WHITELISTED_TESTS:              {class_name -> set of test names}
-      - EXTRA_ALLOWED_DTYPES:           {test_name  -> set of torch.dtype}
-      - PRECISION_OVERRIDES:            {test_name  -> float}
-      - PER_TEST_UNSUPPORTED_DTYPES:     {test_name  -> set of torch.dtype}
-    """
-    whitelisted: Dict[str, set] = {}
-    extra_dtypes: Dict[str, set] = {}
-    precision_overrides: Dict[str, float] = {}
-    per_test_unsupported_dtypes: Dict[str, set] = {}
+# def _parse_whitelist(
+#     data: dict,
+# ) -> tuple[Dict[str, set], Dict[str, set], Dict[str, float], Dict[str, set]]:
+#     """
+#     Parse whitelist section into:
+#       - WHITELISTED_TESTS:              {class_name -> set of test names}
+#       - EXTRA_ALLOWED_DTYPES:           {test_name  -> set of torch.dtype}
+#       - PRECISION_OVERRIDES:            {test_name  -> float}
+#       - PER_TEST_UNSUPPORTED_DTYPES:     {test_name  -> set of torch.dtype}
+#     """
+#     whitelisted: Dict[str, set] = {}
+#     extra_dtypes: Dict[str, set] = {}
+#     precision_overrides: Dict[str, float] = {}
+#     per_test_unsupported_dtypes: Dict[str, set] = {}
 
-    for file_entry in data.get("whitelist", {}).get("files", []):
-        class_name = file_entry["class_name"]
-        test_names: set = set()
+#     for file_entry in data.get("whitelist", {}).get("files", []):
+#         class_name = file_entry["class_name"]
+#         test_names: set = set()
 
-        for test_cfg in file_entry.get("tests", []):
-            name = test_cfg["name"]
-            test_names.add(name)
+#         for test_cfg in file_entry.get("tests", []):
+#             name = test_cfg["name"]
+#             test_names.add(name)
 
-            # optional: inject dtypes missing from upstream @ops(allowed_dtypes=(...))
-            if "extra_allowed_dtypes" in test_cfg:
-                extra_dtypes[name] = {
-                    parse_dtype(dt) for dt in test_cfg["extra_allowed_dtypes"]
-                }
+#             # optional: inject dtypes missing from upstream @ops(allowed_dtypes=(...))
+#             if "extra_allowed_dtypes" in test_cfg:
+#                 extra_dtypes[name] = {
+#                     parse_dtype(dt) for dt in test_cfg["extra_allowed_dtypes"]
+#                 }
 
-            # optional: per-test precision threshold
-            if "precision_override" in test_cfg:
-                precision_overrides[name] = float(test_cfg["precision_override"])
+#             # optional: per-test precision threshold
+#             if "precision_override" in test_cfg:
+#                 precision_overrides[name] = float(test_cfg["precision_override"])
 
-            # optional: per-test unsupported dtypes (overrides global for this test)
-            if "unsupported_dtypes" in test_cfg:
-                per_test_unsupported_dtypes[name] = {
-                    parse_dtype(dt) for dt in test_cfg["unsupported_dtypes"]
-                }
+#             # optional: per-test unsupported dtypes (overrides global for this test)
+#             if "unsupported_dtypes" in test_cfg:
+#                 per_test_unsupported_dtypes[name] = {
+#                     parse_dtype(dt) for dt in test_cfg["unsupported_dtypes"]
+#                 }
 
-        whitelisted[class_name] = test_names
+#         whitelisted[class_name] = test_names
 
-    return whitelisted, extra_dtypes, precision_overrides, per_test_unsupported_dtypes
-
-
-def _parse_blacklist(data: dict) -> Dict[str, set]:
-    """
-    Parse blacklist section into:
-      - BLACKLISTED_TESTS: {class_name -> set of test names}
-    Failure reasons are captured as inline YAML comments, not parsed.
-    """
-    blacklisted: Dict[str, set] = {}
-    for file_entry in data.get("blacklist", {}).get("files", []):
-        class_name = file_entry["class_name"]
-        blacklisted[class_name] = {
-            test_cfg["name"] for test_cfg in file_entry.get("tests", [])
-        }
-    return blacklisted
+#     return whitelisted, extra_dtypes, precision_overrides, per_test_unsupported_dtypes
 
 
-def _parse_xfail(data: dict) -> Dict[str, set]:
-    """
-    Parse xfail section into:
-      - XFAIL_TESTS: {class_name -> set of (test_name, strict)}
+# def _parse_blacklist(data: dict) -> Dict[str, set]:
+#     """
+#     Parse blacklist section into:
+#       - BLACKLISTED_TESTS: {class_name -> set of test names}
+#     Failure reasons are captured as inline YAML comments, not parsed.
+#     """
+#     blacklisted: Dict[str, set] = {}
+#     for file_entry in data.get("blacklist", {}).get("files", []):
+#         class_name = file_entry["class_name"]
+#         blacklisted[class_name] = {
+#             test_cfg["name"] for test_cfg in file_entry.get("tests", [])
+#         }
+#     return blacklisted
 
-    xfail tests still run but are marked with pytest.mark.xfail:
-      - fail --> xfail  (expected, not a CI failure)
-      - pass --> xpass  (unexpected pass)
-    strict=True will turn an unexpected pass into a CI failure.
-    """
-    xfail: Dict[str, set] = {}
-    for file_entry in data.get("xfail", {}).get("files", []):
-        class_name = file_entry["class_name"]
-        xfail[class_name] = {
-            # strict defaults to False -- xpass is noted but does not fail CI
-            (test_cfg["name"], test_cfg.get("strict", False))
-            for test_cfg in file_entry.get("tests", [])
-        }
-    return xfail
+
+# def _parse_xfail(data: dict) -> Dict[str, set]:
+#     """
+#     Parse xfail section into:
+#       - XFAIL_TESTS: {class_name -> set of (test_name, strict)}
+
+#     xfail tests still run but are marked with pytest.mark.xfail:
+#       - fail --> xfail  (expected, not a CI failure)
+#       - pass --> xpass  (unexpected pass)
+#     strict=True will turn an unexpected pass into a CI failure.
+#     """
+#     xfail: Dict[str, set] = {}
+#     for file_entry in data.get("xfail", {}).get("files", []):
+#         class_name = file_entry["class_name"]
+#         xfail[class_name] = {
+#             # strict defaults to False -- xpass is noted but does not fail CI
+#             (test_cfg["name"], test_cfg.get("strict", False))
+#             for test_cfg in file_entry.get("tests", [])
+#         }
+#     return xfail
 
 
 def _parse_global(data: dict) -> Set[torch.dtype]:
@@ -231,10 +236,86 @@ def _parse_global(data: dict) -> Set[torch.dtype]:
     Parse global section into unsupported_dtypes.
     Per-test unsupported_dtypes (in whitelist) takes precedence over this.
     """
-    global_cfg = data.get("global", {})
+    global_cfg = data.get("tests", {}).get("global", {})  # <-- was data.get("global", {})
     if "unsupported_dtypes" in global_cfg:
         return {parse_dtype(dt) for dt in global_cfg["unsupported_dtypes"]}
     return DEFAULT_UNSUPPORTED_DTYPES.copy()
+
+
+def _parse_test_id(test_id: str) -> tuple[str, str]:
+    """Parse 'ClassName::method_name' into (class_name, method_name)."""
+    parts = test_id.split("::")
+    if len(parts) != 2:
+        raise ValueError(f"Invalid test id {test_id!r}, expected 'ClassName::method_name'")
+    return parts[0], parts[1]
+
+def _resolve_rel_path(rel_path: str) -> str:
+    """
+    Resolve ${PYTORCH} and ${TORCH_SPYRE} in rel_path using env vars.
+    e.g. ${PYTORCH}/test/test_binary_ufuncs.py -> pytorch/test/test_binary_ufuncs.py
+    """
+    for token, env_var in (("${PYTORCH}", "PYTORCH"), ("${TORCH_SPYRE}", "TORCH_SPYRE")):
+        if token in rel_path:
+            root = os.environ.get(env_var)
+            if not root:
+                raise EnvironmentError(
+                    f"rel_path contains {token} but ${env_var} env var is not set."
+                )
+            rel_path = rel_path.replace(token, root)
+    return rel_path
+
+
+def _parse_tests(data: dict, current_file: str) -> tuple[
+    Dict[str, set],   # WHITELISTED_TESTS:        {class_name -> set of method names}
+    Dict[str, set],   # BLACKLISTED_TESTS:         {class_name -> set of method names}
+    Dict[str, set],   # XFAIL_TESTS:               {class_name -> set of (method, strict)}
+    Dict[str, set],   # EXTRA_ALLOWED_DTYPES:       {method -> set of torch.dtype}
+    Dict[str, float], # PRECISION_OVERRIDES:        {method -> float}
+    Dict[str, set],   # PER_TEST_UNSUPPORTED_DTYPES:{method -> set of torch.dtype}
+]:
+    whitelisted: Dict[str, set] = {}
+    blacklisted: Dict[str, set] = {}
+    xfail: Dict[str, set] = {}
+    extra_dtypes: Dict[str, set] = {}
+    precision_overrides: Dict[str, float] = {}
+    per_test_unsupported: Dict[str, set] = {}
+
+    for file_entry in data.get("tests", {}).get("files", []):
+        # Only process the file entry that matches the currently running test file
+        if _resolve_rel_path(file_entry["rel_path"]) != current_file:
+            continue
+
+        # ── allow_list ──────────────────────────────────────────────
+        for entry in file_entry.get("allow_list", []):
+            class_name, method_name = _parse_test_id(entry["test"])
+            whitelisted.setdefault(class_name, set()).add(method_name)
+
+            mode = entry.get("mode", _MODE_MANDATORY_PASS)
+            if mode in (_MODE_XFAIL, _MODE_XFAIL_STRICT):
+                strict = mode == _MODE_XFAIL_STRICT
+                xfail.setdefault(class_name, set()).add((method_name, strict))
+
+            # for now, tags are informational only -- stored for future reporting, not parsed here
+
+            edits = entry.get("edits", {}) or {}
+            if "extra_allowed_dtypes" in edits:
+                extra_dtypes[method_name] = {
+                    parse_dtype(dt) for dt in edits["extra_allowed_dtypes"]
+                }
+            if "precision_override" in edits:
+                precision_overrides[method_name] = float(edits["precision_override"])
+            if "unsupported_dtypes" in edits:
+                per_test_unsupported[method_name] = {
+                    parse_dtype(dt) for dt in edits["unsupported_dtypes"]
+                }
+
+        # ── block_list ───────────────────────────────────────────────
+        for entry in file_entry.get("block_list", []):
+            class_name, method_name = _parse_test_id(entry["test"])
+            blacklisted.setdefault(class_name, set()).add(method_name)
+
+    return whitelisted, blacklisted, xfail, extra_dtypes, precision_overrides, per_test_unsupported
+
 
 
 # ---------------------------------------------------------------------------
@@ -318,22 +399,25 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
 
     @classmethod
     def _load_test_suite_config(cls) -> None:
-        """Load YAML config from SPYRE_PYTORCH_TEST_CONFIG and populate class attributes."""
         path = os.environ.get("SPYRE_PYTORCH_TEST_CONFIG")
         if not path or getattr(cls, "_yaml_loaded", False):
             return
 
         data = _load_yaml_config(path)
 
+        # Determine which file entry applies by matching against the running test file.
+        # __file__ is injected into this module's globals by runpy when loaded via TORCH_TEST_DEVICES.
+        current_file = os.path.abspath(__file__)  # noqa: F821 -- injected by runpy
+
         (
             cls.WHITELISTED_TESTS,
+            cls.BLACKLISTED_TESTS,
+            cls.XFAIL_TESTS,
             cls.EXTRA_ALLOWED_DTYPES,
             cls.PRECISION_OVERRIDES,
             cls.PER_TEST_UNSUPPORTED_DTYPES,
-        ) = _parse_whitelist(data)
+        ) = _parse_tests(data, current_file)
 
-        cls.BLACKLISTED_TESTS = _parse_blacklist(data)
-        cls.XFAIL_TESTS = _parse_xfail(data)
         cls.unsupported_dtypes = _parse_global(data)
         cls._yaml_loaded = True
 

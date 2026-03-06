@@ -1,48 +1,45 @@
-whitelist:
+tests:
   files:
-    - class_name: TestBinaryUfuncs
-      tests:
-        - name: test_scalar_support
-          extra_allowed_dtypes:   # float16 missing from upstream @ops(allowed_dtypes=(long, float32, complex64))
-            - float16
-            - int64
-          precision_override: 1e-3
+    - rel_path: ${PYTORCH}/test/test_binary_ufuncs.py
 
-blacklist:
-  files:
-    - class_name: TestBinaryUfuncs
-      tests:
-        - name: test_add_broadcast_empty          # Signal Received: 11 (Segmentation fault)
-        - name: test_add                          # Failed
-        - name: test_addcmul_scalars_as_floats    # Failed
-        - name: test_atan2_edgecases              # Failed
-        - name: test_atan2                        # Signal Received: 8 (Floating point exception)
-        - name: test_float_power_exceptions       # Signal Received: 8 (Floating point exception)
-        - name: test_gcd                          # Buffer not aligned (RAS::SCHEDULER::BufferNotAligned, code 0x161e)
-        - name: test_int_tensor_pow_neg_ints      # DtException: Unsupported data format types / Signal Received: 6
-        - name: test_idiv_and_ifloordiv_vs_python # free(): invalid next size / Signal Received: 6 (Aborted)
-        - name: test_logical_and                  # Buffer not aligned (RAS::SCHEDULER::BufferNotAligned, code 0x161e)
-        - name: test_logical_or                   # Same buffer alignment error as test_logical_and
-        - name: test_logical                      # Control block software failure (RAS::CBRB::ControlBlockSoftFail)
-        - name: test_batch_vs_slicing             # Signal 8 - complex128 Fatal Python error: Floating-point exception
-        - name: test_comparison_ops_type_promotion_and_broadcasting # Signal 8 - complex128 Fatal Python error: Floating-point exception
-        - name: test_complex_div_underflow_overflow # Fatal Python error: Floating-point exception
-        - name: test_complex_scalar_pow_tensor    # complex128 Fatal Python error: Floating-point exception
+      allow_list:
+        - test: TestBinaryUfuncs::test_scalar_support
+          mode: mandatory_pass
+          tags:
+            - model_name_depending_on_this_test_1
+          edits:
+            extra_allowed_dtypes:   # float16 missing from upstream @ops(allowed_dtypes=(long, float32, complex64))
+              - float16
+              - int64
+            precision_override: 1e-3
 
+        - test: TestBinaryUfuncs::test_broadcasting
+          mode: xfail
+          tags:
+            - model_name_depending_on_this_test_2
 
-xfail:
-  files:
-    - class_name: TestBinaryUfuncs
-      tests:
-        - name: test_broadcasting
-        - name: test_pow                          # assuming: pow not yet implemented for spyre
-        - name: test_remainder                    # assuming: remainder not yet implemented for spyre
-          strict: true                            # fail the test if it unexpectedly passes
+      block_list:
+        - test: TestBinaryUfuncs::test_add_broadcast_empty          # Signal Received: 11 (Segmentation fault)
+        - test: TestBinaryUfuncs::test_add                          # Failed
+        - test: TestBinaryUfuncs::test_addcmul_scalars_as_floats    # Failed
+        - test: TestBinaryUfuncs::test_atan2_edgecases              # Failed
+        - test: TestBinaryUfuncs::test_atan2                        # Signal Received: 8 (Floating point exception)
+        - test: TestBinaryUfuncs::test_float_power_exceptions       # Signal Received: 8 (Floating point exception)
+        - test: TestBinaryUfuncs::test_gcd                          # Buffer not aligned (RAS::SCHEDULER::BufferNotAligned, code 0x161e)
+        - test: TestBinaryUfuncs::test_int_tensor_pow_neg_ints      # DtException: Unsupported data format types / Signal Received: 6
+        - test: TestBinaryUfuncs::test_idiv_and_ifloordiv_vs_python # free(): invalid next size / Signal Received: 6 (Aborted)
+        - test: TestBinaryUfuncs::test_logical_and                  # Buffer not aligned (RAS::SCHEDULER::BufferNotAligned, code 0x161e)
+        - test: TestBinaryUfuncs::test_logical_or                   # Same buffer alignment error as test_logical_and
+        - test: TestBinaryUfuncs::test_logical                      # Control block software failure (RAS::CBRB::ControlBlockSoftFail)
+        - test: TestBinaryUfuncs::test_batch_vs_slicing             # Signal 8 - complex128 Fatal Python error: Floating-point exception
+        - test: TestBinaryUfuncs::test_comparison_ops_type_promotion_and_broadcasting # Signal 8 - complex128
+        - test: TestBinaryUfuncs::test_complex_div_underflow_overflow # Fatal Python error: Floating-point exception
+        - test: TestBinaryUfuncs::test_complex_scalar_pow_tensor    # complex128 Fatal Python error: Floating-point exception
 
-global:
-  unsupported_dtypes:
-    - bfloat16
-    - int16
-    - int32
-    - float32
-    - float64
+  global:
+    unsupported_dtypes:
+      - bfloat16
+      - int16
+      - int32
+      - float32
+      - float64
