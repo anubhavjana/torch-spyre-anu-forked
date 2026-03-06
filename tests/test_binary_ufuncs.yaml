@@ -26,13 +26,14 @@ blacklist:
         - name: test_logical                      # Control block software failure (RAS::CBRB::ControlBlockSoftFail)
         - name: test_batch_vs_slicing             # Signal 8 - complex128 Fatal Python error: Floating-point exception
         - name: test_comparison_ops_type_promotion_and_broadcasting # Signal 8 - complex128 Fatal Python error: Floating-point exception
-        # - name: test_complex_div_underflow_overflow
+        - name: test_complex_div_underflow_overflow # Fatal Python error: Floating-point exception
+
 
 xfail:
   files:
     - class_name: TestBinaryUfuncs
       tests:
-        - name: test_complex_div_underflow_overflow
+        - name: test_broadcasting
         - name: test_pow                          # assuming: pow not yet implemented for spyre
         - name: test_remainder                    # assuming: remainder not yet implemented for spyre
           strict: true                            # fail the test if it unexpectedly passes
