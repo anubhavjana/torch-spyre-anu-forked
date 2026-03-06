@@ -4,7 +4,7 @@ tests:
       allow_list:
         - test: TestBinaryUfuncs::test_scalar_support
           # mode: mandatory_pass
-          mode: xfail
+          mode: xfail_strict
           tags:
             - model_name_depending_on_this_test_1
           edits:
