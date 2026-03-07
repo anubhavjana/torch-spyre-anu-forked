@@ -29,7 +29,6 @@ Usage as we already had apart from a new environment variable that got added
 """
 
 import os
-import sys
 import regex as re
 import unittest
 from functools import wraps
@@ -203,6 +202,7 @@ def _parse_tests(
     Dict[str, set],  # EXTRA_ALLOWED_DTYPES:       {method -> set of torch.dtype}
     Dict[str, float],  # PRECISION_OVERRIDES:        {method -> float}
     Dict[str, set],  # PER_TEST_UNSUPPORTED_DTYPES:{method -> set of torch.dtype}
+    Dict[str, list],
 ]:
     whitelisted: Dict[str, set] = {}
     blacklisted: Dict[str, set] = {}
@@ -227,7 +227,6 @@ def _parse_tests(
             if mode in (_MODE_XFAIL, _MODE_XFAIL_STRICT):
                 strict = mode == _MODE_XFAIL_STRICT
                 xfail.setdefault(class_name, set()).add((method_name, strict))
-
 
             edits = entry.get("edits", {}) or {}
             if "extra_allowed_dtypes" in edits:
@@ -523,8 +522,11 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
         tags = cls.TEST_TAGS.get(name)
         if tags:
             tag_list = ", ".join(tags)
-            sys.stderr.write(
-                f"[SpyreTestBase] {generic_cls.__name__}::{name} tags: [{tag_list}]\n"
+            # os.write(2, ...) writes directly to file descriptor 2
+            # pytest only redirects the Python sys.stderr object, not the underlying file descriptor,
+            os.write(
+                2,
+                f"[SpyreTestBase] {generic_cls.__name__}::{name} tags: [{tag_list}]\n".encode(),
             )
 
         # Per-test precision override
