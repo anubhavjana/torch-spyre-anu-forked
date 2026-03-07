@@ -210,6 +210,7 @@ def _parse_tests(
     extra_dtypes: Dict[str, set] = {}
     precision_overrides: Dict[str, float] = {}
     per_test_unsupported: Dict[str, set] = {}
+    tags: Dict[str, list] = {}
 
     for file_entry in data.get("tests", {}).get("files", []):
         # Only process the file entry that matches the currently running test file
@@ -220,19 +221,12 @@ def _parse_tests(
         for entry in file_entry.get("allow_list", []):
             class_name, method_name = _parse_test_id(entry["test"])
             whitelisted.setdefault(class_name, set()).add(method_name)
+            tags[method_name] = entry.get("tags", [])
 
             mode = entry.get("mode", _MODE_MANDATORY_PASS)
             if mode in (_MODE_XFAIL, _MODE_XFAIL_STRICT):
                 strict = mode == _MODE_XFAIL_STRICT
                 xfail.setdefault(class_name, set()).add((method_name, strict))
-
-            # for now, tags are informational only -- stored for future reporting, not parsed here
-            # Print tags for traceability -- useful for tracking which models depend on each test
-            tags = entry.get("tags", [])
-            if tags:
-                tag_list = ", ".join(tags)
-                # pytest does not capture stderr by default - so will be available in logs without -s flag
-                print(f"[SpyreTestBase] {class_name}::{method_name} tags: [{tag_list}]", file=sys.stderr)
 
 
             edits = entry.get("edits", {}) or {}
@@ -259,6 +253,7 @@ def _parse_tests(
         extra_dtypes,
         precision_overrides,
         per_test_unsupported,
+        tags,
     )
 
 
@@ -335,6 +330,7 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
     PRECISION_OVERRIDES: Dict[str, float] = {}
     EXTRA_ALLOWED_DTYPES: Dict[str, set] = {}
     PER_TEST_UNSUPPORTED_DTYPES: Dict[str, set] = {}
+    TEST_TAGS: Dict[str, list] = {}
     unsupported_dtypes: Set[torch.dtype] = DEFAULT_UNSUPPORTED_DTYPES
 
     # ------------------------------------------------------------------
@@ -377,6 +373,7 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
             cls.EXTRA_ALLOWED_DTYPES,
             cls.PRECISION_OVERRIDES,
             cls.PER_TEST_UNSUPPORTED_DTYPES,
+            cls.TEST_TAGS,
         ) = _parse_tests(data, matched_file)
 
         cls.unsupported_dtypes = _parse_global(data)
@@ -521,6 +518,14 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
     def instantiate_test(cls, name, test, *, generic_cls=None):
         # Load test-suite config
         cls._load_test_suite_config()
+
+        # Print tags for traceability after config is loaded
+        tags = cls.TEST_TAGS.get(name)
+        if tags:
+            tag_list = ", ".join(tags)
+            sys.stderr.write(
+                f"[SpyreTestBase] {generic_cls.__name__}::{name} tags: [{tag_list}]\n"
+            )
 
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
