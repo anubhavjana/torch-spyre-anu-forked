@@ -45,3 +45,7 @@ tests:
       - int32
       - float32
       - float64
+    supported_ops:                  # restricts op_db to these ops before @ops sees the lists 
+      - add                         # torch.add
+      - mul                         # torch.mul
+      - sub                         # torch.sub

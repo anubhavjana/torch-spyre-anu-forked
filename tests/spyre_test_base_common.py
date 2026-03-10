@@ -29,12 +29,9 @@ Usage as we already had apart from a new environment variable that got added
 """
 
 import os
-import regex as re
 import unittest
 from functools import wraps
-from typing import Dict, Optional, Set
-import yaml
-from pathlib import Path
+from typing import Dict, Optional, Set, List
 import pytest
 import torch
 # from torch.testing._internal.common_device_type import ops as _ops_parametrizer
@@ -42,218 +39,28 @@ import torch
 # The fix is to do a lazy import inside the function, not at module level:
 
 
-# ------------
-# Constants
-# -----------
-
-DEFAULT_FLOATING_PRECISION: float = 1e-3
-
-# Mode constants for allow_list entries
-_MODE_MANDATORY_PASS = "mandatory_pass"
-_MODE_XFAIL = "xfail"
-_MODE_XFAIL_STRICT = "xfail_strict"
-
-# Default set of unsupported dtypes on spyre (Per-suite subclasses config may extend this set)
-DEFAULT_UNSUPPORTED_DTYPES: Set[torch.dtype] = {
-    torch.complex32,
-    torch.complex64,
-    torch.complex128,
-}
-
-# Valid values for SPYRE_PYTORCH_TEST_FILTER_TYPE
-_MODE_WHITELIST = "whitelist"
-_MODE_BLACKLIST = "blacklist"
-
-# ----------------------------
-# Dtype helper data structures
-# ----------------------------
-
-_DTYPE_STR_MAP: Dict[str, torch.dtype] = {
-    "float16": torch.float16,
-    "float32": torch.float32,
-    "float64": torch.float64,
-    "bfloat16": torch.bfloat16,
-    "int8": torch.int8,
-    "int16": torch.int16,
-    "int32": torch.int32,
-    "int64": torch.int64,
-    "uint8": torch.uint8,
-    "uint16": torch.uint16,
-    "uint32": torch.uint32,
-    "uint64": torch.uint64,
-    "complex32": torch.complex32,
-    "complex64": torch.complex64,
-    "complex128": torch.complex128,
-    "bool": torch.bool,
-}
-
-# Ordered longest-first so "complex128" matches before "complex12"
-_DTYPE_NAMES_ORDERED = sorted(_DTYPE_STR_MAP.keys(), key=len, reverse=True)
-
-
-def extract_dtype_from_name(method_name: str) -> Optional[str]:
-    """Return the dtype suffix embedded in *method_name*, or None."""
-    for dtype in _DTYPE_NAMES_ORDERED:
-        if f"_{dtype}_" in method_name or method_name.endswith(f"_{dtype}"):
-            return dtype
-    return None
-
-
-def parse_dtype(dtype_str: str) -> torch.dtype:
-    if dtype_str not in _DTYPE_STR_MAP:
-        raise ValueError(f"Unknown dtype string: {dtype_str!r}")
-    return _DTYPE_STR_MAP[dtype_str]
-
-
-# -------------------
-# Match-set helpers
-# -------------------
-
-
-class MatchSet:
-    """Holds exact names and regex patterns for fast membership tests."""
-
-    def __init__(self):
-        self.exact: Set[str] = set()
-        self.regex: Set[str] = set()
-
-    @classmethod
-    def from_iterable(cls, items):
-        ms = cls()
-        for m in items:
-            if re.match(r"\w+$", m):
-                ms.exact.add(m)
-            else:
-                ms.regex.add(m)
-        return ms
-
-    def matches(self, name: str) -> bool:
-        if name in self.exact:
-            return True
-        return any(re.match(pattern, name) for pattern in self.regex)
-
-
-def _build_match_sets(d: Dict[str, set]) -> Dict[str, MatchSet]:
-    return {k: MatchSet.from_iterable(v) for k, v in d.items()}
-
-
-# ---------------------------------------------------------------------------
-# YAML config parsers
-# ---------------------------------------------------------------------------
-
-
-def _load_yaml_config(path: str) -> dict:
-    """Load and return the raw YAML config dict from *path*."""
-    config_path = Path(path)
-    if not config_path.exists():
-        raise FileNotFoundError(f"Spyre config file not found: {config_path}")
-    with open(config_path) as f:
-        return yaml.safe_load(f) or {}
-
-
-def _parse_global(data: dict) -> Set[torch.dtype]:
-    """
-    Parse global section into unsupported_dtypes.
-    Per-test unsupported_dtypes (in whitelist) takes precedence over this.
-    """
-    global_cfg = data.get("tests", {}).get("global", {})
-    if "unsupported_dtypes" in global_cfg:
-        return {parse_dtype(dt) for dt in global_cfg["unsupported_dtypes"]}
-    return DEFAULT_UNSUPPORTED_DTYPES.copy()
-
-
-def _parse_test_id(test_id: str) -> tuple[str, str]:
-    """Parse 'ClassName::method_name' into (class_name, method_name)."""
-    parts = test_id.split("::")
-    if len(parts) != 2:
-        raise ValueError(
-            f"Invalid test id {test_id!r}, expected 'ClassName::method_name'"
-        )
-    return parts[0], parts[1]
-
-
-def _resolve_rel_path(rel_path: str) -> str:
-    """
-    Resolve ${PYTORCH} and ${TORCH_SPYRE} in rel_path using env vars.
-    e.g. ${PYTORCH}/test/test_binary_ufuncs.py -> pytorch/test/test_binary_ufuncs.py
-    """
-    for token, env_var in (
-        ("${PYTORCH}", "SPYRE_PYTORCH_ROOT"),
-        ("${TORCH_SPYRE}", "SPYRE_TORCH_SPYRE_ROOT"),
-    ):
-        if token in rel_path:
-            root = os.environ.get(env_var)
-            if not root:
-                raise EnvironmentError(
-                    f"rel_path contains {token} but ${env_var} env var is not set."
-                )
-            rel_path = rel_path.replace(token, root)
-    return rel_path
-
-
-def _parse_tests(
-    data: dict, current_file: str
-) -> tuple[
-    Dict[str, set],  # WHITELISTED_TESTS:        {class_name -> set of method names}
-    Dict[str, set],  # BLACKLISTED_TESTS:         {class_name -> set of method names}
-    Dict[
-        str, set
-    ],  # XFAIL_TESTS:               {class_name -> set of (method, strict)}
-    Dict[str, set],  # EXTRA_ALLOWED_DTYPES:       {method -> set of torch.dtype}
-    Dict[str, float],  # PRECISION_OVERRIDES:        {method -> float}
-    Dict[str, set],  # PER_TEST_UNSUPPORTED_DTYPES:{method -> set of torch.dtype}
-    Dict[str, list],
-]:
-    whitelisted: Dict[str, set] = {}
-    blacklisted: Dict[str, set] = {}
-    xfail: Dict[str, set] = {}
-    extra_dtypes: Dict[str, set] = {}
-    precision_overrides: Dict[str, float] = {}
-    per_test_unsupported: Dict[str, set] = {}
-    tags: Dict[str, list] = {}
-
-    for file_entry in data.get("tests", {}).get("files", []):
-        # Only process the file entry that matches the currently running test file
-        if _resolve_rel_path(file_entry["rel_path"]) != current_file:
-            continue
-
-        # ── allow_list ──────────────────────────────────────────────
-        for entry in file_entry.get("allow_list", []):
-            class_name, method_name = _parse_test_id(entry["test"])
-            whitelisted.setdefault(class_name, set()).add(method_name)
-            tags[method_name] = entry.get("tags", [])
-
-            mode = entry.get("mode", _MODE_MANDATORY_PASS)
-            if mode in (_MODE_XFAIL, _MODE_XFAIL_STRICT):
-                strict = mode == _MODE_XFAIL_STRICT
-                xfail.setdefault(class_name, set()).add((method_name, strict))
-
-            edits = entry.get("edits", {}) or {}
-            if "extra_allowed_dtypes" in edits:
-                extra_dtypes[method_name] = {
-                    parse_dtype(dt) for dt in edits["extra_allowed_dtypes"]
-                }
-            if "precision_override" in edits:
-                precision_overrides[method_name] = float(edits["precision_override"])
-            if "unsupported_dtypes" in edits:
-                per_test_unsupported[method_name] = {
-                    parse_dtype(dt) for dt in edits["unsupported_dtypes"]
-                }
-
-        # ── block_list ───────────────────────────────────────────────
-        for entry in file_entry.get("block_list", []):
-            class_name, method_name = _parse_test_id(entry["test"])
-            blacklisted.setdefault(class_name, set()).add(method_name)
-
-    return (
-        whitelisted,
-        blacklisted,
-        xfail,
-        extra_dtypes,
-        precision_overrides,
-        per_test_unsupported,
-        tags,
-    )
+from spyre_test_constants import (
+    DEFAULT_FLOATING_PRECISION,
+    DEFAULT_UNSUPPORTED_DTYPES,
+    ENV_FILTER_TYPE,
+    ENV_TEST_CONFIG,
+    MODE_BLACKLIST,
+    MODE_WHITELIST,
+)
+from spyre_test_matching import (
+    MatchSet,
+    build_match_sets,
+    extract_dtype_from_name,
+    parse_dtype,
+)
+from spyre_test_parsing import (
+    filter_op_db,
+    load_yaml_config,
+    parse_global_supported_ops,
+    parse_global_unsupported_dtypes,
+    parse_tests,
+    resolve_current_file,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -312,59 +119,49 @@ class _SpyreDtypePatcher:
 
 
 # PrivateUse1TestBase injected via globals()
-class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: F821
-    """
-    Base class for all Spyre PyTorch test overrides.
+class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa: F821
+    """Base class for all Spyre PyTorch test overrides.
 
-    All configuration is loaded from the YAML file at SPYRE_PYTORCH_TEST_CONFIG.
-    See tests/spyre_test_config_schema.yaml for the full schema.
+    All configuration is loaded lazily from the YAML file at
+    SPYRE_PYTORCH_TEST_CONFIG.  See tests/spyre_test_config_schema.yaml for
+    the full schema.
     """
 
     device_type: str = "privateuse1"
     precision: float = DEFAULT_FLOATING_PRECISION
 
+    # Populated by _load_test_suite_config on first call
     WHITELISTED_TESTS: Dict[str, set] = {}
     BLACKLISTED_TESTS: Dict[str, set] = {}
     XFAIL_TESTS: Dict[str, set] = {}
     PRECISION_OVERRIDES: Dict[str, float] = {}
     EXTRA_ALLOWED_DTYPES: Dict[str, set] = {}
     PER_TEST_UNSUPPORTED_DTYPES: Dict[str, set] = {}
-    TEST_TAGS: Dict[str, list] = {}
+    TEST_TAGS: Dict[str, List] = {}
     unsupported_dtypes: Set[torch.dtype] = DEFAULT_UNSUPPORTED_DTYPES
 
     # ------------------------------------------------------------------
-    # Config loading
+    # Config loading  (called once per test run)
     # ------------------------------------------------------------------
 
     @classmethod
     def _load_test_suite_config(cls) -> None:
-        path = os.environ.get("SPYRE_PYTORCH_TEST_CONFIG")
+        path = os.environ.get(ENV_TEST_CONFIG)
         if not path or getattr(cls, "_yaml_loaded", False):
             return
 
-        data = _load_yaml_config(path)
+        data = load_yaml_config(path)
 
-        # The YAML rel_path entries refer to the upstream test file being run.
-        # Since pytest is always invoked from the pytorch/test/ directory
-        # (cd $SPYRE_PYTORCH_ROOT/test/ && python3 -m pytest test_foo.py),
-        # we can match by comparing resolved rel_paths against all .py files
-        # in the current working directory.
+        # ── op_db filtering (must happen before @ops sees the lists) ──
+        supported_ops = parse_global_supported_ops(data)
+        if supported_ops is not None:
+            filter_op_db(supported_ops)
 
-        cwd = os.getcwd()
-        matched_file = None
-        for file_entry in data.get("tests", {}).get("files", []):
-            resolved = _resolve_rel_path(file_entry["rel_path"])
-            # Match if the resolved path lives in the current working directory
-            if os.path.dirname(os.path.abspath(resolved)) == os.path.abspath(cwd):
-                matched_file = resolved
-                break
+        # ── resolve which file entry applies ──────────────────────────
+        # pytest is always invoked from pytorch/test/, so we match by cwd.
+        current_file = resolve_current_file(data, path)
 
-        if not matched_file:
-            raise EnvironmentError(
-                f"No rel_path in {path} matches the current working directory {cwd!r}. "
-                f"Make sure you are running pytest from the correct directory."
-            )
-
+        # ── parse allow_list / block_list ─────────────────────────────
         (
             cls.WHITELISTED_TESTS,
             cls.BLACKLISTED_TESTS,
@@ -373,9 +170,9 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
             cls.PRECISION_OVERRIDES,
             cls.PER_TEST_UNSUPPORTED_DTYPES,
             cls.TEST_TAGS,
-        ) = _parse_tests(data, matched_file)
+        ) = parse_tests(data, current_file)
 
-        cls.unsupported_dtypes = _parse_global(data)
+        cls.unsupported_dtypes = parse_global_unsupported_dtypes(data)
         cls._yaml_loaded = True
 
     # ------------------------------------------------------------------
@@ -384,35 +181,31 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
 
     @classmethod
     def _resolve_mode(cls) -> str:
-        """
-        Return the active mode: 'whitelist' or 'blacklist'.
+        """Return the active filter mode: 'whitelist' or 'blacklist'.
+
         Priority:
-          1. SPYRE_PYTORCH_TEST_FILTER_TYPE env var
-          2. Inferred from which dicts are populated on the class
+          1. SPYRE_PYTORCH_TEST_FILTER_TYPE env var (explicit)
+          2. Inferred: whitelist if WHITELISTED_TESTS is populated, else blacklist
+          3. Default: blacklist (run everything)
         """
-        env = os.environ.get("SPYRE_PYTORCH_TEST_FILTER_TYPE", "").strip().lower()
-        if env in (_MODE_WHITELIST, _MODE_BLACKLIST):
+        env = os.environ.get(ENV_FILTER_TYPE, "").strip().lower()
+        if env in (MODE_WHITELIST, MODE_BLACKLIST):
             return env
         if env:
             raise ValueError(
-                f"SPYRE_PYTORCH_TEST_FILTER_TYPE={env!r} is invalid. "
-                f"Use 'whitelist' or 'blacklist'."
+                f"{ENV_FILTER_TYPE}={env!r} is invalid. "
+                f"Use {MODE_WHITELIST!r} or {MODE_BLACKLIST!r}."
             )
-
-        # Prefer whitelist if WHITELISTED_TESTS is populated (priority)
         if cls.WHITELISTED_TESTS:
-            return _MODE_WHITELIST
-
-        # Prefer blacklist if BLACKLISTED_TESTS is populated
+            return MODE_WHITELIST
         if cls.BLACKLISTED_TESTS:
-            return _MODE_BLACKLIST
+            return MODE_BLACKLIST
+        return MODE_BLACKLIST  # default: run everything
 
-        # Nothing is defined ->  blacklist mode (run everything by default)
-        return _MODE_BLACKLIST
-
-    # ----------------------------
+    # ------------------------------------------------------------------
     # Compiled match-set cache
-    # ----------------------------
+    # ------------------------------------------------------------------
+
     @classmethod
     def _get_active_match_sets(cls) -> Dict[str, MatchSet]:
         """Return compiled MatchSets for whichever dict is active."""
@@ -421,35 +214,25 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
         if cache_attr not in cls.__dict__ or cls.__dict__[cache_attr] is None:
             source = (
                 cls.WHITELISTED_TESTS
-                if mode == _MODE_WHITELIST
+                if mode == MODE_WHITELIST
                 else cls.BLACKLISTED_TESTS
             )
-            setattr(cls, cache_attr, _build_match_sets(source))
+            setattr(cls, cache_attr, build_match_sets(source))
         return cls.__dict__[cache_attr]
 
-    # -----------------------
-    # xfail lookup helper
-    # -----------------------
-
-    @classmethod
-    def _get_xfail_entry(
-        cls, method_name: str, base_test_name: str, generic_cls_name: str
-    ) -> Optional[tuple[bool]]:
-        """
-        Return (strict,) if the test is in XFAIL_TESTS, else None.
-        Matches on either the instantiated method name or the base test name.
-        """
-        entries = cls.XFAIL_TESTS.get(generic_cls_name, set())
-        for xfail_name, strict in entries:
-            if xfail_name in (method_name, base_test_name):
-                return (strict,)
-        return None
+    # ------------------------------------------------------------------
+    # Dtype unsupported check
+    # ------------------------------------------------------------------
 
     @classmethod
     def _is_dtype_unsupported(
         cls, method_name: str, base_test_name: str
     ) -> Optional[str]:
-        """Return skip reason if dtype is unsupported, else None."""
+        """Return a skip reason string if the dtype is unsupported, else None.
+
+        Per-test edits.unsupported_dtypes takes precedence over
+        global.unsupported_dtypes (complete override, not a union).
+        """
         dtype_str = extract_dtype_from_name(method_name)
         if dtype_str:
             try:
@@ -462,46 +245,64 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
                 pass
         return None
 
-    # Decide whether an instantiated test method should run
+    # ------------------------------------------------------------------
+    # xfail lookup
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def _get_xfail_entry(
+        cls, method_name: str, base_test_name: str, generic_cls_name: str
+    ) -> Optional[tuple]:
+        """Return (strict,) if the test is in XFAIL_TESTS, else None.
+
+        Matches on either the instantiated method name or the base test name.
+        """
+        entries = cls.XFAIL_TESTS.get(generic_cls_name, set())
+        for xfail_name, strict in entries:
+            if xfail_name in (method_name, base_test_name):
+                return (strict,)
+        return None
+
+    # ------------------------------------------------------------------
+    # _should_run
+    # ------------------------------------------------------------------
+
     @classmethod
     def _should_run(
         cls,
         method_name: str,
         base_test_name: str,
         generic_cls_name: str,
-    ) -> tuple[bool, Optional[str]]:
-        """
+    ) -> tuple:
+        """Decide whether an instantiated test method should run.
 
         Whitelist mode
-        -> Test is in WHITELISTED_TESTS for this class then RUN
-        -> Otherwise SKIP
+          - name in WHITELISTED_TESTS  -> RUN  (subject to dtype filter)
+          - otherwise                  -> SKIP
 
         Blacklist mode
-        -> Test is in BLACKLISTED_TESTS for this class then SKIP
-        -> Otherwise RUN with dtype filter applied
+          - name in BLACKLISTED_TESTS  -> SKIP
+          - otherwise                  -> RUN  (subject to dtype filter)
 
-        #   Dtype filtering (both modes)
-        #   Tests with unsupported dtype are skipped regardless of mode.
-        #   Per-test edits.unsupported_dtypes takes precedence over global.unsupported_dtypes.
+        Dtype filtering (both modes)
+          Tests whose method name embeds an unsupported dtype are skipped.
+          Per-test edits.unsupported_dtypes overrides global.unsupported_dtypes.
+
+        Returns:
+            (enabled: bool, reason: Optional[str])
         """
         mode = cls._resolve_mode()
-        match_sets = cls._get_active_match_sets()
-        mset = match_sets.get(generic_cls_name)
+        mset: Optional[MatchSet] = cls._get_active_match_sets().get(generic_cls_name)
 
         def _name_matches(ms: Optional[MatchSet]) -> bool:
-            if ms is None:
-                return False
-            return ms.matches(method_name) or ms.matches(base_test_name)
+            return ms is not None and (
+                ms.matches(method_name) or ms.matches(base_test_name)
+            )
 
-        if mode == _MODE_WHITELIST:
+        if mode == MODE_WHITELIST:
             if _name_matches(mset):
-                return (
-                    (False, reason)
-                    if (
-                        reason := cls._is_dtype_unsupported(method_name, base_test_name)
-                    )
-                    else (True, None)
-                )
+                reason = cls._is_dtype_unsupported(method_name, base_test_name)
+                return (False, reason) if reason else (True, None)
             return False, "Not in ALLOWED_TESTS"
 
         else:  # blacklist
@@ -510,37 +311,33 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
             reason = cls._is_dtype_unsupported(method_name, base_test_name)
             return (False, reason) if reason else (True, None)
 
-    # ---------------------------
+    # ------------------------------------------------------------------
     # instantiate_test override
-    # ---------------------------
+    # ------------------------------------------------------------------
+
     @classmethod
     def instantiate_test(cls, name, test, *, generic_cls=None):
-        # Load test-suite config
         cls._load_test_suite_config()
 
-        # Print tags for traceability after config is loaded
+        # Print tags to real stderr (fd 2) so they appear without -s flag.
+        # os.write bypasses pytest's sys.stderr redirection during collection.
         tags = cls.TEST_TAGS.get(name)
         if tags:
-            tag_list = ", ".join(tags)
-            # os.write(2, ...) writes directly to file descriptor 2
-            # pytest only redirects the Python sys.stderr object, not the underlying file descriptor,
             os.write(
                 2,
-                f"[SpyreTestBase] {generic_cls.__name__}::{name} tags: [{tag_list}]\n".encode(),
+                f"[SpyreTestBase] {generic_cls.__name__}::{name} "
+                f"tags: [{', '.join(tags)}]\n".encode(),
             )
 
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
-        extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
 
+        # Inject extra dtypes into @ops before super() generates variants
+        extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
         if extra_dtypes:
-            # test is a bound method; @ops instance is at test.__func__.parametrize_fn.__self__
-            # We patch allowed_dtypes directly on it before super() calls _parametrize_test,
-            # so extra dtype variants are generated in the normal flow.
-            # Safe to mutate since `test` is already a deepcopy from upstream.
             _SpyreDtypePatcher(test, extra_dtypes).patch()
 
-        # Let the parent class generate all variant methods first
+        # Let the parent generate all variant methods, then apply our filters
         existing_methods = set(cls.__dict__.keys())
         super().instantiate_test(name, test, generic_cls=generic_cls)
         new_methods = set(cls.__dict__.keys()) - existing_methods
@@ -562,16 +359,15 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
                 setattr(cls, method_name, _skip)
                 continue
 
-            # Check xfail -- applied after skip so blacklisted tests are not
-            # also marked xfail. xfail tests still run; pytest reports them as
-            # xfail on failure and xpass on unexpected success.
+            # xfail is applied after skip so blocked tests are not also marked xfail
             xfail_entry = cls._get_xfail_entry(method_name, name, generic_cls.__name__)
             if xfail_entry is not None:
                 (strict,) = xfail_entry
                 existing_fn = cls.__dict__.get(method_name)
                 if existing_fn is not None:
-                    marked = pytest.mark.xfail(strict=strict)(existing_fn)
-                    setattr(cls, method_name, marked)
+                    setattr(
+                        cls, method_name, pytest.mark.xfail(strict=strict)(existing_fn)
+                    )
 
 
 TEST_CLASS = SpyreTestBase
