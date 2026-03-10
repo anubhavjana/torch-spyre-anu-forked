@@ -29,7 +29,7 @@ Usage as we already had apart from a new environment variable that got added
 """
 
 import os
-import regex as re
+import re
 import unittest
 from functools import wraps
 from typing import Dict, Optional, Set
@@ -134,25 +134,29 @@ def _build_match_sets(d: Dict[str, set]) -> Dict[str, MatchSet]:
 
 # ---------------------------------------------------------------------------
 # PrivateUse1TestBase filter
-#
-# Called once at the top of each suite file, immediately after imports.
-# Removes the built-in PrivateUse1TestBase so that SpyreTestBase is the sole
-# handler for the privateuse1 device type, preventing nondeterministic
-# overwrites when list(set(...)) randomises ordering.
-#
-# TODO: investigate whether this filter will still be needed once the upstream
-#       PrivateUse1TestBase correctly defers to registered custom backends.
 # ---------------------------------------------------------------------------
-
-# Remove built-in PrivateUse1TestBase so only SpyreTestBase handles
-# the privateuse1 device type.  This prevents the nondeterministic
-# overwrite when list(set(...)) randomizes order.
 # TODO: figure out why this filter is needed - expected to use default PrivateUse1TestBase
-device_type_test_bases[:] = [  # type: ignore[name-defined] # noqa: F821
-    b
-    for b in device_type_test_bases  # type: ignore[name-defined] # noqa: F821
-    if b is not PrivateUse1TestBase  # type: ignore[name-defined] # noqa: F821
-]
+def remove_builtin_privateuse1_test_base():
+    """
+    Remove built-in PrivateUse1TestBase from device_type_test_bases.
+
+    This ensures only SpyreTestBase handles the privateuse1 device type,
+    preventing nondeterministic overwrites when list(set(...)) randomizes order.
+
+    Side effect: Modifies the global device_type_test_bases list in-place.
+
+    TODO: investigate whether this filter will still be needed once the upstream
+          PrivateUse1TestBase correctly defers to registered custom backends.
+    """
+    device_type_test_bases[:] = [  # type: ignore[name-defined] # noqa: F821
+        b
+        for b in device_type_test_bases  # type: ignore[name-defined] # noqa: F821
+        if b is not PrivateUse1TestBase  # type: ignore[name-defined] # noqa: F821
+    ]
+
+
+# Call the filter function to apply the side effect
+remove_builtin_privateuse1_test_base()
 
 
 class _SpyreDtypePatcher:
@@ -233,6 +237,23 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
             data = yaml.safe_load(f) or {}
 
         # --------------------------
+        # VALIDATE CONFIG KEYS
+        # --------------------------
+        # Catch typos early
+        valid_keys = {
+            "_WHITELISTED",
+            "_BLACKLISTED",
+            "_PRECISION_OVERRIDES",
+            "_UNSUPPORTED_DTYPES",
+        }
+        invalid_keys = set(data.keys()) - valid_keys
+        if invalid_keys:
+            raise ValueError(
+                f"Invalid keys in {config_path}: {invalid_keys}. "
+                f"Valid keys are: {valid_keys}"
+            )
+
+        # --------------------------
         # WHITELIST / BLACKLIST
         # --------------------------
         cls.WHITELISTED_TESTS = {
@@ -258,8 +279,9 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined] # noqa: 
                     }
         cls.EXTRA_ALLOWED_DTYPES = extra
 
-        # PRECISION OVERRIDES / UNSUPPORTED DTYPES
-        cls.PRECISION_OVERRIDES = data.get("_PRECISION_OVERRIDES", {})
+        # --------------------------
+        # UNSUPPORTED DTYPES
+        # --------------------------
         unsupported = data.get("_UNSUPPORTED_DTYPES")
         if unsupported:
             cls.unsupported_dtypes = {parse_dtype(dt) for dt in unsupported}
