@@ -71,7 +71,7 @@ def enable_spyre_decompositions(
         decomps = torch._inductor.decomposition.decompositions
 
     with _decompositions_lock:
-        from torch_spyre.fallbacks import fallback_ops
+        from torch_spyre.ops.fallbacks import fallback_ops
         from torch._ops import OpOverload, OpOverloadPacket
 
         # Helper function to remove ops from decompositions
