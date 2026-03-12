@@ -26,7 +26,6 @@ from spyre_test_constants import (
     MODE_XFAIL_STRICT,
     OP_DB_ATTRS,
     REL_PATH_TOKENS,
-    ENV_TEST_CONFIG,
 )
 from spyre_test_matching import parse_dtype
 
@@ -34,6 +33,7 @@ from spyre_test_matching import parse_dtype
 # ---------------------------------------------------------------------------
 # YAML loading
 # ---------------------------------------------------------------------------
+
 
 def load_yaml_config(path: str) -> dict:
     """Load and return the raw YAML config dict from *path*."""
@@ -47,6 +47,7 @@ def load_yaml_config(path: str) -> dict:
 # ---------------------------------------------------------------------------
 # Path resolution
 # ---------------------------------------------------------------------------
+
 
 def resolve_rel_path(rel_path: str) -> str:
     """Expand ${PYTORCH} and ${TORCH_SPYRE} tokens in *rel_path* using env vars.
@@ -91,6 +92,7 @@ def resolve_current_file(data: dict, config_path: str) -> str:
 # Global section parsers
 # ---------------------------------------------------------------------------
 
+
 def parse_global_unsupported_dtypes(data: dict) -> Set[torch.dtype]:
     """Parse tests.global.unsupported_dtypes.
 
@@ -120,42 +122,64 @@ def parse_global_supported_ops(data: dict) -> Optional[Set[str]]:
 # op_db monkey-patching
 # ---------------------------------------------------------------------------
 
+
 def filter_op_db(supported_ops: Set[str]) -> None:
     """Restrict pytorch op_db lists to *supported_ops* in-place.
 
-    Mutates the module-level lists in common_methods_invocations so that
-    the @ops decorator only sees the ops we support.  Must be called before
-    test collection (i.e. at module load time, not inside a test).
+    Mutates (or replaces) the module-level sequences in
+    common_methods_invocations so that the @ops decorator only sees the ops
+    we support.  Must be called before test collection (i.e. at module load
+    time, not inside a test).
 
-    Only attrs that exist and are plain lists are patched -- future pytorch
-    refactors that make them lazy/properties will be caught by the assertion.
+    Handles both list attrs (mutated in-place with [:]=) and tuple attrs
+    (reassigned, since tuples are immutable).  Unknown types emit a warning
+    and are skipped rather than aborting collection.
 
     Args:
         supported_ops: set of op name strings, e.g. {'add', 'mul'}.
                        If empty, raises ValueError -- likely a config mistake.
     """
+    import warnings
+    import torch.testing._internal.common_methods_invocations as _cmi
+
     if not supported_ops:
         raise ValueError(
             "supported_ops is empty -- this would skip all ops. "
             "Remove the key from the YAML to run all ops, or add at least one op name."
         )
 
-    import torch.testing._internal.common_methods_invocations as _cmi  # lazy: avoid circular import
-
     for attr in OP_DB_ATTRS:
-        lst = getattr(_cmi, attr, None)
-        if lst is None:
-            continue 
-        assert isinstance(lst, list), (
-            f"pytorch's {attr!r} is no longer a plain list "
-            f"-- op_db filtering needs revisiting (got {type(lst)})."
-        )
-        lst[:] = [op for op in lst if op.name in supported_ops]
+        obj = getattr(_cmi, attr, None)
+        if obj is None:
+            continue
+
+        filtered = [op for op in obj if op.name in supported_ops]
+
+        if isinstance(obj, list):
+            # Mutate in-place so any other references to the same list object
+            # (e.g. binary_ufuncs imported directly into a test module) also
+            # see the filtered view.
+            obj[:] = filtered
+        elif isinstance(obj, tuple):
+            # Tuples are immutable -- reassign the module attribute.
+            # References held by other modules that already did
+            # `from common_methods_invocations import binary_ufuncs_and_refs`
+            # will NOT see this change, but @ops looks up the attr fresh each
+            # time so this is sufficient for our use case.
+            setattr(_cmi, attr, tuple(filtered))
+        else:
+            warnings.warn(
+                f"spyre filter_op_db: pytorch's {attr!r} is neither a list nor a "
+                f"tuple (got {type(obj)}) -- skipping. Op filtering may be incomplete. "
+                f"This likely means a pytorch refactor needs revisiting in OP_DB_ATTRS.",
+                stacklevel=2,
+            )
 
 
 # ---------------------------------------------------------------------------
 # Test list parser
 # ---------------------------------------------------------------------------
+
 
 def parse_test_id(test_id: str) -> Tuple[str, str]:
     """Parse 'ClassName::method_name' into (class_name, method_name)."""
@@ -167,13 +191,15 @@ def parse_test_id(test_id: str) -> Tuple[str, str]:
     return parts[0], parts[1]
 
 
-def parse_tests(data: dict, current_file: str) -> Tuple[
-    Dict[str, set],   # WHITELISTED_TESTS         {class_name -> set of method names}
-    Dict[str, set],   # BLACKLISTED_TESTS          {class_name -> set of method names}
-    Dict[str, set],   # XFAIL_TESTS               {class_name -> set of (method, strict)}
-    Dict[str, set],   # EXTRA_ALLOWED_DTYPES       {method -> set of torch.dtype}
-    Dict[str, float], # PRECISION_OVERRIDES        {method -> float}
-    Dict[str, set],   # PER_TEST_UNSUPPORTED_DTYPES{method -> set of torch.dtype}
+def parse_tests(
+    data: dict, current_file: str
+) -> Tuple[
+    Dict[str, set],  # WHITELISTED_TESTS         {class_name -> set of method names}
+    Dict[str, set],  # BLACKLISTED_TESTS          {class_name -> set of method names}
+    Dict[str, set],  # XFAIL_TESTS               {class_name -> set of (method, strict)}
+    Dict[str, set],  # EXTRA_ALLOWED_DTYPES       {method -> set of torch.dtype}
+    Dict[str, float],  # PRECISION_OVERRIDES        {method -> float}
+    Dict[str, set],  # PER_TEST_UNSUPPORTED_DTYPES{method -> set of torch.dtype}
     Dict[str, List],  # TEST_TAGS                  {method -> [tag, ...]}
 ]:
     """Parse allow_list and block_list for the file entry matching *current_file*.

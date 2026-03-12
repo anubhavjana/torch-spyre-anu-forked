@@ -19,6 +19,7 @@ from spyre_test_constants import DTYPE_STR_MAP, DTYPE_NAMES_ORDERED
 # Dtype helpers
 # ----------------
 
+
 def parse_dtype(dtype_str: str) -> torch.dtype:
     """Map a dtype string (e.g. 'float16') to a torch.dtype.  Raises ValueError if unknown."""
     if dtype_str not in DTYPE_STR_MAP:
@@ -41,6 +42,7 @@ def extract_dtype_from_name(method_name: str) -> Optional[str]:
 # ----------
 # MatchSet
 # ----------
+
 
 class MatchSet:
     """Holds exact names and compiled regex patterns for fast membership tests.
