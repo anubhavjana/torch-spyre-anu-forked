@@ -20,6 +20,9 @@ tests:
           tags:
             - model_name_depending_on_this_test_2
 
+        - test: TestBinaryUfuncs::test_compare_cpu   # run this one, must pass = mandatory_success
+          mode: xfail
+
       block_list:
         - test: TestBinaryUfuncs::test_add_broadcast_empty          # Signal Received: 11 (Segmentation fault)
         - test: TestBinaryUfuncs::test_add                          # Failed
