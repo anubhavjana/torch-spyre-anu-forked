@@ -1,0 +1,55 @@
+tests:
+  files:
+    - rel_path: ${PYTORCH}/test/test_binary_ufuncs.py
+      allow_list:
+        - test: TestBinaryUfuncs::test_scalar_support
+          mode: xfail
+          tags:
+            - model_name_depending_on_this_test_1
+          edits:
+            extra_allowed_dtypes:
+              - float16
+              - int64
+            precision_override: 1e-3
+            unsupported_dtypes:
+              - bfloat16
+
+        - test: TestBinaryUfuncs::test_broadcasting
+          mode: xfail
+          tags:
+            - model_name_depending_on_this_test_2
+
+      block_list:
+        - test: TestBinaryUfuncs::test_add_broadcast_empty          # Signal Received: 11 (Segmentation fault)
+        - test: TestBinaryUfuncs::test_add                          # Failed
+        - test: TestBinaryUfuncs::test_addcmul_scalars_as_floats    # Failed
+        - test: TestBinaryUfuncs::test_atan2_edgecases              # Failed
+        - test: TestBinaryUfuncs::test_atan2                        # Signal Received: 8 (Floating point exception)
+        - test: TestBinaryUfuncs::test_float_power_exceptions       # Signal Received: 8 (Floating point exception)
+        - test: TestBinaryUfuncs::test_gcd                          # Buffer not aligned (RAS::SCHEDULER::BufferNotAligned, code 0x161e)
+        - test: TestBinaryUfuncs::test_int_tensor_pow_neg_ints      # DtException: Unsupported data format types / Signal Received: 6
+        - test: TestBinaryUfuncs::test_idiv_and_ifloordiv_vs_python # free(): invalid next size / Signal Received: 6 (Aborted)
+        - test: TestBinaryUfuncs::test_logical_and                  # Buffer not aligned (RAS::SCHEDULER::BufferNotAligned, code 0x161e)
+        - test: TestBinaryUfuncs::test_logical_or                   # Same buffer alignment error as test_logical_and
+        - test: TestBinaryUfuncs::test_logical                      # Control block software failure (RAS::CBRB::ControlBlockSoftFail)
+        - test: TestBinaryUfuncs::test_batch_vs_slicing             # Signal 8 - complex128 Fatal Python error: Floating-point exception
+        - test: TestBinaryUfuncs::test_comparison_ops_type_promotion_and_broadcasting # Signal 8 - complex128
+        - test: TestBinaryUfuncs::test_complex_div_underflow_overflow # Fatal Python error: Floating-point exception
+        - test: TestBinaryUfuncs::test_complex_scalar_pow_tensor    # complex128 Fatal Python error: Floating-point exception
+
+    - rel_path: ${PYTORCH}/test/test_ops.py
+      allow_list:
+        - test: TestCommon::test_compare_cpu
+          mode: xfail
+
+  global:
+    unsupported_dtypes:
+      - bfloat16
+      - int16
+      - int32
+      - float32
+      - float64
+    supported_ops:
+      - add
+      - mul
+      - sub
