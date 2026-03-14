@@ -276,25 +276,65 @@ def resolve_rel_path(rel_path: str) -> str:
     return rel_path
 
 
+# def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry:
+#     """Match a YAML FileEntry against the current working directory.
+
+#     Returns:
+#         The matching FileEntry.
+
+#     Raises:
+#         EnvironmentError: if no entry matches cwd.
+#     """
+#     cwd = os.path.abspath(os.getcwd())
+#     for file_entry in config.files:
+#         resolved = os.path.abspath(resolve_rel_path(file_entry.rel_path))
+#         if os.path.dirname(resolved) == cwd:
+#             return file_entry
+#     raise EnvironmentError(
+#         f"No rel_path in {config_path!r} matches the current working directory "
+#         f"{cwd!r}.\n"
+#         f"Make sure you are running pytest from the pytorch/test/ directory and "
+#         f"that the YAML has an entry for the test file you are running."
+#     )
+
+
 def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry:
-    """Match a YAML FileEntry against the current working directory.
+    """Match a YAML file entry against the file pytest is currently running.
 
-    Returns:
-        The matching FileEntry.
+    Iterates sys.argv to find the test file path passed to pytest, then
+    finds the FileEntry whose resolved rel_path matches it exactly.
 
-    Raises:
-        EnvironmentError: if no entry matches cwd.
+    Raises EnvironmentError if no match is found.
     """
-    cwd = os.path.abspath(os.getcwd())
+    import sys
+
+    # Find the test file pytest was invoked with from sys.argv
+    # e.g. pytest test_ops.py -v  ->  sys.argv = ['pytest', 'test_ops.py', '-v']
+    current_test_file = None
+    for arg in sys.argv:
+        candidate = Path(arg)
+        if candidate.suffix == ".py" and candidate.exists():
+            current_test_file = str(candidate.resolve())
+            break
+
+    if current_test_file is None:
+        raise EnvironmentError(
+            f"Could not determine the test file being run from sys.argv={sys.argv!r}.\n"
+            f"Make sure you invoke pytest with an explicit test file, "
+            f"e.g. `pytest test_ops.py`."
+        )
+
     for file_entry in config.files:
-        resolved = os.path.abspath(resolve_rel_path(file_entry.rel_path))
-        if os.path.dirname(resolved) == cwd:
+        resolved = str(Path(resolve_rel_path(file_entry.rel_path)).resolve())
+        if resolved == current_test_file:
             return file_entry
+
     raise EnvironmentError(
-        f"No rel_path in {config_path!r} matches the current working directory "
-        f"{cwd!r}.\n"
-        f"Make sure you are running pytest from the pytorch/test/ directory and "
-        f"that the YAML has an entry for the test file you are running."
+        f"No rel_path in {config_path!r} matches the test file being run "
+        f"({current_test_file!r}).\n"
+        f"sys.argv={sys.argv!r}\n"
+        f"Available entries:\n"
+        + "\n".join(f"  {resolve_rel_path(f.rel_path)}" for f in config.files)
     )
 
 
