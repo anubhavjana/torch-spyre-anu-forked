@@ -89,10 +89,10 @@ remove_builtin_privateuse1_test_base()
 class _SpyreOnlyOnPatcher:
     """Patches @onlyOn decorated test methods to also allow privateuse1.
 
-    @onlyOn stores its allowed device list in the closure of the wrapper
-    it creates. We walk the __wrapped__ chain to find the onlyOn closure
-    cell that holds a list of device strings and append 'privateuse1' to it
-    in-place so the runtime check allows our device.
+    @onlyOn stores the allowed device list on the onlyOn instance as
+    self.device_type. The wrapper closes over the onlyOn instance itself,
+    not the list directly. We find the onlyOn instance in the closure and
+    append 'privateuse1' to its device_type list.
     """
 
     _PRIVATEUSE1 = "privateuse1"
@@ -105,51 +105,34 @@ class _SpyreOnlyOnPatcher:
         )
 
     def patch(self) -> None:
-        """Walk the decorator stack and patch any @onlyOn closure found.
+        """Walk the decorator stack and patch any @onlyOn instance found.
 
         Iterates the __wrapped__ chain layer by layer. For each layer,
-        inspects closure cells for a list of strings — that is the onlyOn
-        device_type list. Appends 'privateuse1' to it in-place so the
-        runtime check allows our device.
+        inspects closure cells for an onlyOn instance and appends
+        'privateuse1' to its device_type list in-place.
         """
+        from torch.testing._internal.common_device_type import onlyOn as _onlyOn_cls
+
         current = self._underlying_fn
-        depth = 0
         while current is not None:
             cells = getattr(current, "__closure__", None) or ()
-            os.write(
-                2,
-                f"[DEBUG OnlyOnPatcher] depth={depth} fn={getattr(current, '__name__', '?')} cells={len(cells)}\n".encode(),
-            )
-            for i, cell in enumerate(cells):
+            for cell in cells:
                 try:
                     val = cell.cell_contents
-                    os.write(
-                        2,
-                        f"[DEBUG OnlyOnPatcher]   cell[{i}] type={type(val).__name__} val={val!r}\n".encode(),
-                    )
                 except ValueError:
-                    os.write(2, f"[DEBUG OnlyOnPatcher]   cell[{i}] EMPTY\n".encode())
                     continue
 
-                if (
-                    isinstance(val, list)
-                    and all(isinstance(d, str) for d in val)
-                    and self._PRIVATEUSE1 not in val
-                ):
-                    val.append(self._PRIVATEUSE1)
-                    os.write(
-                        2,
-                        f"[DEBUG OnlyOnPatcher] PATCHED at depth={depth} val now={val!r}\n".encode(),
-                    )
-                    return
+                if isinstance(val, _onlyOn_cls):
+                    # device_type is either a list or a str
+                    if isinstance(val.device_type, list):
+                        if self._PRIVATEUSE1 not in val.device_type:
+                            val.device_type.append(self._PRIVATEUSE1)
+                    elif isinstance(val.device_type, str):
+                        if val.device_type != self._PRIVATEUSE1:
+                            val.device_type = [val.device_type, self._PRIVATEUSE1]
+                    return  # patched, done
 
             current = getattr(current, "__wrapped__", None)
-            depth += 1
-
-        os.write(
-            2,
-            f"[DEBUG OnlyOnPatcher] no onlyOn closure found after {depth} levels\n".encode(),
-        )
 
 
 # ---------------------------------------------------------------------------
