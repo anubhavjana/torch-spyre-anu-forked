@@ -3,12 +3,11 @@ tests:
     - rel_path: ${PYTORCH}/test/test_binary_ufuncs.py
       allow_list:
         - test: TestBinaryUfuncs::test_scalar_support
-          # mode: mandatory_pass
           mode: xfail
           tags:
             - model_name_depending_on_this_test_1
           edits:
-            extra_allowed_dtypes:   # float16 missing from upstream @ops(allowed_dtypes=(long, float32, complex64))
+            extra_allowed_dtypes:
               - float16
               - int64
             precision_override: 1e-3
@@ -19,9 +18,6 @@ tests:
           mode: xfail
           tags:
             - model_name_depending_on_this_test_2
-
-        - test: TestBinaryUfuncs::test_compare_cpu   # run this one, must pass = mandatory_success
-          mode: xfail
 
       block_list:
         - test: TestBinaryUfuncs::test_add_broadcast_empty          # Signal Received: 11 (Segmentation fault)
@@ -41,6 +37,11 @@ tests:
         - test: TestBinaryUfuncs::test_complex_div_underflow_overflow # Fatal Python error: Floating-point exception
         - test: TestBinaryUfuncs::test_complex_scalar_pow_tensor    # complex128 Fatal Python error: Floating-point exception
 
+    - rel_path: ${PYTORCH}/test/test_ops.py
+      allow_list:
+        - test: TestCommon::test_compare_cpu
+          mode: xfail
+
   global:
     unsupported_dtypes:
       - bfloat16
@@ -48,7 +49,7 @@ tests:
       - int32
       - float32
       - float64
-    supported_ops:                  # restricts op_db to these ops before @ops sees the lists 
-      - add                         # torch.add
-      - mul                         # torch.mul
-      - sub                         # torch.sub
+    supported_ops:
+      - add
+      - mul
+      - sub
