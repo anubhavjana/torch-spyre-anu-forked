@@ -6,227 +6,17 @@ Responsibilities:
   - resolve_rel_path: expand ${PYTORCH} / ${TORCH_SPYRE} tokens
   - resolve_current_file: match a YAML file entry against cwd
   - filter_op_db: monkey-patch pytorch op_db lists to supported_ops subset
-
 """
 
 import os
 import warnings
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Optional, Set
 
-import torch
 import yaml
-from pydantic import BaseModel, field_validator, model_validator
 
-from spyre_test_constants import (
-    DEFAULT_UNSUPPORTED_DTYPES,
-    MODE_MANDATORY_PASS,
-    MODE_XFAIL,
-    MODE_XFAIL_STRICT,
-    OP_DB_ATTRS,
-    REL_PATH_TOKENS,
-)
-from spyre_test_matching import parse_dtype
-
-
-# ---------------------------------------------------------------------------
-# Valid dtype strings (used in validators)
-# ---------------------------------------------------------------------------
-
-_VALID_DTYPE_STRINGS = {
-    "float16",
-    "float32",
-    "float64",
-    "bfloat16",
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "uint8",
-    "uint16",
-    "uint32",
-    "uint64",
-    "complex32",
-    "complex64",
-    "complex128",
-    "bool",
-}
-
-_VALID_MODES = {MODE_MANDATORY_PASS, MODE_XFAIL, MODE_XFAIL_STRICT}
-
-
-# ---------------------------------------------------------------------------
-# Pydantic models
-# ---------------------------------------------------------------------------
-
-
-class TestEdits(BaseModel):
-    extra_allowed_dtypes: List[str] = []
-    precision_override: Optional[float] = None
-    unsupported_dtypes: Optional[List[str]] = None
-
-    @field_validator("extra_allowed_dtypes", mode="before")
-    @classmethod
-    def validate_extra_dtypes(cls, v):
-        for dt in v or []:
-            if dt not in _VALID_DTYPE_STRINGS:
-                raise ValueError(
-                    f"Unknown dtype {dt!r} in extra_allowed_dtypes. "
-                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
-                )
-        return v
-
-    @field_validator("unsupported_dtypes", mode="before")
-    @classmethod
-    def validate_unsupported_dtypes(cls, v):
-        for dt in v or []:
-            if dt not in _VALID_DTYPE_STRINGS:
-                raise ValueError(
-                    f"Unknown dtype {dt!r} in unsupported_dtypes. "
-                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
-                )
-        return v
-
-    def resolved_extra_allowed_dtypes(self) -> Set[torch.dtype]:
-        return {parse_dtype(dt) for dt in self.extra_allowed_dtypes}
-
-    def resolved_unsupported_dtypes(self) -> Set[torch.dtype]:
-        """Return resolved unsupported dtypes. Only call when unsupported_dtypes is not None."""
-        assert self.unsupported_dtypes is not None, (
-            "resolved_unsupported_dtypes() called but unsupported_dtypes is None. "
-            "Check with `entry.edits.unsupported_dtypes is not None` before calling."
-        )
-        return {parse_dtype(dt) for dt in self.unsupported_dtypes}
-
-
-class AllowListEntry(BaseModel):
-    test: str
-    mode: str = MODE_MANDATORY_PASS
-    tags: List[str] = []
-    edits: TestEdits = TestEdits()
-
-    @field_validator("test")
-    @classmethod
-    def validate_test_id(cls, v):
-        parts = v.split("::")
-        if len(parts) != 2 or not all(parts):
-            raise ValueError(
-                f"Invalid test id {v!r}, expected 'ClassName::method_name'"
-            )
-        return v
-
-    @field_validator("mode")
-    @classmethod
-    def validate_mode(cls, v):
-        if v not in _VALID_MODES:
-            raise ValueError(
-                f"Invalid mode {v!r}. Valid values: {sorted(_VALID_MODES)}"
-            )
-        return v
-
-    @property
-    def class_name(self) -> str:
-        return self.test.split("::")[0]
-
-    @property
-    def method_name(self) -> str:
-        return self.test.split("::")[1]
-
-
-class BlockListEntry(BaseModel):
-    test: str
-
-    @field_validator("test")
-    @classmethod
-    def validate_test_id(cls, v):
-        parts = v.split("::")
-        if len(parts) != 2 or not all(parts):
-            raise ValueError(
-                f"Invalid test id {v!r}, expected 'ClassName::method_name'"
-            )
-        return v
-
-    @property
-    def class_name(self) -> str:
-        return self.test.split("::")[0]
-
-    @property
-    def method_name(self) -> str:
-        return self.test.split("::")[1]
-
-
-class FileEntry(BaseModel):
-    rel_path: str
-    allow_list: List[AllowListEntry] = []
-    block_list: List[BlockListEntry] = []
-
-    @field_validator("rel_path")
-    @classmethod
-    def validate_rel_path(cls, v):
-        known_tokens = {token for token, _ in REL_PATH_TOKENS}
-        has_token = any(token in v for token in known_tokens)
-        if not has_token and not Path(v).is_absolute():
-            warnings.warn(
-                f"rel_path {v!r} contains no known token "
-                f"({sorted(known_tokens)}) and is not absolute. "
-                "Make sure the path is resolvable at runtime.",
-                stacklevel=2,
-            )
-        return v
-
-
-class GlobalConfig(BaseModel):
-    unsupported_dtypes: List[str] = []
-    supported_ops: Optional[List[str]] = None
-
-    @field_validator("unsupported_dtypes", mode="before")
-    @classmethod
-    def validate_unsupported_dtypes(cls, v):
-        for dt in v or []:
-            if dt not in _VALID_DTYPE_STRINGS:
-                raise ValueError(
-                    f"Unknown dtype {dt!r} in global.unsupported_dtypes. "
-                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
-                )
-        return v
-
-    def resolved_unsupported_dtypes(self) -> Set[torch.dtype]:
-        if not self.unsupported_dtypes:
-            return DEFAULT_UNSUPPORTED_DTYPES.copy()
-        return {parse_dtype(dt) for dt in self.unsupported_dtypes}
-
-    def resolved_supported_ops(self) -> Optional[Set[str]]:
-        if self.supported_ops is None:
-            return None
-        return set(self.supported_ops)
-
-
-class TestsBlock(BaseModel):
-    files: List[FileEntry]
-    global_config: GlobalConfig = GlobalConfig()
-
-    # pydantic reads "global" from YAML but "global" is a Python keyword
-    # so we alias it
-    model_config = {"populate_by_name": True}
-
-    @model_validator(mode="before")
-    @classmethod
-    def rename_global(cls, values):
-        if "global" in values:
-            values["global_config"] = values.pop("global")
-        return values
-
-
-class SpyreTestConfig(BaseModel):
-    tests: TestsBlock
-
-    @property
-    def files(self) -> List[FileEntry]:
-        return self.tests.files
-
-    @property
-    def global_config(self) -> GlobalConfig:
-        return self.tests.global_config
+from spyre_test_constants import OP_DB_ATTRS, REL_PATH_TOKENS
+from spyre_test_config_models import FileEntry, SpyreTestConfig
 
 
 # ---------------------------------------------------------------------------
@@ -251,7 +41,6 @@ def load_yaml_config(path: str) -> SpyreTestConfig:
     with open(config_path) as f:
         raw = yaml.safe_load(f) or {}
 
-    # pydantic raises ValidationError with clear field-level messages if invalid
     return SpyreTestConfig.model_validate(raw)
 
 
@@ -273,8 +62,18 @@ def resolve_rel_path(rel_path: str) -> str:
     return rel_path
 
 
+# ---------------------------------------------------------------------------
+# Debug helper
+# ---------------------------------------------------------------------------
+
+
 def _debug(msg: str) -> None:
-    os.write(2, f"DEBUG resolve_current_file: {msg}\n".encode())
+    os.write(2, f"[DEBUG] resolve_current_file: {msg}\n".encode())
+
+
+# ---------------------------------------------------------------------------
+# Current file resolution
+# ---------------------------------------------------------------------------
 
 
 def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry:
@@ -289,13 +88,12 @@ def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry
 
     cwd = Path(os.getcwd()).resolve()
 
-    # sys.argv[0] is the pytest runner itself (e.g. pytest/__main__.py) -- so skipping it.
+    # sys.argv[0] is the pytest runner itself (e.g. pytest/__main__.py) -- skip it.
     # The test file is one of the remaining args, e.g. 'test_ops.py'.
     current_test_file: Optional[str] = None
     for arg in sys.argv[1:]:
         candidate = Path(arg)
         if candidate.suffix == ".py":
-            # resolve relative to cwd since pytest is invoked from pytorch/test/
             candidate_resolved = (
                 (cwd / candidate).resolve()
                 if not candidate.is_absolute()
