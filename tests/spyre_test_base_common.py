@@ -85,6 +85,53 @@ def remove_builtin_privateuse1_test_base():
 # Call the filter function to apply the side effect
 remove_builtin_privateuse1_test_base()
 
+
+class _SpyreOnlyOnPatcher:
+    """Patches @onlyOn decorated test methods to also allow privateuse1.
+
+    @onlyOn stores its allowed device list in the closure of the wrapper
+    it creates. We walk the __wrapped__ chain to find the onlyOn closure
+    cell that holds a list of device strings and append 'privateuse1' to it
+    in-place so the runtime check allows our device.
+    """
+
+    _PRIVATEUSE1 = "privateuse1"
+
+    def __init__(self, test: object) -> None:
+        self._underlying_fn = (
+            test.__func__  # type: ignore[union-attr]
+            if hasattr(test, "__func__")
+            else test
+        )
+
+    def patch(self) -> None:
+        """Walk the decorator stack and patch any @onlyOn closure found.
+
+        Iterates the __wrapped__ chain layer by layer. For each layer,
+        inspects closure cells for a list of strings — that is the onlyOn
+        device_type list. Appends 'privateuse1' to it in-place so the
+        runtime check allows our device.
+        """
+        current = self._underlying_fn
+        while current is not None:
+            cells = getattr(current, "__closure__", None) or ()
+            for cell in cells:
+                try:
+                    val = cell.cell_contents
+                except ValueError:
+                    continue
+
+                if (
+                    isinstance(val, list)
+                    and all(isinstance(d, str) for d in val)
+                    and self._PRIVATEUSE1 not in val
+                ):
+                    val.append(self._PRIVATEUSE1)
+                    return  # patched, done
+
+            current = getattr(current, "__wrapped__", None)
+
+
 # ---------------------------------------------------------------------------
 # Dtype patcher
 # ---------------------------------------------------------------------------
@@ -262,8 +309,8 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
 
         Priority:
           1. SPYRE_PYTORCH_TEST_FILTER_TYPE env var (explicit)
-          2. Inferred: allow_list if ALLOW_LIST_TESTS is populated, else block_list
-          3. Default: block_list (run everything)
+          2. Inferred: MODE_ALLOW_LIST if both `allowed_list` and `block_list` are populated
+          3. Default: MODE_ALLOW_LIST
         """
         env = os.environ.get(ENV_FILTER_TYPE, "").strip().lower()
         if env in (MODE_ALLOW_LIST, MODE_BLOCK_LIST):
@@ -277,7 +324,7 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
             return MODE_ALLOW_LIST
         if cls.BLOCK_LIST_TESTS:
             return MODE_BLOCK_LIST
-        return MODE_BLOCK_LIST  # default: run everything
+        return MODE_ALLOW_LIST  # default: run allowed_list
 
     # ------------------------------------------------------------------
     # Compiled match-set cache
@@ -408,6 +455,18 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
 
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
+
+        # Only patch @onlyOn and @ops for tests explicitly in the allow_list.
+        # This is an intentional opt-in — if you add TestCommon::test_compare_cpu
+        # to allow_list, we patch @onlyOn so it runs for privateuse1.
+        mode = cls._resolve_mode()
+        if mode == MODE_ALLOW_LIST:
+            generic_cls_name = generic_cls.__name__ if generic_cls else ""
+            mset = cls._get_active_match_sets().get(generic_cls_name)
+            if mset is not None and (
+                mset.matches(name) or mset.matches(f"{generic_cls_name}::{name}")
+            ):
+                _SpyreOnlyOnPatcher(test).patch()
 
         # Inject extra dtypes into @ops before super() generates variants
         extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
