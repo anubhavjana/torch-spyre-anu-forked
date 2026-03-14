@@ -113,12 +113,22 @@ class _SpyreOnlyOnPatcher:
         runtime check allows our device.
         """
         current = self._underlying_fn
+        depth = 0
         while current is not None:
             cells = getattr(current, "__closure__", None) or ()
-            for cell in cells:
+            os.write(
+                2,
+                f"[DEBUG OnlyOnPatcher] depth={depth} fn={getattr(current, '__name__', '?')} cells={len(cells)}\n".encode(),
+            )
+            for i, cell in enumerate(cells):
                 try:
                     val = cell.cell_contents
+                    os.write(
+                        2,
+                        f"[DEBUG OnlyOnPatcher]   cell[{i}] type={type(val).__name__} val={val!r}\n".encode(),
+                    )
                 except ValueError:
+                    os.write(2, f"[DEBUG OnlyOnPatcher]   cell[{i}] EMPTY\n".encode())
                     continue
 
                 if (
@@ -127,9 +137,16 @@ class _SpyreOnlyOnPatcher:
                     and self._PRIVATEUSE1 not in val
                 ):
                     val.append(self._PRIVATEUSE1)
+
                     return  # patched, done
 
             current = getattr(current, "__wrapped__", None)
+            depth += 1
+
+        os.write(
+            2,
+            f"[DEBUG OnlyOnPatcher] no onlyOn closure found after {depth} levels\n".encode(),
+        )
 
 
 # ---------------------------------------------------------------------------
