@@ -29,13 +29,10 @@ Usage as we already had apart from a new environment variable that got added
 """
 
 import os
-import re
 import unittest
 from functools import wraps
-from typing import Dict, Optional, Set
-import yaml
-from pathlib import Path
-
+from typing import Dict, Optional, Set, List
+import pytest  # type: ignore
 import torch
 # from torch.testing._internal.common_device_type import ops as _ops_parametrizer
 # common_device_type.py is the one running our suite file via runpy, so it's not fully initialized yet when we try to import from it.
@@ -68,29 +65,25 @@ from spyre_test_parsing import (
 
 # ---------------------------------------------------------------------------
 # PrivateUse1TestBase filter
+#
+# Called once at the top of each suite file, immediately after imports.
+# Removes the built-in PrivateUse1TestBase so that SpyreTestBase is the sole
+# handler for the privateuse1 device type, preventing nondeterministic
+# overwrites when list(set(...)) randomises ordering.
+#
+# TODO: investigate whether this filter will still be needed once the upstream
+#       PrivateUse1TestBase correctly defers to registered custom backends.
 # ---------------------------------------------------------------------------
+
+# Remove built-in PrivateUse1TestBase so only SpyreTestBase handles
+# the privateuse1 device type.  This prevents the nondeterministic
+# overwrite when list(set(...)) randomizes order.
 # TODO: figure out why this filter is needed - expected to use default PrivateUse1TestBase
-def remove_builtin_privateuse1_test_base():
-    """
-    Remove built-in PrivateUse1TestBase from device_type_test_bases.
-
-    This ensures only SpyreTestBase handles the privateuse1 device type,
-    preventing nondeterministic overwrites when list(set(...)) randomizes order.
-
-    Side effect: Modifies the global device_type_test_bases list in-place.
-
-    TODO: investigate whether this filter will still be needed once the upstream
-          PrivateUse1TestBase correctly defers to registered custom backends.
-    """
-    device_type_test_bases[:] = [  # type: ignore[name-defined] # noqa: F821
-        b
-        for b in device_type_test_bases  # type: ignore[name-defined] # noqa: F821
-        if b is not PrivateUse1TestBase  # type: ignore[name-defined] # noqa: F821
-    ]
-
-
-# Call the filter function to apply the side effect
-remove_builtin_privateuse1_test_base()
+device_type_test_bases[:] = [  # type: ignore[name-defined] # noqa: F821
+    b
+    for b in device_type_test_bases  # type: ignore[name-defined] # noqa: F821
+    if b is not PrivateUse1TestBase  # type: ignore[name-defined] # noqa: F821
+]
 
 
 class _SpyreDtypePatcher:
