@@ -87,7 +87,6 @@ class TestEdits(BaseModel):
                 )
         return v
 
-    # Convenience: resolved torch.dtype sets used by SpyreTestBase
     def resolved_extra_allowed_dtypes(self) -> Set[torch.dtype]:
         return {parse_dtype(dt) for dt in self.extra_allowed_dtypes}
 
@@ -125,7 +124,6 @@ class AllowListEntry(BaseModel):
             )
         return v
 
-    # Convenience
     @property
     def class_name(self) -> str:
         return self.test.split("::")[0]
@@ -192,7 +190,6 @@ class GlobalConfig(BaseModel):
                 )
         return v
 
-    # Convenience
     def resolved_unsupported_dtypes(self) -> Set[torch.dtype]:
         if not self.unsupported_dtypes:
             return DEFAULT_UNSUPPORTED_DTYPES.copy()
@@ -276,6 +273,10 @@ def resolve_rel_path(rel_path: str) -> str:
     return rel_path
 
 
+def _debug(msg: str) -> None:
+    os.write(2, f"DEBUG resolve_current_file: {msg}\n".encode())
+
+
 def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry:
     """Match a YAML file entry against the file pytest is currently running.
 
@@ -304,6 +305,9 @@ def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry
                 current_test_file = str(candidate_resolved)
                 break
 
+    _debug(f"current_test_file: {current_test_file!r}")
+    _debug(f"cwd: {cwd!r}")
+
     if current_test_file is None:
         raise EnvironmentError(
             f"Could not determine the test file being run from sys.argv[1:]={sys.argv[1:]!r}.\n"
@@ -313,6 +317,9 @@ def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry
 
     for file_entry in config.files:
         entry_resolved = str(Path(resolve_rel_path(file_entry.rel_path)).resolve())
+        _debug(
+            f"entry: {file_entry.rel_path!r} -> {entry_resolved!r} match={entry_resolved == current_test_file}"
+        )
         if entry_resolved == current_test_file:
             return file_entry
 
