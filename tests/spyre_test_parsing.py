@@ -2,22 +2,21 @@
 YAML config parsing and op_db filtering for the Spyre PyTorch test framework.
 
 Responsibilities:
-  - load_yaml_config: read raw YAML
+  - load_yaml_config: read YAML and return validated SpyreTestConfig
   - resolve_rel_path: expand ${PYTORCH} / ${TORCH_SPYRE} tokens
   - resolve_current_file: match a YAML file entry against cwd
-  - parse_global_unsupported_dtypes: read global.unsupported_dtypes
-  - parse_tests: parse allow_list / block_list into typed dicts
   - filter_op_db: monkey-patch pytorch op_db lists to supported_ops subset
 
-No pytest imports, no SpyreTestBase references.
 """
 
 import os
+import warnings
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Set
 
 import torch
 import yaml
+from pydantic import BaseModel, field_validator, model_validator
 
 from spyre_test_constants import (
     DEFAULT_UNSUPPORTED_DTYPES,
@@ -31,17 +30,232 @@ from spyre_test_matching import parse_dtype
 
 
 # ---------------------------------------------------------------------------
+# Valid dtype strings (used in validators)
+# ---------------------------------------------------------------------------
+
+_VALID_DTYPE_STRINGS = {
+    "float16",
+    "float32",
+    "float64",
+    "bfloat16",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "uint8",
+    "uint16",
+    "uint32",
+    "uint64",
+    "complex32",
+    "complex64",
+    "complex128",
+    "bool",
+}
+
+_VALID_MODES = {MODE_MANDATORY_PASS, MODE_XFAIL, MODE_XFAIL_STRICT}
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models
+# ---------------------------------------------------------------------------
+
+
+class TestEdits(BaseModel):
+    extra_allowed_dtypes: List[str] = []
+    precision_override: Optional[float] = None
+    unsupported_dtypes: Optional[List[str]] = None
+
+    @field_validator("extra_allowed_dtypes", mode="before")
+    @classmethod
+    def validate_extra_dtypes(cls, v):
+        for dt in v or []:
+            if dt not in _VALID_DTYPE_STRINGS:
+                raise ValueError(
+                    f"Unknown dtype {dt!r} in extra_allowed_dtypes. "
+                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
+                )
+        return v
+
+    @field_validator("unsupported_dtypes", mode="before")
+    @classmethod
+    def validate_unsupported_dtypes(cls, v):
+        for dt in v or []:
+            if dt not in _VALID_DTYPE_STRINGS:
+                raise ValueError(
+                    f"Unknown dtype {dt!r} in unsupported_dtypes. "
+                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
+                )
+        return v
+
+    # Convenience: resolved torch.dtype sets used by SpyreTestBase
+    def resolved_extra_allowed_dtypes(self) -> Set[torch.dtype]:
+        return {parse_dtype(dt) for dt in self.extra_allowed_dtypes}
+
+    def resolved_unsupported_dtypes(self) -> Set[torch.dtype]:
+        """Return resolved unsupported dtypes. Only call when unsupported_dtypes is not None."""
+        assert self.unsupported_dtypes is not None, (
+            "resolved_unsupported_dtypes() called but unsupported_dtypes is None. "
+            "Check with `entry.edits.unsupported_dtypes is not None` before calling."
+        )
+        return {parse_dtype(dt) for dt in self.unsupported_dtypes}
+
+
+class AllowListEntry(BaseModel):
+    test: str
+    mode: str = MODE_MANDATORY_PASS
+    tags: List[str] = []
+    edits: TestEdits = TestEdits()
+
+    @field_validator("test")
+    @classmethod
+    def validate_test_id(cls, v):
+        parts = v.split("::")
+        if len(parts) != 2 or not all(parts):
+            raise ValueError(
+                f"Invalid test id {v!r}, expected 'ClassName::method_name'"
+            )
+        return v
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v):
+        if v not in _VALID_MODES:
+            raise ValueError(
+                f"Invalid mode {v!r}. Valid values: {sorted(_VALID_MODES)}"
+            )
+        return v
+
+    # Convenience
+    @property
+    def class_name(self) -> str:
+        return self.test.split("::")[0]
+
+    @property
+    def method_name(self) -> str:
+        return self.test.split("::")[1]
+
+
+class BlockListEntry(BaseModel):
+    test: str
+
+    @field_validator("test")
+    @classmethod
+    def validate_test_id(cls, v):
+        parts = v.split("::")
+        if len(parts) != 2 or not all(parts):
+            raise ValueError(
+                f"Invalid test id {v!r}, expected 'ClassName::method_name'"
+            )
+        return v
+
+    @property
+    def class_name(self) -> str:
+        return self.test.split("::")[0]
+
+    @property
+    def method_name(self) -> str:
+        return self.test.split("::")[1]
+
+
+class FileEntry(BaseModel):
+    rel_path: str
+    allow_list: List[AllowListEntry] = []
+    block_list: List[BlockListEntry] = []
+
+    @field_validator("rel_path")
+    @classmethod
+    def validate_rel_path(cls, v):
+        known_tokens = {token for token, _ in REL_PATH_TOKENS}
+        has_token = any(token in v for token in known_tokens)
+        if not has_token and not Path(v).is_absolute():
+            warnings.warn(
+                f"rel_path {v!r} contains no known token "
+                f"({sorted(known_tokens)}) and is not absolute. "
+                "Make sure the path is resolvable at runtime.",
+                stacklevel=2,
+            )
+        return v
+
+
+class GlobalConfig(BaseModel):
+    unsupported_dtypes: List[str] = []
+    supported_ops: Optional[List[str]] = None
+
+    @field_validator("unsupported_dtypes", mode="before")
+    @classmethod
+    def validate_unsupported_dtypes(cls, v):
+        for dt in v or []:
+            if dt not in _VALID_DTYPE_STRINGS:
+                raise ValueError(
+                    f"Unknown dtype {dt!r} in global.unsupported_dtypes. "
+                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
+                )
+        return v
+
+    # Convenience
+    def resolved_unsupported_dtypes(self) -> Set[torch.dtype]:
+        if not self.unsupported_dtypes:
+            return DEFAULT_UNSUPPORTED_DTYPES.copy()
+        return {parse_dtype(dt) for dt in self.unsupported_dtypes}
+
+    def resolved_supported_ops(self) -> Optional[Set[str]]:
+        if self.supported_ops is None:
+            return None
+        return set(self.supported_ops)
+
+
+class TestsBlock(BaseModel):
+    files: List[FileEntry]
+    global_config: GlobalConfig = GlobalConfig()
+
+    # pydantic reads "global" from YAML but "global" is a Python keyword
+    # so we alias it
+    model_config = {"populate_by_name": True}
+
+    @model_validator(mode="before")
+    @classmethod
+    def rename_global(cls, values):
+        if "global" in values:
+            values["global_config"] = values.pop("global")
+        return values
+
+
+class SpyreTestConfig(BaseModel):
+    tests: TestsBlock
+
+    @property
+    def files(self) -> List[FileEntry]:
+        return self.tests.files
+
+    @property
+    def global_config(self) -> GlobalConfig:
+        return self.tests.global_config
+
+
+# ---------------------------------------------------------------------------
 # YAML loading
 # ---------------------------------------------------------------------------
 
 
-def load_yaml_config(path: str) -> dict:
-    """Load and return the raw YAML config dict from *path*."""
+def load_yaml_config(path: str) -> SpyreTestConfig:
+    """Load YAML and return a validated SpyreTestConfig.
+
+    Pydantic validates structure, field types, dtype strings, mode values,
+    and test id format automatically.
+
+    Raises:
+        FileNotFoundError: if the YAML file does not exist.
+        pydantic.ValidationError: if the YAML structure is invalid.
+    """
     config_path = Path(path)
     if not config_path.exists():
         raise FileNotFoundError(f"Spyre config file not found: {config_path}")
+
     with open(config_path) as f:
-        return yaml.safe_load(f) or {}
+        raw = yaml.safe_load(f) or {}
+
+    # pydantic raises ValidationError with clear field-level messages if invalid
+    return SpyreTestConfig.model_validate(raw)
 
 
 # ---------------------------------------------------------------------------
@@ -50,72 +264,38 @@ def load_yaml_config(path: str) -> dict:
 
 
 def resolve_rel_path(rel_path: str) -> str:
-    """Expand ${PYTORCH} and ${TORCH_SPYRE} tokens in *rel_path* using env vars.
-
-    Token -> env var mapping is defined in REL_PATH_TOKENS (spyre_test_constants).
-
-    Example:
-        ${PYTORCH}/test/test_binary_ufuncs.py
-        -> $SPYRE_PYTORCH_ROOT/test/test_binary_ufuncs.py
-    """
+    """Expand ${PYTORCH} and ${TORCH_SPYRE} tokens using env vars."""
     for token, env_var in REL_PATH_TOKENS:
         if token in rel_path:
             root = os.environ.get(env_var)
             if not root:
                 raise EnvironmentError(
-                    f"rel_path contains {token!r} but ${env_var} env var is not set."
+                    f"rel_path contains {token!r} but ${env_var} is not set."
                 )
             rel_path = rel_path.replace(token, root)
     return rel_path
 
 
-def resolve_current_file(data: dict, config_path: str) -> str:
-    """Match a YAML file entry against the current working directory.
+def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry:
+    """Match a YAML FileEntry against the current working directory.
 
-    pytest is always invoked from pytorch/test/, so we find the entry
-    whose resolved rel_path lives in cwd.  Raises EnvironmentError if
-    no match is found (wrong directory or missing YAML entry).
+    Returns:
+        The matching FileEntry.
+
+    Raises:
+        EnvironmentError: if no entry matches cwd.
     """
     cwd = os.path.abspath(os.getcwd())
-    for file_entry in data.get("tests", {}).get("files", []):
-        resolved = os.path.abspath(resolve_rel_path(file_entry["rel_path"]))
+    for file_entry in config.files:
+        resolved = os.path.abspath(resolve_rel_path(file_entry.rel_path))
         if os.path.dirname(resolved) == cwd:
-            return resolved
+            return file_entry
     raise EnvironmentError(
-        f"No rel_path in {config_path!r} matches the current working directory {cwd!r}.\n"
-        f"Make sure you are running pytest from the pytorch/test/ directory and that "
-        f"the YAML has an entry for the test file you are running."
+        f"No rel_path in {config_path!r} matches the current working directory "
+        f"{cwd!r}.\n"
+        f"Make sure you are running pytest from the pytorch/test/ directory and "
+        f"that the YAML has an entry for the test file you are running."
     )
-
-
-# ---------------------------------------------------------------------------
-# Global section parsers
-# ---------------------------------------------------------------------------
-
-
-def parse_global_unsupported_dtypes(data: dict) -> Set[torch.dtype]:
-    """Parse tests.global.unsupported_dtypes.
-
-    Falls back to DEFAULT_UNSUPPORTED_DTYPES when the key is absent.
-    Per-test edits.unsupported_dtypes takes precedence over this at runtime.
-    """
-    global_cfg = data.get("tests", {}).get("global", {})
-    if "unsupported_dtypes" in global_cfg:
-        return {parse_dtype(dt) for dt in global_cfg["unsupported_dtypes"]}
-    return DEFAULT_UNSUPPORTED_DTYPES.copy()
-
-
-def parse_global_supported_ops(data: dict) -> Optional[Set[str]]:
-    """Parse tests.global.supported_ops.
-
-    Returns a set of op name strings if present, or None if the key is absent
-    (meaning: no op filtering requested).
-    """
-    global_cfg = data.get("tests", {}).get("global", {})
-    ops = global_cfg.get("supported_ops")
-    if ops is None:
-        return None
-    return set(ops)
 
 
 # ---------------------------------------------------------------------------
@@ -126,21 +306,14 @@ def parse_global_supported_ops(data: dict) -> Optional[Set[str]]:
 def filter_op_db(supported_ops: Set[str]) -> None:
     """Restrict pytorch op_db lists to *supported_ops* in-place.
 
-    Mutates (or replaces) the module-level sequences in
-    common_methods_invocations so that the @ops decorator only sees the ops
-    we support.  Must be called before test collection (i.e. at module load
-    time, not inside a test).
-
-    Handles both list attrs (mutated in-place with [:]=) and tuple attrs
-    (reassigned, since tuples are immutable).  Unknown types emit a warning
-    and are skipped rather than aborting collection.
+    Handles list attrs (mutated in-place) and tuple attrs (reassigned).
+    Unknown types emit a warning and are skipped.
 
     Args:
         supported_ops: set of op name strings, e.g. {'add', 'mul'}.
-                       If empty, raises ValueError -- likely a config mistake.
+                       If empty, raises ValueError.
     """
-    import warnings
-    import torch.testing._internal.common_methods_invocations as _cmi
+    import torch.testing._internal.common_methods_invocations as _cmi  # lazy import
 
     if not supported_ops:
         raise ValueError(
@@ -156,16 +329,8 @@ def filter_op_db(supported_ops: Set[str]) -> None:
         filtered = [op for op in obj if op.name in supported_ops]
 
         if isinstance(obj, list):
-            # Mutate in-place so any other references to the same list object
-            # (e.g. binary_ufuncs imported directly into a test module) also
-            # see the filtered view.
             obj[:] = filtered
         elif isinstance(obj, tuple):
-            # Tuples are immutable -- reassign the module attribute.
-            # References held by other modules that already did
-            # `from common_methods_invocations import binary_ufuncs_and_refs`
-            # will NOT see this change, but @ops looks up the attr fresh each
-            # time so this is sufficient for our use case.
             setattr(_cmi, attr, tuple(filtered))
         else:
             warnings.warn(
@@ -174,85 +339,3 @@ def filter_op_db(supported_ops: Set[str]) -> None:
                 f"This likely means a pytorch refactor needs revisiting in OP_DB_ATTRS.",
                 stacklevel=2,
             )
-
-
-# ---------------------------------------------------------------------------
-# Test list parser
-# ---------------------------------------------------------------------------
-
-
-def parse_test_id(test_id: str) -> Tuple[str, str]:
-    """Parse 'ClassName::method_name' into (class_name, method_name)."""
-    parts = test_id.split("::")
-    if len(parts) != 2:
-        raise ValueError(
-            f"Invalid test id {test_id!r}, expected 'ClassName::method_name'"
-        )
-    return parts[0], parts[1]
-
-
-def parse_tests(
-    data: dict, current_file: str
-) -> Tuple[
-    Dict[str, set],  # WHITELISTED_TESTS         {class_name -> set of method names}
-    Dict[str, set],  # BLACKLISTED_TESTS          {class_name -> set of method names}
-    Dict[str, set],  # XFAIL_TESTS               {class_name -> set of (method, strict)}
-    Dict[str, set],  # EXTRA_ALLOWED_DTYPES       {method -> set of torch.dtype}
-    Dict[str, float],  # PRECISION_OVERRIDES        {method -> float}
-    Dict[str, set],  # PER_TEST_UNSUPPORTED_DTYPES{method -> set of torch.dtype}
-    Dict[str, List],  # TEST_TAGS                  {method -> [tag, ...]}
-]:
-    """Parse allow_list and block_list for the file entry matching *current_file*.
-
-    Only the entry whose resolved rel_path matches *current_file* is processed;
-    all other file entries in the YAML are ignored.
-    """
-    whitelisted: Dict[str, set] = {}
-    blacklisted: Dict[str, set] = {}
-    xfail: Dict[str, set] = {}
-    extra_dtypes: Dict[str, set] = {}
-    precision_overrides: Dict[str, float] = {}
-    per_test_unsupported: Dict[str, set] = {}
-    test_tags: Dict[str, List] = {}
-
-    for file_entry in data.get("tests", {}).get("files", []):
-        if os.path.abspath(resolve_rel_path(file_entry["rel_path"])) != current_file:
-            continue
-
-        # ── allow_list ───────────────────────────────────────────────
-        for entry in file_entry.get("allow_list", []):
-            class_name, method_name = parse_test_id(entry["test"])
-            whitelisted.setdefault(class_name, set()).add(method_name)
-            test_tags[method_name] = entry.get("tags", [])
-
-            mode = entry.get("mode", MODE_MANDATORY_PASS)
-            if mode in (MODE_XFAIL, MODE_XFAIL_STRICT):
-                strict = mode == MODE_XFAIL_STRICT
-                xfail.setdefault(class_name, set()).add((method_name, strict))
-
-            edits = entry.get("edits", {}) or {}
-            if "extra_allowed_dtypes" in edits:
-                extra_dtypes[method_name] = {
-                    parse_dtype(dt) for dt in edits["extra_allowed_dtypes"]
-                }
-            if "precision_override" in edits:
-                precision_overrides[method_name] = float(edits["precision_override"])
-            if "unsupported_dtypes" in edits:
-                per_test_unsupported[method_name] = {
-                    parse_dtype(dt) for dt in edits["unsupported_dtypes"]
-                }
-
-        # ── block_list ───────────────────────────────────────────────
-        for entry in file_entry.get("block_list", []):
-            class_name, method_name = parse_test_id(entry["test"])
-            blacklisted.setdefault(class_name, set()).add(method_name)
-
-    return (
-        whitelisted,
-        blacklisted,
-        xfail,
-        extra_dtypes,
-        precision_overrides,
-        per_test_unsupported,
-        test_tags,
-    )

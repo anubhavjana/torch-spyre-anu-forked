@@ -1,0 +1,127 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SpyreTestConfig",
+  "description": "Configuration schema for the Spyre PyTorch test framework",
+  "type": "object",
+  "required": ["tests"],
+  "additionalProperties": false,
+  "properties": {
+    "tests": {
+      "type": "object",
+      "required": ["files"],
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["rel_path"],
+            "additionalProperties": false,
+            "properties": {
+              "rel_path": {
+                "type": "string",
+                "description": "Path to the upstream test file. Use ${PYTORCH} or ${TORCH_SPYRE} tokens.",
+                "examples": ["${PYTORCH}/test/test_binary_ufuncs.py"]
+              },
+              "allow_list": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/AllowListEntry" }
+              },
+              "block_list": {
+                "type": "array",
+                "items": { "$ref": "#/$defs/BlockListEntry" }
+              }
+            }
+          }
+        },
+        "global": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "unsupported_dtypes": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/DtypeString" }
+            },
+            "supported_ops": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Restricts op_db to these op names before @ops sees the lists.",
+              "examples": ["add", "mul", "sub"]
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "DtypeString": {
+      "type": "string",
+      "enum": [
+        "float16", "float32", "float64", "bfloat16",
+        "int8", "int16", "int32", "int64",
+        "uint8", "uint16", "uint32", "uint64",
+        "complex32", "complex64", "complex128",
+        "bool"
+      ]
+    },
+    "TestMode": {
+      "type": "string",
+      "enum": ["mandatory_pass", "xfail", "xfail_strict"],
+      "default": "mandatory_pass"
+    },
+    "TestEdits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "extra_allowed_dtypes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DtypeString" },
+          "description": "Inject dtypes missing from upstream @ops(allowed_dtypes=(...)). Without this, those variants are never instantiated."
+        },
+        "precision_override": {
+          "type": "number",
+          "description": "Numeric precision threshold, e.g. 1e-3"
+        },
+        "unsupported_dtypes": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DtypeString" },
+          "description": "Per-test override of global.unsupported_dtypes. Completely replaces global — not a union."
+        }
+      }
+    },
+    "AllowListEntry": {
+      "type": "object",
+      "required": ["test"],
+      "additionalProperties": false,
+      "properties": {
+        "test": {
+          "type": "string",
+          "pattern": "^\\w+::\\w+$",
+          "description": "ClassName::method_name",
+          "examples": ["TestBinaryUfuncs::test_scalar_support"]
+        },
+        "mode": { "$ref": "#/$defs/TestMode" },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Free-form labels for reporting and traceability, e.g. model names."
+        },
+        "edits": { "$ref": "#/$defs/TestEdits" }
+      }
+    },
+    "BlockListEntry": {
+      "type": "object",
+      "required": ["test"],
+      "additionalProperties": false,
+      "properties": {
+        "test": {
+          "type": "string",
+          "pattern": "^\\w+::\\w+$",
+          "description": "ClassName::method_name",
+          "examples": ["TestBinaryUfuncs::test_add"]
+        }
+      }
+    }
+  }
+}

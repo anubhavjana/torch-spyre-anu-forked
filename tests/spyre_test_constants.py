@@ -25,8 +25,8 @@ MODE_XFAIL_STRICT = "xfail_strict"
 # Filter type modes  (SPYRE_PYTORCH_TEST_FILTER_TYPE)
 # ---------------------------------------------------------------------------
 
-MODE_WHITELIST = "whitelist"
-MODE_BLACKLIST = "blacklist"
+MODE_ALLOW_LIST = "allow_list"
+MODE_BLOCK_LIST = "block_list"
 
 # --------------------
 # Dtype defaults
