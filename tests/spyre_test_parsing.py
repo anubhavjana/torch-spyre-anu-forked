@@ -9,14 +9,15 @@ Responsibilities:
 """
 
 import os
+import sys
 import warnings
 from pathlib import Path
-from typing import Optional, Set
+from typing import Dict, Optional
 
 import yaml
 
-from spyre_test_constants import OP_DB_ATTRS, REL_PATH_TOKENS
-from spyre_test_config_models import FileEntry, SpyreTestConfig
+from spyre_test_constants import REL_PATH_TOKENS
+from spyre_test_config_models import FileEntry, SpyreTestConfig, SupportedOpConfig
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +85,6 @@ def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry
 
     Raises EnvironmentError if no match is found.
     """
-    import sys
 
     cwd = Path(os.getcwd()).resolve()
 
@@ -130,44 +130,40 @@ def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry
     )
 
 
-# ---------------------------------------------------------------------------
-# op_db monkey-patching
-# ---------------------------------------------------------------------------
+def apply_op_config_overrides(
+    op_configs: Dict[str, "SupportedOpConfig"],
+) -> None:
+    """Apply per-op attribute overrides (dtypes, atol, rtol) to OpInfo objects.
 
+    Mutates OpInfo attributes in-place on op_db entries. Because @ops reads
+    op.dtypes / op.atol etc. from the OpInfo object at parametrize time,
+    these mutations propagate to test generation even though @ops.op_list
+    was copied at decoration time.
 
-def filter_op_db(supported_ops: Set[str]) -> None:
-    """Restrict pytorch op_db lists to *supported_ops* in-place.
-
-    Handles list attrs (mutated in-place) and tuple attrs (reassigned).
-    Unknown types emit a warning and are skipped.
-
-    Args:
-        supported_ops: set of op name strings, e.g. {'add', 'mul'}.
-                       If empty, raises ValueError.
+    Op filtering for test generation is handled separately by
+    _SpyreOpListPatcher -- this function only handles attribute overrides.
     """
-    import torch.testing._internal.common_methods_invocations as _cmi  # lazy import
+    import torch.testing._internal.common_methods_invocations as _cmi
 
-    if not supported_ops:
-        raise ValueError(
-            "supported_ops is empty -- this would skip all ops. "
-            "Remove the key from the YAML to run all ops, or add at least one op name."
-        )
+    op_db = getattr(_cmi, "op_db", [])
+    op_info_by_name = {op.name: op for op in op_db}
 
-    for attr in OP_DB_ATTRS:
-        obj = getattr(_cmi, attr, None)
-        if obj is None:
-            continue
-
-        filtered = [op for op in obj if op.name in supported_ops]
-
-        if isinstance(obj, list):
-            obj[:] = filtered
-        elif isinstance(obj, tuple):
-            setattr(_cmi, attr, tuple(filtered))
-        else:
+    for op_name, cfg in op_configs.items():
+        op_info = op_info_by_name.get(op_name)
+        if op_info is None:
             warnings.warn(
-                f"spyre filter_op_db: pytorch's {attr!r} is neither a list nor a "
-                f"tuple (got {type(obj)}) -- skipping. Op filtering may be incomplete. "
-                f"This likely means a pytorch refactor needs revisiting in OP_DB_ATTRS.",
+                f"apply_op_config_overrides: op {op_name!r} not found in op_db.",
                 stacklevel=2,
             )
+            continue
+
+        resolved_dtypes = cfg.resolved_dtypes()
+        if resolved_dtypes is not None:
+            # dispatch_dtypes = _dispatch_dtypes(tuple(resolved_dtypes))
+            # # op_info.dtypes = dispatch_dtypes        # type: ignore[attr-defined]
+            op_info.__dict__["dtypes"] = frozenset(resolved_dtypes)
+
+        if cfg.atol is not None:
+            op_info.atol = cfg.atol  # type: ignore[attr-defined]
+        if cfg.rtol is not None:
+            op_info.rtol = cfg.rtol  # type: ignore[attr-defined]

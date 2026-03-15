@@ -81,26 +81,3 @@ REL_PATH_TOKENS = (
     ("${PYTORCH}", ENV_PYTORCH_ROOT),
     ("${TORCH_SPYRE}", ENV_TORCH_SPYRE_ROOT),
 )
-
-# -----------------------------------------
-# op_db attribute names that need to be
-# filtered when supported_ops is set
-# ----------------------------------------
-
-OP_DB_ATTRS = (
-    "op_db",
-    "ops_and_refs",
-    "binary_ufuncs",
-    "binary_ufuncs_and_refs",
-    "unary_ufuncs",
-    "reduction_ops",
-    "spectral_funcs",
-    "sparse_unary_ufuncs",
-    "sparse_csr_unary_ufuncs",
-    "sparse_reduction_ops",
-    "shape_funcs",
-    "reference_filtered_ops",
-    "reference_masked_ops",
-    "sparse_masked_reduction_ops",
-    "python_ref_db",
-)

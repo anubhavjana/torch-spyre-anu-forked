@@ -14,7 +14,7 @@ tests:
             unsupported_dtypes:
               - bfloat16
 
-        - test: TestBinaryUfuncs::test_broadcasting
+        - test: TestBinaryUfuncs::test_contig_vs_transposed
           mode: xfail
           tags:
             - model_name_depending_on_this_test_2
@@ -57,6 +57,11 @@ tests:
       - complex128
       - complex32
     supported_ops:
-      - add
-      - mul
-      - sub
+      - name: add
+        dtypes:         # override upstream dtypes for spyre
+          - float16
+          - int64
+        atol: 1e-3
+        rtol: 1e-3
+      - name: mul
+      - name: sub

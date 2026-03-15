@@ -6,10 +6,10 @@ Used by spyre_test_parsing.py to validate and parse the YAML config.
 
 import warnings
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 
 import torch
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator  # type: ignore
 
 from spyre_test_constants import (
     DEFAULT_UNSUPPORTED_DTYPES,
@@ -19,6 +19,7 @@ from spyre_test_constants import (
     REL_PATH_TOKENS,
 )
 from spyre_test_matching import parse_dtype
+
 
 # ---------------------------------------------------------------------------
 # Valid dtype strings (used in validators)
@@ -54,7 +55,6 @@ _VALID_MODES = {MODE_MANDATORY_PASS, MODE_XFAIL, MODE_XFAIL_STRICT}
 class TestEdits(BaseModel):
     extra_allowed_dtypes: List[str] = []
     precision_override: Optional[float] = None
-    # None means "use global"; an explicit list overrides global completely
     unsupported_dtypes: Optional[List[str]] = None
 
     @field_validator("extra_allowed_dtypes", mode="before")
@@ -171,9 +171,43 @@ class FileEntry(BaseModel):
         return v
 
 
+class SupportedOpConfig(BaseModel):
+    """Per-op configuration mapping back to upstream OpInfo fields.
+
+    Only fields we need to override for Spyre are listed here.
+    Unspecified fields fall back to the upstream OpInfo values.
+    """
+
+    name: str  # matches OpInfo.name in upstream op_db
+    dtypes: Optional[List[str]] = None  # override upstream dtypes for Spyre
+    atol: Optional[float] = None  # absolute tolerance override
+    rtol: Optional[float] = None  # relative tolerance override
+
+    @field_validator("dtypes", mode="before")
+    @classmethod
+    def validate_dtypes(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        for dt in v or []:
+            if dt not in _VALID_DTYPE_STRINGS:
+                raise ValueError(
+                    f"Unknown dtype {dt!r} in supported_ops dtypes. "
+                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
+                )
+        return v
+
+    def resolved_dtypes(self) -> Optional[Set[torch.dtype]]:
+        """Return dtypes as a plain set of torch.dtype, or None if not overridden.
+
+        Callers that assign to OpInfo.dtypes must wrap this in _dispatch_dtypes —
+        OpInfo.__setattr__ enforces isinstance(value, _dispatch_dtypes).
+        """
+        if self.dtypes is None:
+            return None
+        return {parse_dtype(dt) for dt in self.dtypes}
+
+
 class GlobalConfig(BaseModel):
     unsupported_dtypes: List[str] = []
-    supported_ops: Optional[List[str]] = None
+    supported_ops: Optional[List[SupportedOpConfig]] = None
 
     @field_validator("unsupported_dtypes", mode="before")
     @classmethod
@@ -186,6 +220,24 @@ class GlobalConfig(BaseModel):
                 )
         return v
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_supported_ops(cls, values: object) -> object:
+        """Accept both plain string list and structured dict list for supported_ops.
+
+        Format 1 (plain): supported_ops: [add, mul, sub]
+        Format 2 (structured): supported_ops: [{name: add, dtypes: [float16]}, ...]
+
+        Plain strings are normalised to dicts so SupportedOpConfig can parse them.
+        """
+        if isinstance(values, dict) and "supported_ops" in values:
+            ops = values["supported_ops"]
+            if ops is not None:
+                values["supported_ops"] = [
+                    {"name": op} if isinstance(op, str) else op for op in ops
+                ]
+        return values
+
     def resolved_unsupported_dtypes(self) -> Set[torch.dtype]:
         """Return unsupported_dtypes as a set of torch.dtype.
 
@@ -196,28 +248,37 @@ class GlobalConfig(BaseModel):
         return {parse_dtype(dt) for dt in self.unsupported_dtypes}
 
     def resolved_supported_ops(self) -> Optional[Set[str]]:
-        """Return supported_ops as a set of strings, or None if not set."""
+        """Return op names as a plain set of strings for filter_op_db."""
         if self.supported_ops is None:
             return None
-        return set(self.supported_ops)
+        return {op.name for op in self.supported_ops}
+
+    def resolved_supported_ops_config(self) -> Optional[Dict[str, SupportedOpConfig]]:
+        """Return {op_name -> SupportedOpConfig} for per-op attribute access."""
+        if self.supported_ops is None:
+            return None
+        return {op.name: op for op in self.supported_ops}
 
 
 class TestsBlock(BaseModel):
+    """Holds the inner YAML keys: files and global."""
+
     files: List[FileEntry]
     global_config: GlobalConfig = GlobalConfig()
-
-    model_config = {"populate_by_name": True}
 
     @model_validator(mode="before")
     @classmethod
     def rename_global(cls, values: object) -> object:
-        # "global" is a Python keyword so we alias it to "global_config"
+        # "global" is a Python keyword so rename it to "global_config"
+        # before Pydantic processes the fields.
         if isinstance(values, dict) and "global" in values:
             values["global_config"] = values.pop("global")
         return values
 
 
 class SpyreTestConfig(BaseModel):
+    """Root model for the Spyre test YAML config."""
+
     tests: TestsBlock
 
     @property

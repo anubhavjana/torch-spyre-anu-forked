@@ -53,12 +53,16 @@ from spyre_test_matching import (
 from spyre_test_parsing import (
     FileEntry,
     SpyreTestConfig,
-    filter_op_db,
+    apply_op_config_overrides,
     load_yaml_config,
     resolve_current_file,
 )
 
-from spyre_upstream_patcher import _SpyreDtypePatcher, _SpyreOnlyOnPatcher
+from spyre_upstream_patcher import (
+    _SpyreDtypePatcher,
+    _SpyreOnlyOnPatcher,
+    _SpyreOpListPatcher,
+)
 
 
 # Resolve the actual backend name registered for privateuse1.
@@ -207,19 +211,19 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         if not path or getattr(cls, "_yaml_loaded", False):
             return
 
-        # load_yaml_config returns a validated SpyreTestConfig (Pydantic model)
         config: SpyreTestConfig = load_yaml_config(path)
 
-        # ── op_db filtering (must happen before @ops sees the lists) ──
-        supported_ops = config.global_config.resolved_supported_ops()
-        if supported_ops is not None:
-            filter_op_db(supported_ops)
+        cls._supported_ops = config.global_config.resolved_supported_ops()
 
-        # ── resolve which file entry applies to the current test file ──
-        # pytest is always invoked from pytorch/test/, matched by cwd.
+        # only needed if per-op attribute overrides are specified in YAML
+        op_configs = config.global_config.resolved_supported_ops_config()
+        if op_configs:
+            apply_op_config_overrides(op_configs)
+
+        # -- resolve which file entry applies to the current test file --
         file_entry: FileEntry = resolve_current_file(config, path)
 
-        # ── populate class-level dicts from typed FileEntry ───────────
+        # ── populate class-level dicts from typed FileEntry ───────────────
         cls.ALLOW_LIST_TESTS = _build_allow_list_map(file_entry)
         cls.BLOCK_LIST_TESTS = _build_block_list_map(file_entry)
         cls.XFAIL_TESTS = _build_xfail_map(file_entry)
@@ -369,6 +373,13 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
             reason = cls._is_dtype_unsupported(method_name, base_test_name)
             return (False, reason) if reason else (True, None)
 
+    @classmethod
+    def _get_supported_ops(cls) -> Optional[Set[str]]:
+        """Return the set of supported op names, or None if no filtering is configured."""
+        # _supported_ops is populated by _load_test_suite_config alongside the
+        # other class-level dicts. Returns None if supported_ops was not set in YAML.
+        return getattr(cls, "_supported_ops", None)
+
     # ------------------------------------------------------------------
     # instantiate_test override
     # ------------------------------------------------------------------
@@ -394,6 +405,14 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
 
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
+
+        # Filter @ops.op_list to supported_ops before super() generates variants.
+        # @ops copies its op_list at decoration time so filter_op_db mutations
+        # on the original lists don't reach it. We should therefore patch op_list directly
+        # on the @ops instance.
+        supported_ops = cls._get_supported_ops()
+        if supported_ops is not None:
+            _SpyreOpListPatcher(test, supported_ops).patch()
 
         # Inject extra dtypes into @ops before super() generates variants
         extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
