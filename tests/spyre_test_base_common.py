@@ -58,6 +58,8 @@ from spyre_test_parsing import (
     resolve_current_file,
 )
 
+from spyre_upstream_patcher import _SpyreDtypePatcher, _SpyreOnlyOnPatcher
+
 
 # Resolve the actual backend name registered for privateuse1.
 # torch._C._get_privateuse1_backend_name() returns e.g. "spyre".
@@ -97,124 +99,6 @@ def remove_builtin_privateuse1_test_base():
 
 # Call the filter function to apply the side effect
 remove_builtin_privateuse1_test_base()
-
-
-class _SpyreOnlyOnPatcher:
-    """Patches @onlyOn decorated test methods to also allow privateuse1.
-
-    The already-produced only_fn wrapper closes over the onlyOn instance.
-    self.device_type is read at call time, so mutating the instance's
-    device_type list after decoration still takes effect.
-    """
-
-    _PRIVATEUSE1 = _SPYRE_DEVICE_TYPE
-
-    # Unwrap bound method to get the underlying function object.
-    # Test methods passed to instantiate_test() are bound to their class,
-    # so __func__ gives us the raw function whose closure we need to walk.
-
-    def __init__(self, test: object) -> None:
-        self._underlying_fn = (
-            test.__func__  # type: ignore[union-attr]
-            if hasattr(test, "__func__")
-            else test
-        )
-
-    def patch(self) -> None:
-        """Walk the decorator stack and mutate the onlyOn instance in-place.
-
-        Decorator stacking means @onlyOn may not be the outermost wrapper --
-        @suppress_warnings, @skipCUDAIfNotRocm, and @ops are all stacked on
-        top of it. We walk the __wrapped__ chain (set by @wraps on each layer)
-        until we find a closure cell that holds an onlyOn instance.
-
-        Once found, we append our device name to onlyOn.device_type in-place.
-        Because the wrapper reads self.device_type at call time (not at
-        decoration time), this update takes effect when the test runs.
-        """
-
-        from torch.testing._internal.common_device_type import onlyOn as _onlyOn_cls
-
-        current = self._underlying_fn
-        while current is not None:
-            # Inspect every cell in this function's closure.
-            # Each decorator layer may close over different objects --
-            # here we are looking specifically for an onlyOn instance.
-            cells = getattr(current, "__closure__", None) or ()
-            for cell in cells:
-                try:
-                    val = cell.cell_contents
-                except ValueError:
-                    continue
-
-                if not isinstance(val, _onlyOn_cls):
-                    # This cell holds something else (e.g. the wrapped function,
-                    # a string, or another decorator instance), so continue
-                    continue
-
-                # Found the onlyOn instance. Its device_type attribute is what
-                # the wrapper checks: `if slf.device_type not in self.device_type`.
-                # Update in-place to include our backend name.
-                if isinstance(val.device_type, list):
-                    if self._PRIVATEUSE1 not in val.device_type:
-                        val.device_type.append(self._PRIVATEUSE1)
-
-                # Less common scenario: @onlyOn("cuda") -- single string.
-                # Replace with a list containing both the original and ours.
-                elif isinstance(val.device_type, str):
-                    if val.device_type != self._PRIVATEUSE1:
-                        val.device_type = [val.device_type, self._PRIVATEUSE1]
-                return
-
-            # This layer had no onlyOn instance in its closure.
-            # Move one level deeper via __wrapped__, which @wraps sets
-            # to point to the function this decorator wraps.
-            current = getattr(current, "__wrapped__", None)
-
-        # If we reach here, that means no @onlyOn was found in the decorator stack.
-        # That implies that the test simply did not have @onlyOn.
-
-
-# ---------------------------------------------------------------------------
-# Dtype patcher
-# ---------------------------------------------------------------------------
-
-
-class _SpyreDtypePatcher:
-    """Patches @ops allowed_dtypes on a bound test method before instantiation.
-
-    Needed because upstream @ops(..., allowed_dtypes=(...)) restricts which dtype
-    variants are generated -- dtypes absent here are never instantiated, so they
-    cannot be added to the allow_list. We inject extra dtypes before
-    super().instantiate_test() calls _parametrize_test.
-    """
-
-    def __init__(self, test, extra_dtypes: set):
-        from torch.testing._internal.common_device_type import ops as _ops_cls
-
-        # @ops instance lives at test.__func__.parametrize_fn.__self__
-        underlying_fn = test.__func__ if hasattr(test, "__func__") else test
-        p = getattr(underlying_fn, "parametrize_fn", None)
-        self._ops_instance = (
-            p.__self__
-            if p is not None
-            and hasattr(p, "__self__")
-            and isinstance(p.__self__, _ops_cls)
-            else None
-        )
-        self._extra_dtypes = extra_dtypes
-
-    def patch(self) -> None:
-        if (
-            self._ops_instance is not None
-            and self._ops_instance.allowed_dtypes is not None
-        ):
-            self._ops_instance.allowed_dtypes |= self._extra_dtypes
-
-
-def _patch_only_on_per_test(test: object) -> None:
-    """Patch the onlyOn instance in this specific test's closure."""
-    _SpyreOnlyOnPatcher(test).patch()
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +375,11 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
 
     @classmethod
     def instantiate_test(cls, name, test, *, generic_cls=None):
-        _patch_only_on_per_test(test)
+        # Patch @onlyOn on this specific test copy before super() runs.
+        # Must be per-call because upstream deepcopies the test before
+        # calling instantiate_test, so each call has a fresh onlyOn instance.
+
+        _SpyreOnlyOnPatcher(test, _SPYRE_DEVICE_TYPE).patch()
         cls._load_test_suite_config()
 
         # Print tags to real stderr (fd 2) so they appear without -s flag.
