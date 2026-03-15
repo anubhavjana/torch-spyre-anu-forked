@@ -59,6 +59,19 @@ from spyre_test_parsing import (
 )
 
 
+# Resolve the actual backend name registered for privateuse1.
+# torch._C._get_privateuse1_backend_name() returns e.g. "spyre".
+# This is what slf.device_type will be at test runtime.
+def _get_privateuse1_device_type() -> str:
+    try:
+        return torch._C._get_privateuse1_backend_name()
+    except Exception:
+        return "privateuse1"  # fallback if not registered yet
+
+
+_SPYRE_DEVICE_TYPE: str = _get_privateuse1_device_type()
+
+
 # ---------------------------------------------------------------------------
 # PrivateUse1TestBase filter
 # ---------------------------------------------------------------------------
@@ -89,13 +102,16 @@ remove_builtin_privateuse1_test_base()
 class _SpyreOnlyOnPatcher:
     """Patches @onlyOn decorated test methods to also allow privateuse1.
 
-    @onlyOn stores the allowed device list on the onlyOn instance as
-    self.device_type. The wrapper closes over the onlyOn instance itself,
-    not the list directly. We find the onlyOn instance in the closure and
-    append 'privateuse1' to its device_type list.
+    The already-produced only_fn wrapper closes over the onlyOn instance.
+    self.device_type is read at call time, so mutating the instance's
+    device_type list after decoration still takes effect.
     """
 
-    _PRIVATEUSE1 = "privateuse1"
+    _PRIVATEUSE1 = _SPYRE_DEVICE_TYPE
+
+    # Unwrap bound method to get the underlying function object.
+    # Test methods passed to instantiate_test() are bound to their class,
+    # so __func__ gives us the raw function whose closure we need to walk.
 
     def __init__(self, test: object) -> None:
         self._underlying_fn = (
@@ -105,16 +121,25 @@ class _SpyreOnlyOnPatcher:
         )
 
     def patch(self) -> None:
-        """Walk the decorator stack and patch any @onlyOn instance found.
+        """Walk the decorator stack and mutate the onlyOn instance in-place.
 
-        Iterates the __wrapped__ chain layer by layer. For each layer,
-        inspects closure cells for an onlyOn instance and appends
-        'privateuse1' to its device_type list in-place.
+        Decorator stacking means @onlyOn may not be the outermost wrapper --
+        @suppress_warnings, @skipCUDAIfNotRocm, and @ops are all stacked on
+        top of it. We walk the __wrapped__ chain (set by @wraps on each layer)
+        until we find a closure cell that holds an onlyOn instance.
+
+        Once found, we append our device name to onlyOn.device_type in-place.
+        Because the wrapper reads self.device_type at call time (not at
+        decoration time), this update takes effect when the test runs.
         """
+
         from torch.testing._internal.common_device_type import onlyOn as _onlyOn_cls
 
         current = self._underlying_fn
         while current is not None:
+            # Inspect every cell in this function's closure.
+            # Each decorator layer may close over different objects --
+            # here we are looking specifically for an onlyOn instance.
             cells = getattr(current, "__closure__", None) or ()
             for cell in cells:
                 try:
@@ -122,17 +147,32 @@ class _SpyreOnlyOnPatcher:
                 except ValueError:
                     continue
 
-                if isinstance(val, _onlyOn_cls):
-                    # device_type is either a list or a str
-                    if isinstance(val.device_type, list):
-                        if self._PRIVATEUSE1 not in val.device_type:
-                            val.device_type.append(self._PRIVATEUSE1)
-                    elif isinstance(val.device_type, str):
-                        if val.device_type != self._PRIVATEUSE1:
-                            val.device_type = [val.device_type, self._PRIVATEUSE1]
-                    return  # patched, done
+                if not isinstance(val, _onlyOn_cls):
+                    # This cell holds something else (e.g. the wrapped function,
+                    # a string, or another decorator instance), so continue
+                    continue
 
+                # Found the onlyOn instance. Its device_type attribute is what
+                # the wrapper checks: `if slf.device_type not in self.device_type`.
+                # Update in-place to include our backend name.
+                if isinstance(val.device_type, list):
+                    if self._PRIVATEUSE1 not in val.device_type:
+                        val.device_type.append(self._PRIVATEUSE1)
+
+                # Less common scenario: @onlyOn("cuda") -- single string.
+                # Replace with a list containing both the original and ours.
+                elif isinstance(val.device_type, str):
+                    if val.device_type != self._PRIVATEUSE1:
+                        val.device_type = [val.device_type, self._PRIVATEUSE1]
+                return
+
+            # This layer had no onlyOn instance in its closure.
+            # Move one level deeper via __wrapped__, which @wraps sets
+            # to point to the function this decorator wraps.
             current = getattr(current, "__wrapped__", None)
+
+        # If we reach here, that means no @onlyOn was found in the decorator stack.
+        # That implies that the test simply did not have @onlyOn.
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +210,11 @@ class _SpyreDtypePatcher:
             and self._ops_instance.allowed_dtypes is not None
         ):
             self._ops_instance.allowed_dtypes |= self._extra_dtypes
+
+
+def _patch_only_on_per_test(test: object) -> None:
+    """Patch the onlyOn instance in this specific test's closure."""
+    _SpyreOnlyOnPatcher(test).patch()
 
 
 # ---------------------------------------------------------------------------
@@ -363,9 +408,11 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         dtype_str = extract_dtype_from_name(method_name)
         if dtype_str:
             try:
-                active_unsupported = cls.PER_TEST_UNSUPPORTED_DTYPES.get(
-                    base_test_name, cls.unsupported_dtypes
-                )
+                # Per-test unsupported_dtypes UNIONS with global
+                # This ensures global exclusions (e.g. complex64) always apply
+                # even when a per-test override is present.
+                per_test = cls.PER_TEST_UNSUPPORTED_DTYPES.get(base_test_name, set())
+                active_unsupported = cls.unsupported_dtypes | per_test
                 if parse_dtype(dtype_str) in active_unsupported:
                     return f"Unsupported dtype: {dtype_str}"
             except ValueError:
@@ -444,6 +491,7 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
 
     @classmethod
     def instantiate_test(cls, name, test, *, generic_cls=None):
+        _patch_only_on_per_test(test)
         cls._load_test_suite_config()
 
         # Print tags to real stderr (fd 2) so they appear without -s flag.
@@ -458,18 +506,6 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
 
         # Per-test precision override
         cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
-
-        # Only patch @onlyOn and @ops for tests explicitly in the allow_list.
-        # This is an intentional opt-in — if you add TestCommon::test_compare_cpu
-        # to allow_list, we patch @onlyOn so it runs for privateuse1.
-        mode = cls._resolve_mode()
-        if mode == MODE_ALLOW_LIST:
-            generic_cls_name = generic_cls.__name__ if generic_cls else ""
-            mset = cls._get_active_match_sets().get(generic_cls_name)
-            if mset is not None and (
-                mset.matches(name) or mset.matches(f"{generic_cls_name}::{name}")
-            ):
-                _SpyreOnlyOnPatcher(test).patch()
 
         # Inject extra dtypes into @ops before super() generates variants
         extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)

@@ -39,8 +39,12 @@ tests:
 
     - rel_path: ${PYTORCH}/test/test_ops.py
       allow_list:
-        - test: TestCommon::test_compare_cpu
-          mode: xfail
+        - test: TestCommon::test_compare_cpu # export PYTORCH_TEST_WITH_SLOW=1
+          mode: mandatory_pass
+          edits:
+            unsupported_dtypes:
+              - float32 # test_ops.py::TestCommonPRIVATEUSE1::test_compare_cpu__refs__conversions_float_spyre_float32
+                        # corrupted double-linked list
 
   global:
     unsupported_dtypes:
@@ -49,6 +53,9 @@ tests:
       - int32
       - float32
       - float64
+      - complex64
+      - complex128
+      - complex32
     supported_ops:
       - add
       - mul
