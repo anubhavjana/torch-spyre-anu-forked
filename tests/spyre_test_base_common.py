@@ -1,18 +1,5 @@
 """
-Shared class and methods for all Spyre PyTorch test overrides.
-
-Each per-suite file (e.g. spyre_test_binaryfuncs.py) imports
-SpyreTestBase from here and declares ALLOW_LIST_TESTS and/or BLOCK_LIST_TESTS
-as class attributes.  A single environment variable selects which dict
-is active at runtime.
-
-# ENV VAR
-SPYRE_PYTORCH_TEST_FILTER_TYPE=allow_list --> use tests from allow_list  (default when it exists)
-SPYRE_PYTORCH_TEST_FILTER_TYPE=block_list --> skip tests from block_list (default when only that exists)
-
-If a suite file defines BOTH dicts, set SPYRE_PYTORCH_TEST_FILTER_TYPE explicitly to
-choose which one governs the run.  When only one dict is defined the
-mode is inferred automatically and SPYRE_PYTORCH_TEST_FILTER_TYPE need not be set.
+Shared class and methods for all OOT PyTorch test overrides.
 
 Usage:
     export PYTORCH_TESTING_DEVICE_ONLY_FOR="privateuse1"
@@ -21,8 +8,7 @@ Usage:
     $DTI_PROJECT_ROOT/torch-spyre-docs/scripts/checkout-pytorch-src.sh
 
     export TORCH_TEST_DEVICES="$DTI_PROJECT_ROOT/torch-spyre/tests/spyre_test_base_common.py"
-    export SPYRE_PYTORCH_TEST_FILTER_TYPE=allow_list  # or block_list
-    export SPYRE_PYTORCH_TEST_CONFIG=tests/test_binary_ufuncs.yaml
+    export PYTORCH_TEST_CONFIG="$DTI_PROJECT_ROOT/torch-spyre/tests/test_suite_config.yaml"
 
     cd $DTI_PROJECT_ROOT/pytorch/test/
     python3 -m pytest test_binary_ufuncs.py -v
@@ -31,22 +17,21 @@ Usage:
 import os
 import unittest
 from functools import wraps
-from typing import Dict, List, Optional, Set
+from typing import Dict, Optional, Set
 
 import pytest  # type: ignore
 import torch
 
 from spyre_test_constants import (
     DEFAULT_FLOATING_PRECISION,
-    DEFAULT_UNSUPPORTED_DTYPES,
-    ENV_FILTER_TYPE,
     ENV_TEST_CONFIG,
-    MODE_ALLOW_LIST,
-    MODE_BLOCK_LIST,
+    MODE_BLOCK,
+    MODE_MANDATORY_SUCCESS,
+    MODE_XFAIL,
+    MODE_XFAIL_STRICT,
+    UNLISTED_MODE_XFAIL,
 )
 from spyre_test_matching import (
-    MatchSet,
-    build_match_sets,
     extract_dtype_from_name,
     parse_dtype,
 )
@@ -63,6 +48,7 @@ from spyre_upstream_patcher import (
     _SpyreOnlyOnPatcher,
     _SpyreOpListPatcher,
 )
+from spyre_test_config_models import SupportedOpConfig, TestEntry
 
 
 # Resolve the actual backend name registered for privateuse1.
@@ -105,71 +91,30 @@ def remove_builtin_privateuse1_test_base():
 remove_builtin_privateuse1_test_base()
 
 
-# ---------------------------------------------------------------------------
-# Helpers to build internal dicts from typed FileEntry
-# ---------------------------------------------------------------------------
+def _build_test_entry_map(file_entry: FileEntry) -> Dict[str, TestEntry]:
+    """Build {method_name -> TestEntry} from file_entry.tests."""
+    return {entry.method_name: entry for entry in file_entry.tests}
 
 
-def _build_allow_list_map(file_entry: FileEntry) -> Dict[str, set]:
-    """Build {class_name -> set of method_names} from allow_list entries."""
-    result: Dict[str, set] = {}
-    for entry in file_entry.allow_list:
-        result.setdefault(entry.class_name, set()).add(entry.method_name)
-    return result
+def _extract_op_name_from_method(
+    method_name: str, base_test_name: str
+) -> Optional[str]:
+    """Extract the op name from a parametrized method name.
 
+    method_name: test_scalar_support_add_spyre_float16
+    base_test_name: test_scalar_support
+    returns: "add"
 
-def _build_block_list_map(file_entry: FileEntry) -> Dict[str, set]:
-    """Build {class_name -> set of method_names} from block_list entries."""
-    result: Dict[str, set] = {}
-    for entry in file_entry.block_list:
-        result.setdefault(entry.class_name, set()).add(entry.method_name)
-    return result
-
-
-def _build_xfail_map(file_entry: FileEntry) -> Dict[str, set]:
-    """Build {class_name -> set of (method_name, strict)} from allow_list xfail entries."""
-    from spyre_test_constants import MODE_XFAIL, MODE_XFAIL_STRICT
-
-    result: Dict[str, set] = {}
-    for entry in file_entry.allow_list:
-        if entry.mode in (MODE_XFAIL, MODE_XFAIL_STRICT):
-            strict = entry.mode == MODE_XFAIL_STRICT
-            result.setdefault(entry.class_name, set()).add((entry.method_name, strict))
-    return result
-
-
-def _build_extra_dtypes_map(file_entry: FileEntry) -> Dict[str, set]:
-    """Build {method_name -> set of torch.dtype} from allow_list edits."""
-    return {
-        entry.method_name: entry.edits.resolved_extra_allowed_dtypes()
-        for entry in file_entry.allow_list
-        if entry.edits.extra_allowed_dtypes
-    }
-
-
-def _build_precision_overrides_map(file_entry: FileEntry) -> Dict[str, float]:
-    """Build {method_name -> float} from allow_list edits."""
-    return {
-        entry.method_name: entry.edits.precision_override
-        for entry in file_entry.allow_list
-        if entry.edits.precision_override is not None
-    }
-
-
-def _build_per_test_unsupported_map(
-    file_entry: FileEntry,
-) -> Dict[str, Set[torch.dtype]]:
-    """Build {method_name -> set of torch.dtype} from allow_list edits."""
-    result: Dict[str, Set[torch.dtype]] = {}
-    for entry in file_entry.allow_list:
-        if entry.edits.unsupported_dtypes is not None:
-            result[entry.method_name] = entry.edits.resolved_unsupported_dtypes()
-    return result
-
-
-def _build_tags_map(file_entry: FileEntry) -> Dict[str, List]:
-    """Build {method_name -> [tag, ...]} from allow_list entries."""
-    return {entry.method_name: entry.tags for entry in file_entry.allow_list}
+    Returns None if the op name cannot be determined.
+    """
+    if not method_name.startswith(base_test_name + "_"):
+        return None
+    remainder = method_name[len(base_test_name) + 1 :]  # "add_spyre_float16"
+    # op name is the first segment before the device suffix
+    device_type = "spyre"  # or read from _SPYRE_DEVICE_TYPE
+    if f"_{device_type}_" in remainder:
+        return remainder.split(f"_{device_type}_")[0]  # "add"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -189,145 +134,39 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
     device_type: str = "privateuse1"
     precision: float = DEFAULT_FLOATING_PRECISION
 
-    # Populated by _load_test_suite_config on first call.
-    # Keyed by class_name from 'ClassName::method_name' in YAML.
-    ALLOW_LIST_TESTS: Dict[str, set] = {}
-    BLOCK_LIST_TESTS: Dict[str, set] = {}
-    XFAIL_TESTS: Dict[str, set] = {}
-    PRECISION_OVERRIDES: Dict[str, float] = {}
-    EXTRA_ALLOWED_DTYPES: Dict[str, set] = {}
-    PER_TEST_UNSUPPORTED_DTYPES: Dict[str, set] = {}
-    TEST_TAGS: Dict[str, List] = {}
-    unsupported_dtypes: Set[torch.dtype] = DEFAULT_UNSUPPORTED_DTYPES
+    TEST_ENTRIES: Dict[str, "TestEntry"] = {}  # {method_name -> TestEntry}
+    UNLISTED_TEST_MODE: str = UNLISTED_MODE_XFAIL  # file-level default
+    SUPPORTED_OPS_CONFIG: Dict[str, "SupportedOpConfig"] = {}  # {op_name -> config}
+    GLOBAL_SUPPORTED_DTYPES: Optional[Set[torch.dtype]] = None  # None = no filtering
 
     # ------------------------------------------------------------------
     # Config loading  (called once per test run via instantiate_test)
     # ------------------------------------------------------------------
-
     @classmethod
     def _load_test_suite_config(cls) -> None:
-        """Load and apply YAML config. No-op after first successful load."""
         path = os.environ.get(ENV_TEST_CONFIG)
         if not path or getattr(cls, "_yaml_loaded", False):
             return
 
         config: SpyreTestConfig = load_yaml_config(path)
 
+        # global op filtering and overrides
         cls._supported_ops = config.global_config.resolved_supported_ops()
-
-        # only needed if per-op attribute overrides are specified in YAML
         op_configs = config.global_config.resolved_supported_ops_config()
         if op_configs:
             apply_op_config_overrides(op_configs)
+            cls.SUPPORTED_OPS_CONFIG = op_configs  # NEW: store for force_xfail lookup
 
-        # -- resolve which file entry applies to the current test file --
+        # global dtype capability ceiling
+        cls.GLOBAL_SUPPORTED_DTYPES = config.global_config.resolved_supported_dtypes()
+
         file_entry: FileEntry = resolve_current_file(config, path)
 
-        # ── populate class-level dicts from typed FileEntry ───────────────
-        cls.ALLOW_LIST_TESTS = _build_allow_list_map(file_entry)
-        cls.BLOCK_LIST_TESTS = _build_block_list_map(file_entry)
-        cls.XFAIL_TESTS = _build_xfail_map(file_entry)
-        cls.EXTRA_ALLOWED_DTYPES = _build_extra_dtypes_map(file_entry)
-        cls.PRECISION_OVERRIDES = _build_precision_overrides_map(file_entry)
-        cls.PER_TEST_UNSUPPORTED_DTYPES = _build_per_test_unsupported_map(file_entry)
-        cls.TEST_TAGS = _build_tags_map(file_entry)
-        cls.unsupported_dtypes = config.global_config.resolved_unsupported_dtypes()
+        # NEW: single test entry map instead of separate allow/block/xfail maps
+        cls.TEST_ENTRIES = _build_test_entry_map(file_entry)
+        cls.UNLISTED_TEST_MODE = file_entry.unlisted_test_mode
 
         cls._yaml_loaded = True
-
-    # ------------------------------------------------------------------
-    # Mode resolution
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def _resolve_mode(cls) -> str:
-        """Return the active filter mode: 'allow_list' or 'block_list'.
-
-        Priority:
-          1. SPYRE_PYTORCH_TEST_FILTER_TYPE env var (explicit)
-          2. Inferred: MODE_ALLOW_LIST if both `allowed_list` and `block_list` are populated
-          3. Default: MODE_ALLOW_LIST
-        """
-        env = os.environ.get(ENV_FILTER_TYPE, "").strip().lower()
-        if env in (MODE_ALLOW_LIST, MODE_BLOCK_LIST):
-            return env
-        if env:
-            raise ValueError(
-                f"{ENV_FILTER_TYPE}={env!r} is invalid. "
-                f"Use {MODE_ALLOW_LIST!r} or {MODE_BLOCK_LIST!r}."
-            )
-        if cls.ALLOW_LIST_TESTS:
-            return MODE_ALLOW_LIST
-        if cls.BLOCK_LIST_TESTS:
-            return MODE_BLOCK_LIST
-        return MODE_ALLOW_LIST  # default: run allowed_list
-
-    # ------------------------------------------------------------------
-    # Compiled match-set cache
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def _get_active_match_sets(cls) -> Dict[str, MatchSet]:
-        """Return compiled MatchSets for whichever dict is active."""
-        mode = cls._resolve_mode()
-        cache_attr = f"_cached_msets_{mode}"
-        if cache_attr not in cls.__dict__ or cls.__dict__[cache_attr] is None:
-            source = (
-                cls.ALLOW_LIST_TESTS
-                if mode == MODE_ALLOW_LIST
-                else cls.BLOCK_LIST_TESTS
-            )
-            setattr(cls, cache_attr, build_match_sets(source))
-        return cls.__dict__[cache_attr]
-
-    # ------------------------------------------------------------------
-    # Dtype unsupported check
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def _is_dtype_unsupported(
-        cls, method_name: str, base_test_name: str
-    ) -> Optional[str]:
-        """Return a skip reason string if the dtype is unsupported, else None.
-
-        Per-test edits.unsupported_dtypes takes precedence over
-        global.unsupported_dtypes (complete override, not a union).
-        """
-        dtype_str = extract_dtype_from_name(method_name)
-        if dtype_str:
-            try:
-                # Per-test unsupported_dtypes UNIONS with global
-                # This ensures global exclusions (e.g. complex64) always apply
-                # even when a per-test override is present.
-                per_test = cls.PER_TEST_UNSUPPORTED_DTYPES.get(base_test_name, set())
-                active_unsupported = cls.unsupported_dtypes | per_test
-                if parse_dtype(dtype_str) in active_unsupported:
-                    return f"Unsupported dtype: {dtype_str}"
-            except ValueError:
-                pass
-        return None
-
-    # ------------------------------------------------------------------
-    # xfail lookup
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def _get_xfail_entry(
-        cls, method_name: str, base_test_name: str, generic_cls_name: str
-    ) -> Optional[tuple]:
-        """Return (strict,) if the test is in XFAIL_TESTS, else None.
-
-        Matches on either the instantiated method name or the base test name.
-        """
-        entries = cls.XFAIL_TESTS.get(generic_cls_name, set())
-        for xfail_name, strict in entries:
-            if xfail_name in (method_name, base_test_name):
-                return (strict,)
-        return None
-
-    # ------------------------------------------------------------------
-    # _should_run
-    # ------------------------------------------------------------------
 
     @classmethod
     def _should_run(
@@ -336,66 +175,74 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         base_test_name: str,
         generic_cls_name: str,
     ) -> tuple:
-        """Decide whether an instantiated test method should run.
+        """Decide variant fate using new RFC mode logic.
 
-        allow_list mode
-          - name in ALLOW_LIST_TESTS -> RUN  (subject to dtype filter)
-          - otherwise                -> SKIP
-
-        block_list mode
-          - name in BLOCK_LIST_TESTS -> SKIP
-          - otherwise                -> RUN  (subject to dtype filter)
-
-        Dtype filtering (both modes)
-          Tests whose method name embeds an unsupported dtype are skipped.
-          Per-test edits.unsupported_dtypes overrides global.unsupported_dtypes.
-
-        Returns:
-            (enabled: bool, reason: Optional[str])
+        Returns (enabled: bool, reason: Optional[str], xfail: bool, strict: bool)
         """
-        mode = cls._resolve_mode()
-        mset: Optional[MatchSet] = cls._get_active_match_sets().get(generic_cls_name)
+        # look up the test entry by base_test_name (method name without op/dtype suffix)
+        entry: Optional[TestEntry] = cls.TEST_ENTRIES.get(base_test_name)
 
-        def _name_matches(ms: Optional[MatchSet]) -> bool:
-            return ms is not None and (
-                ms.matches(method_name) or ms.matches(base_test_name)
-            )
+        # resolve effective mode
+        if entry is not None and entry.mode is not None:
+            effective_mode = entry.mode  # explicit test mode governs
+        else:
+            effective_mode = cls.UNLISTED_TEST_MODE  # file-level default
 
-        if mode == MODE_ALLOW_LIST:
-            if _name_matches(mset):
-                reason = cls._is_dtype_unsupported(method_name, base_test_name)
-                return (False, reason) if reason else (True, None)
-            return False, "Not in allow_list"
+        # dtype filtering — extract dtype from method_name and check against supported
+        dtype_str = extract_dtype_from_name(method_name)
+        if dtype_str:
+            try:
+                dtype = parse_dtype(dtype_str)
 
-        else:  # block_list
-            if _name_matches(mset):
-                return False, "In block_list - disabled for Spyre"
-            reason = cls._is_dtype_unsupported(method_name, base_test_name)
-            return (False, reason) if reason else (True, None)
+                # check edits.dtypes.exclude first
+                if entry is not None:
+                    excluded = entry.edits.dtypes.resolved_exclude()
+                    if dtype in excluded:
+                        return False, f"Excluded dtype: {dtype_str}", False, False
+
+                # check global supported_dtypes ceiling
+                if cls.GLOBAL_SUPPORTED_DTYPES is not None:
+                    if dtype not in cls.GLOBAL_SUPPORTED_DTYPES:
+                        return False, f"Unsupported dtype: {dtype_str}", False, False
+
+            except ValueError:
+                pass
+
+        # apply force_xfail from op-level config
+        # extract op name from method_name — format: test_name_opname_device_dtype
+        # force_xfail only flips mandatory_success → xfail, leaves others unchanged
+        op_name = _extract_op_name_from_method(method_name, base_test_name)
+        if op_name and effective_mode == MODE_MANDATORY_SUCCESS:
+            op_cfg = cls.SUPPORTED_OPS_CONFIG.get(op_name)
+            if op_cfg is not None and op_cfg.force_xfail:
+                effective_mode = MODE_XFAIL  # flipped by force_xfail
+
+        # resolve final fate
+        if effective_mode == MODE_BLOCK:
+            return False, "Blocked for Spyre", False, False
+        elif effective_mode == MODE_XFAIL:
+            return True, None, True, False  # run, xfail non-strict
+        elif effective_mode == MODE_XFAIL_STRICT:
+            return True, None, True, True  # run, xfail strict
+        else:  # MODE_MANDATORY_SUCCESS
+            return True, None, False, False  # run, must pass
 
     @classmethod
     def _get_supported_ops(cls) -> Optional[Set[str]]:
         """Return the set of supported op names, or None if no filtering is configured."""
-        # _supported_ops is populated by _load_test_suite_config alongside the
-        # other class-level dicts. Returns None if supported_ops was not set in YAML.
         return getattr(cls, "_supported_ops", None)
 
     # ------------------------------------------------------------------
     # instantiate_test override
     # ------------------------------------------------------------------
-
     @classmethod
     def instantiate_test(cls, name, test, *, generic_cls=None):
-        # Patch @onlyOn on this specific test copy before super() runs.
-        # Must be per-call because upstream deepcopies the test before
-        # calling instantiate_test, so each call has a fresh onlyOn instance.
-
         _SpyreOnlyOnPatcher(test, _SPYRE_DEVICE_TYPE).patch()
         cls._load_test_suite_config()
 
-        # Print tags to real stderr (fd 2) so they appear without -s flag.
-        # os.write bypasses pytest's sys.stderr redirection during collection.
-        tags = cls.TEST_TAGS.get(name)
+        # print tags to stderr
+        entry = cls.TEST_ENTRIES.get(name)
+        tags = entry.tags if entry is not None else []
         if tags:
             os.write(
                 2,
@@ -403,54 +250,56 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
                 f"tags: [{', '.join(tags)}]\n".encode(),
             )
 
-        # Per-test precision override
-        cls.precision = cls.PRECISION_OVERRIDES.get(name, DEFAULT_FLOATING_PRECISION)
-
-        # Filter @ops.op_list to supported_ops before super() generates variants.
-        # @ops copies its op_list at decoration time so filter_op_db mutations
-        # on the original lists don't reach it. We should therefore patch op_list directly
-        # on the @ops instance.
+        # op list filtering
         supported_ops = cls._get_supported_ops()
         if supported_ops is not None:
             _SpyreOpListPatcher(test, supported_ops).patch()
 
-        # Inject extra dtypes into @ops before super() generates variants
-        extra_dtypes = cls.EXTRA_ALLOWED_DTYPES.get(name)
-        if extra_dtypes:
-            _SpyreDtypePatcher(test, extra_dtypes).patch()
+        # dtype injection from edits.dtypes.include
+        if entry is not None:
+            extra_dtypes = entry.edits.dtypes.resolved_include()
+            if extra_dtypes:
+                _SpyreDtypePatcher(test, extra_dtypes).patch()
 
-        # Let the parent generate all variant methods, then apply our filters
+        # op exclude from edits.ops.exclude — filter after patcher
         existing_methods = set(cls.__dict__.keys())
         super().instantiate_test(name, test, generic_cls=generic_cls)
         new_methods = set(cls.__dict__.keys()) - existing_methods
 
         for method_name in new_methods:
-            enabled, reason = cls._should_run(
+            # NEW: _should_run now returns 4-tuple
+            enabled, reason, is_xfail, is_strict = cls._should_run(
                 method_name=method_name,
                 base_test_name=name,
                 generic_cls_name=generic_cls.__name__,
             )
 
             if not enabled:
-                skip_reason = reason or "Skipped for Spyre"
 
                 @wraps(test)
-                def _skip(self, _reason=skip_reason):
+                def _skip(self, _reason=reason or "Skipped for Spyre"):
                     raise unittest.SkipTest(_reason)
 
                 setattr(cls, method_name, _skip)
                 continue
 
-            # xfail applied after skip so block_list tests are not also marked xfail
-            xfail_entry = cls._get_xfail_entry(method_name, name, generic_cls.__name__)
-            if xfail_entry is not None:
-                (strict,) = xfail_entry
+            # apply pytest tags as marks
+            if tags:
+                existing_fn = cls.__dict__.get(method_name)
+                if existing_fn is not None:
+                    marked_fn = existing_fn
+                    for tag in tags:
+                        marked_fn = pytest.mark.__getattr__(tag)(marked_fn)
+                    setattr(cls, method_name, marked_fn)
+
+            # apply xfail if needed
+            if is_xfail:
                 existing_fn = cls.__dict__.get(method_name)
                 if existing_fn is not None:
                     setattr(
                         cls,
                         method_name,
-                        pytest.mark.xfail(strict=strict)(existing_fn),
+                        pytest.mark.xfail(strict=is_strict)(existing_fn),
                     )
 
 

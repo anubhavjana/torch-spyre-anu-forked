@@ -7,26 +7,28 @@ from typing import Dict, Set
 
 import torch
 
-# ----------------
-# Precision
-# ----------------
 
 DEFAULT_FLOATING_PRECISION: float = 1e-3
 
-# ---------------------------
-# allow_list entry modes
-# ---------------------------
-
-MODE_MANDATORY_PASS = "mandatory_pass"
+MODE_MANDATORY_SUCCESS = "mandatory_success"
 MODE_XFAIL = "xfail"
 MODE_XFAIL_STRICT = "xfail_strict"
+MODE_BLOCK = "block"
 
-# ---------------------------------------------------------------------------
-# Filter type modes  (SPYRE_PYTORCH_TEST_FILTER_TYPE)
-# ---------------------------------------------------------------------------
+UNLISTED_MODE_BLOCK = "block"
+UNLISTED_MODE_XFAIL = "xfail"
+UNLISTED_MODE_XFAIL_STRICT = "xfail_strict"
+UNLISTED_MODE_MANDATORY_SUCCESS = "mandatory_success"
+UNLISTED_TEST_MODE_DEFAULT = UNLISTED_MODE_XFAIL
 
-MODE_ALLOW_LIST = "allow_list"
-MODE_BLOCK_LIST = "block_list"
+# ADD: all valid modes in one set for validation
+_VALID_TEST_MODES = {MODE_MANDATORY_SUCCESS, MODE_XFAIL, MODE_XFAIL_STRICT, MODE_BLOCK}
+_VALID_UNLISTED_MODES = {
+    UNLISTED_MODE_BLOCK,
+    UNLISTED_MODE_XFAIL,
+    UNLISTED_MODE_XFAIL_STRICT,
+    UNLISTED_MODE_MANDATORY_SUCCESS,
+}
 
 # --------------------
 # Dtype defaults
@@ -68,10 +70,9 @@ DTYPE_NAMES_ORDERED = sorted(DTYPE_STR_MAP.keys(), key=len, reverse=True)
 # Environment variables
 # ------------------------------
 
-ENV_TEST_CONFIG = "SPYRE_PYTORCH_TEST_CONFIG"
-ENV_FILTER_TYPE = "SPYRE_PYTORCH_TEST_FILTER_TYPE"
-ENV_PYTORCH_ROOT = "SPYRE_PYTORCH_ROOT"
-ENV_TORCH_SPYRE_ROOT = "SPYRE_TORCH_SPYRE_ROOT"
+ENV_TEST_CONFIG = "PYTORCH_TEST_CONFIG"
+ENV_PYTORCH_ROOT = "PYTORCH_ROOT"
+ENV_TORCH_SPYRE_ROOT = "TORCH_SPYRE_ROOT"
 
 # -------------------------------------
 # rel_path tokens -> env var names

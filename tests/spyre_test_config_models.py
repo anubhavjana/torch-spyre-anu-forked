@@ -12,8 +12,8 @@ import torch
 from pydantic import BaseModel, field_validator, model_validator  # type: ignore
 
 from spyre_test_constants import (
-    DEFAULT_UNSUPPORTED_DTYPES,
-    MODE_MANDATORY_PASS,
+    MODE_BLOCK,
+    MODE_MANDATORY_SUCCESS,
     MODE_XFAIL,
     MODE_XFAIL_STRICT,
     REL_PATH_TOKENS,
@@ -44,60 +44,82 @@ _VALID_DTYPE_STRINGS = {
     "bool",
 }
 
-_VALID_MODES = {MODE_MANDATORY_PASS, MODE_XFAIL, MODE_XFAIL_STRICT}
+
+_VALID_TEST_MODES = {MODE_MANDATORY_SUCCESS, MODE_XFAIL, MODE_XFAIL_STRICT, MODE_BLOCK}
+
+_VALID_UNLISTED_MODES = {"block", "xfail", "xfail_strict", "mandatory_success"}
 
 
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
+class NamedItem(BaseModel):
+    """A named item in an include/exclude list."""
+
+    name: str
+
+
+class Precision(BaseModel):
+    """Precision sub-model for tolerance overrides"""
+
+    atol: Optional[float] = None
+    rtol: Optional[float] = None
+
+
+class OpsEdits(BaseModel):
+    """Per-test op list overrides."""
+
+    include: List[NamedItem] = []  # inject ops into @ops.op_list
+    exclude: List[NamedItem] = []  # remove ops from @ops.op_list
+
+    def included_op_names(self) -> Set[str]:
+        return {item.name for item in self.include}
+
+    def excluded_op_names(self) -> Set[str]:
+        return {item.name for item in self.exclude}
+
+
+class DtypesEdits(BaseModel):
+    """Per-test dtype overrides."""
+
+    include: List[NamedItem] = []  # inject dtypes into @ops.allowed_dtypes
+    exclude: List[NamedItem] = []  # remove dtype variants for this test
+
+    @field_validator("include", "exclude", mode="before")
+    @classmethod
+    def validate_dtype_names(cls, v: list) -> list:
+        for item in v or []:
+            name = item.get("name") if isinstance(item, dict) else item
+            if name not in _VALID_DTYPE_STRINGS:
+                raise ValueError(
+                    f"Unknown dtype {name!r}. "
+                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
+                )
+        return v
+
+    def included_dtype_names(self) -> Set[str]:
+        return {item.name for item in self.include}
+
+    def excluded_dtype_names(self) -> Set[str]:
+        return {item.name for item in self.exclude}
+
+    def resolved_include(self) -> Set[torch.dtype]:
+        return {parse_dtype(item.name) for item in self.include}
+
+    def resolved_exclude(self) -> Set[torch.dtype]:
+        return {parse_dtype(item.name) for item in self.exclude}
 
 
 class TestEdits(BaseModel):
-    extra_allowed_dtypes: List[str] = []
-    precision_override: Optional[float] = None
-    unsupported_dtypes: Optional[List[str]] = None
-
-    @field_validator("extra_allowed_dtypes", mode="before")
-    @classmethod
-    def validate_extra_dtypes(cls, v: Optional[List[str]]) -> Optional[List[str]]:
-        for dt in v or []:
-            if dt not in _VALID_DTYPE_STRINGS:
-                raise ValueError(
-                    f"Unknown dtype {dt!r} in extra_allowed_dtypes. "
-                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
-                )
-        return v
-
-    @field_validator("unsupported_dtypes", mode="before")
-    @classmethod
-    def validate_unsupported_dtypes(cls, v: Optional[List[str]]) -> Optional[List[str]]:
-        for dt in v or []:
-            if dt not in _VALID_DTYPE_STRINGS:
-                raise ValueError(
-                    f"Unknown dtype {dt!r} in unsupported_dtypes. "
-                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
-                )
-        return v
-
-    def resolved_extra_allowed_dtypes(self) -> Set[torch.dtype]:
-        """Return extra_allowed_dtypes as a set of torch.dtype."""
-        return {parse_dtype(dt) for dt in self.extra_allowed_dtypes}
-
-    def resolved_unsupported_dtypes(self) -> Set[torch.dtype]:
-        """Return unsupported_dtypes as a set of torch.dtype.
-
-        Only call when unsupported_dtypes is not None.
-        """
-        assert self.unsupported_dtypes is not None, (
-            "resolved_unsupported_dtypes() called but unsupported_dtypes is None. "
-            "Guard with `entry.edits.unsupported_dtypes is not None` before calling."
-        )
-        return {parse_dtype(dt) for dt in self.unsupported_dtypes}
+    ops: OpsEdits = OpsEdits()
+    dtypes: DtypesEdits = DtypesEdits()
 
 
-class AllowListEntry(BaseModel):
+class TestEntry(BaseModel):
+    """A single test entry in the per-file tests list."""
+
     test: str
-    mode: str = MODE_MANDATORY_PASS
+    mode: Optional[str] = None  # if None, unlisted_test_mode governs
     tags: List[str] = []
     edits: TestEdits = TestEdits()
 
@@ -113,32 +135,10 @@ class AllowListEntry(BaseModel):
 
     @field_validator("mode")
     @classmethod
-    def validate_mode(cls, v: str) -> str:
-        if v not in _VALID_MODES:
+    def validate_mode(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in _VALID_TEST_MODES:
             raise ValueError(
-                f"Invalid mode {v!r}. Valid values: {sorted(_VALID_MODES)}"
-            )
-        return v
-
-    @property
-    def class_name(self) -> str:
-        return self.test.split("::")[0]
-
-    @property
-    def method_name(self) -> str:
-        return self.test.split("::")[1]
-
-
-class BlockListEntry(BaseModel):
-    test: str
-
-    @field_validator("test")
-    @classmethod
-    def validate_test_id(cls, v: str) -> str:
-        parts = v.split("::")
-        if len(parts) != 2 or not all(parts):
-            raise ValueError(
-                f"Invalid test id {v!r}, expected 'ClassName::method_name'"
+                f"Invalid mode {v!r}. Valid values: {sorted(_VALID_TEST_MODES)}"
             )
         return v
 
@@ -153,8 +153,18 @@ class BlockListEntry(BaseModel):
 
 class FileEntry(BaseModel):
     rel_path: str
-    allow_list: List[AllowListEntry] = []
-    block_list: List[BlockListEntry] = []
+    unlisted_test_mode: str = "xfail"
+    tests: List[TestEntry] = []
+
+    @field_validator("unlisted_test_mode")
+    @classmethod
+    def validate_unlisted_mode(cls, v: str) -> str:
+        if v not in _VALID_UNLISTED_MODES:
+            raise ValueError(
+                f"Invalid unlisted_test_mode {v!r}. "
+                f"Valid values: {sorted(_VALID_UNLISTED_MODES)}"
+            )
+        return v
 
     @field_validator("rel_path")
     @classmethod
@@ -170,54 +180,70 @@ class FileEntry(BaseModel):
             )
         return v
 
+    def get_test_entry(self, class_name: str, method_name: str) -> Optional[TestEntry]:
+        """Look up a TestEntry by class and method name, or None if not listed."""
+        for entry in self.tests:
+            if entry.class_name == class_name and entry.method_name == method_name:
+                return entry
+        return None
 
-class SupportedOpConfig(BaseModel):
-    """Per-op configuration mapping back to upstream OpInfo fields.
 
-    Only fields we need to override for Spyre are listed here.
-    Unspecified fields fall back to the upstream OpInfo values.
+class SupportedOpDtypeConfig(BaseModel):
+    """Model for supported_ops.dtype
+
+    name: str
+
+    precision: Optional[Precision] = None
+
     """
 
-    name: str  # matches OpInfo.name in upstream op_db
-    dtypes: Optional[List[str]] = None  # override upstream dtypes for Spyre
-    atol: Optional[float] = None  # absolute tolerance override
-    rtol: Optional[float] = None  # relative tolerance override
+    name: str
+    precision: Optional[Precision] = None
 
-    @field_validator("dtypes", mode="before")
+    @field_validator("name")
     @classmethod
-    def validate_dtypes(cls, v: Optional[List[str]]) -> Optional[List[str]]:
-        for dt in v or []:
-            if dt not in _VALID_DTYPE_STRINGS:
-                raise ValueError(
-                    f"Unknown dtype {dt!r} in supported_ops dtypes. "
-                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
-                )
+    def validate_name(cls, v: str) -> str:
+        if v not in _VALID_DTYPE_STRINGS:
+            raise ValueError(f"Unknown dtype {v!r}.")
         return v
 
-    def resolved_dtypes(self) -> Optional[Set[torch.dtype]]:
-        """Return dtypes as a plain set of torch.dtype, or None if not overridden.
+    def resolved_dtype(self) -> torch.dtype:
+        return parse_dtype(self.name)
 
-        Callers that assign to OpInfo.dtypes must wrap this in _dispatch_dtypes —
-        OpInfo.__setattr__ enforces isinstance(value, _dispatch_dtypes).
-        """
-        if self.dtypes is None:
+
+class SupportedOpConfig(BaseModel):
+    name: str
+    force_xfail: bool = False
+    dtypes: List[SupportedOpDtypeConfig] = []
+
+    def resolved_dtype_names(self) -> Optional[Set[str]]:
+        if not self.dtypes:
             return None
-        return {parse_dtype(dt) for dt in self.dtypes}
+        return {d.name for d in self.dtypes}
+
+    def resolved_dtypes(self) -> Optional[Set[torch.dtype]]:
+        if not self.dtypes:
+            return None
+        return {d.resolved_dtype() for d in self.dtypes}
+
+    def get_precision(self, dtype_name: str) -> Optional[Precision]:
+        """Return Precision for a specific dtype, or None if not set."""
+        for d in self.dtypes:
+            if d.name == dtype_name and d.precision is not None:
+                return d.precision
+        return None
 
 
 class GlobalConfig(BaseModel):
-    unsupported_dtypes: List[str] = []
+    supported_dtypes: List[str] = []
     supported_ops: Optional[List[SupportedOpConfig]] = None
 
-    @field_validator("unsupported_dtypes", mode="before")
+    @field_validator("supported_dtypes", mode="before")
     @classmethod
-    def validate_unsupported_dtypes(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+    def validate_supported_dtypes(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         for dt in v or []:
             if dt not in _VALID_DTYPE_STRINGS:
-                raise ValueError(
-                    f"Unknown dtype {dt!r} in global.unsupported_dtypes. "
-                    f"Valid values: {sorted(_VALID_DTYPE_STRINGS)}"
-                )
+                raise ValueError(f"Unknown dtype {dt!r} in global.supported_dtypes.")
         return v
 
     @model_validator(mode="before")
@@ -238,23 +264,18 @@ class GlobalConfig(BaseModel):
                 ]
         return values
 
-    def resolved_unsupported_dtypes(self) -> Set[torch.dtype]:
-        """Return unsupported_dtypes as a set of torch.dtype.
-
-        Falls back to DEFAULT_UNSUPPORTED_DTYPES if the field is empty.
-        """
-        if not self.unsupported_dtypes:
-            return DEFAULT_UNSUPPORTED_DTYPES.copy()
-        return {parse_dtype(dt) for dt in self.unsupported_dtypes}
+    def resolved_supported_dtypes(self) -> Optional[Set[torch.dtype]]:
+        """Return supported_dtypes as a set, or None if not specified (no filtering)."""
+        if not self.supported_dtypes:
+            return None
+        return {parse_dtype(dt) for dt in self.supported_dtypes}
 
     def resolved_supported_ops(self) -> Optional[Set[str]]:
-        """Return op names as a plain set of strings for filter_op_db."""
         if self.supported_ops is None:
             return None
         return {op.name for op in self.supported_ops}
 
     def resolved_supported_ops_config(self) -> Optional[Dict[str, SupportedOpConfig]]:
-        """Return {op_name -> SupportedOpConfig} for per-op attribute access."""
         if self.supported_ops is None:
             return None
         return {op.name: op for op in self.supported_ops}
@@ -277,14 +298,12 @@ class TestsBlock(BaseModel):
 
 
 class SpyreTestConfig(BaseModel):
-    """Root model for the Spyre test YAML config."""
-
-    tests: TestsBlock
+    test_suite_config: TestsBlock
 
     @property
     def files(self) -> List[FileEntry]:
-        return self.tests.files
+        return self.test_suite_config.files
 
     @property
     def global_config(self) -> GlobalConfig:
-        return self.tests.global_config
+        return self.test_suite_config.global_config

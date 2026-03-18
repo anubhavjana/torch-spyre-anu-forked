@@ -133,7 +133,7 @@ def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry
 def apply_op_config_overrides(
     op_configs: Dict[str, "SupportedOpConfig"],
 ) -> None:
-    """Apply per-op attribute overrides (dtypes, atol, rtol) to OpInfo objects.
+    """Apply per-op attribute overrides (dtypes, precision) to OpInfo objects.
 
     Mutates OpInfo attributes in-place on op_db entries. Because @ops reads
     op.dtypes / op.atol etc. from the OpInfo object at parametrize time,
@@ -142,6 +142,11 @@ def apply_op_config_overrides(
 
     Op filtering for test generation is handled separately by
     _SpyreOpListPatcher -- this function only handles attribute overrides.
+
+    Precision is now per (op, dtype) rather than per op. Since OpInfo stores
+    a single atol/rtol, we apply the precision from the first dtype entry
+    that has a precision override. Per-dtype precision at test runtime is
+    handled separately via cls.precision in instantiate_test.
     """
     import torch.testing._internal.common_methods_invocations as _cmi
 
@@ -157,13 +162,19 @@ def apply_op_config_overrides(
             )
             continue
 
+        # Override dtypes if specified at op level.
+        # Bypass OpInfo.__setattr__ validation by writing to __dict__ directly
+        # with a frozenset -- frozenset supports set operations (.intersection
+        # etc.) that upstream _parametrize_test relies on, whereas
+        # _dispatch_dtypes does not.
         resolved_dtypes = cfg.resolved_dtypes()
         if resolved_dtypes is not None:
-            # dispatch_dtypes = _dispatch_dtypes(tuple(resolved_dtypes))
-            # # op_info.dtypes = dispatch_dtypes        # type: ignore[attr-defined]
             op_info.__dict__["dtypes"] = frozenset(resolved_dtypes)
 
-        if cfg.atol is not None:
-            op_info.atol = cfg.atol  # type: ignore[attr-defined]
-        if cfg.rtol is not None:
-            op_info.rtol = cfg.rtol  # type: ignore[attr-defined]
+        for dtype_cfg in cfg.dtypes:
+            if dtype_cfg.precision is not None:
+                if dtype_cfg.precision.atol is not None:
+                    op_info.atol = dtype_cfg.precision.atol  # type: ignore[attr-defined]
+                if dtype_cfg.precision.rtol is not None:
+                    op_info.rtol = dtype_cfg.precision.rtol  # type: ignore[attr-defined]
+                break  # apply first found, stop — OpInfo has one atol/rtol

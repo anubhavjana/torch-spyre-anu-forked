@@ -1,12 +1,12 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "SpyreTestConfig",
-  "description": "Configuration schema for the Spyre PyTorch test framework",
+  "description": "Configuration schema for the Spyre PyTorch test framework. Enables OOT device backends to reuse upstream PyTorch tests with fine-grained control over which tests run, how failures are treated, and which ops and dtypes are exercised. Reference implementation: IBM Spyre.",
   "type": "object",
-  "required": ["tests"],
+  "required": ["test_suite_config"],
   "additionalProperties": false,
   "properties": {
-    "tests": {
+    "test_suite_config": {
       "type": "object",
       "required": ["files"],
       "additionalProperties": false,
@@ -14,6 +14,7 @@
         "files": {
           "type": "array",
           "minItems": 1,
+          "description": "One entry per upstream PyTorch test file to run on this device.",
           "items": {
             "type": "object",
             "required": ["rel_path"],
@@ -21,16 +22,18 @@
             "properties": {
               "rel_path": {
                 "type": "string",
-                "description": "Path to the upstream test file. Use ${PYTORCH} or ${TORCH_SPYRE} tokens.",
+                "description": "Path to the upstream test file. Use ${PYTORCH} (resolves via SPYRE_PYTORCH_ROOT) or ${TORCH_SPYRE} (resolves via SPYRE_TORCH_SPYRE_ROOT) tokens.",
                 "examples": ["${PYTORCH}/test/test_binary_ufuncs.py"]
               },
-              "allow_list": {
-                "type": "array",
-                "items": { "$ref": "#/$defs/AllowListEntry" }
+              "unlisted_test_mode": {
+                "$ref": "#/$defs/UnlistedTestMode",
+                "description": "Mode applied to tests NOT listed under 'tests', or listed without an explicit 'mode'. Default: xfail.",
+                "default": "xfail"
               },
-              "block_list": {
+              "tests": {
                 "type": "array",
-                "items": { "$ref": "#/$defs/BlockListEntry" }
+                "description": "Explicit configuration for specific upstream test methods. Tests not listed here are governed by unlisted_test_mode.",
+                "items": { "$ref": "#/$defs/TestEntry" }
               }
             }
           }
@@ -38,20 +41,21 @@
         "global": {
           "type": "object",
           "additionalProperties": false,
+          "description": "Device-wide capability declaration. All file and test entries operate within these bounds.",
           "properties": {
-            "unsupported_dtypes": {
+            "supported_dtypes": {
               "type": "array",
               "items": { "$ref": "#/$defs/DtypeString" },
-              "description": "Dtype variants skipped automatically in both allow_list and block_list modes. Per-test edits.unsupported_dtypes unions with this."
+              "description": "Positive list of dtypes the device hardware supports. Acts as a hard ceiling — no test variant will run with a dtype outside this list. If omitted, no dtype filtering is applied."
             },
             "supported_ops": {
               "type": "array",
-              "description": "Restricts @ops.op_list to these ops before test variants are generated. Accepts plain op name strings (format 1) or structured dicts with per-op overrides (format 2). Both formats can be mixed.",
+              "description": "Ops the device supports. Only ops listed here generate test variants via _SpyreOpListPatcher. Accepts plain op name strings or structured dicts with per-op overrides. Both formats can be mixed.",
               "items": {
                 "oneOf": [
                   {
                     "type": "string",
-                    "description": "Format 1 (plain): op name only, e.g. 'add'. No per-op attribute overrides.",
+                    "description": "Plain format: op name only, no per-op overrides.",
                     "examples": ["add", "mul", "sub"]
                   },
                   { "$ref": "#/$defs/SupportedOpConfig" }
@@ -74,87 +78,159 @@
         "bool"
       ]
     },
+    "UnlistedTestMode": {
+      "type": "string",
+      "enum": ["block", "xfail", "xfail_strict", "mandatory_success"],
+      "description": "Controls behaviour for tests not explicitly listed or listed without a mode. block=skip entirely. xfail=run, expected to fail (default). xfail_strict=run, must fail. mandatory_success=must pass."
+    },
     "TestMode": {
       "type": "string",
-      "enum": ["mandatory_pass", "xfail", "xfail_strict"],
-      "default": "mandatory_pass"
+      "enum": ["mandatory_success", "xfail", "xfail_strict", "block"],
+      "description": "How to treat variants of this specific test. Applied at variant level — each (test, op, dtype) combination is treated independently. If absent, unlisted_test_mode governs."
+    },
+    "NamedItem": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "description": "A named item in an include/exclude list. Dict form for future extensibility (e.g. adding per-item precision overrides).",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the op or dtype."
+        }
+      }
+    },
+    "OpsEdits": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-test op list overrides. Controls which ops are included in @ops.op_list for this specific test.",
+      "properties": {
+        "include": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NamedItem" },
+          "description": "Inject ops into @ops.op_list for this test. Only needed when the upstream test uses a pre-filtered op list (e.g. binary_ufuncs_with_references) that excludes an op you want to test."
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/NamedItem" },
+          "description": "Remove ops from @ops.op_list for this test only. Use when an op is in supported_ops but you want to suppress it for this specific test."
+        }
+      }
+    },
+    "DtypesEdits": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Per-test dtype overrides. Controls which dtype variants are generated for this test.",
+      "properties": {
+        "include": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DtypeNamedItem" },
+          "description": "Inject dtypes into @ops.allowed_dtypes for this test. Without this, dtype variants missing from upstream @ops(allowed_dtypes=(...)) are never generated. Must be a subset of global.supported_dtypes."
+        },
+        "exclude": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/DtypeNamedItem" },
+          "description": "Suppress dtype variants for this test only. Useful when a specific (test, dtype) combination is known to crash or produce incorrect results."
+        }
+      }
+    },
+    "DtypeNamedItem": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "description": "A named dtype item. Dict form for future extensibility.",
+      "properties": {
+        "name": { "$ref": "#/$defs/DtypeString" }
+      }
     },
     "TestEdits": {
       "type": "object",
       "additionalProperties": false,
+      "description": "Per-test overrides for ops and dtypes. Scoped to this test only — does not affect other tests.",
       "properties": {
-        "extra_allowed_dtypes": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/DtypeString" },
-          "description": "Inject dtypes missing from upstream @ops(allowed_dtypes=(...)). Without this, those variants are never instantiated."
+        "ops": { "$ref": "#/$defs/OpsEdits" },
+        "dtypes": { "$ref": "#/$defs/DtypesEdits" }
+      }
+    },
+    "TestEntry": {
+      "type": "object",
+      "required": ["test"],
+      "additionalProperties": false,
+      "description": "Configuration for a specific upstream test method.",
+      "properties": {
+        "test": {
+          "type": "string",
+          "pattern": "^\\w+::\\w+$",
+          "description": "ClassName::method_name identifying the upstream test.",
+          "examples": ["TestBinaryUfuncs::test_scalar_support", "TestCommon::test_compare_cpu"]
         },
-        "precision_override": {
+        "mode": {
+          "$ref": "#/$defs/TestMode",
+          "description": "How to treat variants of this test. If absent, unlisted_test_mode governs."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+            "description": "Must be a valid Python identifier — used as a pytest mark name."
+          },
+          "description": "Pytest marks applied to all variants of this test. Enables selection via -m model_name. Example: pytest test_binary_ufuncs.py -m my_model"
+        },
+        "edits": { "$ref": "#/$defs/TestEdits" }
+      }
+    },
+    "Precision": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Numeric tolerance overrides for a specific (op, dtype) combination.",
+      "properties": {
+        "atol": {
           "type": "number",
-          "description": "Numeric precision threshold, e.g. 1e-3"
+          "description": "Absolute tolerance, e.g. 1e-3."
         },
-        "unsupported_dtypes": {
-          "type": "array",
-          "items": { "$ref": "#/$defs/DtypeString" },
-          "description": "Per-test additional unsupported dtypes. Unioned with global.unsupported_dtypes — does not replace it."
+        "rtol": {
+          "type": "number",
+          "description": "Relative tolerance, e.g. 1e-3."
+        }
+      }
+    },
+    "SupportedOpDtypeConfig": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "description": "Per-dtype configuration within a supported op entry. Allows specifying precision per (op, dtype) combination.",
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/DtypeString",
+          "description": "Dtype name. Must be a subset of global.supported_dtypes."
+        },
+        "precision": {
+          "$ref": "#/$defs/Precision",
+          "description": "Tolerance override for this (op, dtype) combination. Applied to all test variants for this op and dtype."
         }
       }
     },
     "SupportedOpConfig": {
       "type": "object",
-      "description": "Format 2 (structured): op name with optional per-op attribute overrides mapping back to upstream OpInfo fields.",
       "required": ["name"],
       "additionalProperties": false,
+      "description": "Structured op entry with optional per-op overrides. Maps back to upstream OpInfo fields.",
       "properties": {
         "name": {
           "type": "string",
-          "description": "Op name matching OpInfo.name in upstream op_db, e.g. 'add'.",
-          "examples": ["add", "mul", "sub"]
+          "description": "Op name matching OpInfo.name in upstream op_db.",
+          "examples": ["add", "mul", "sub", "gcd"]
+        },
+        "force_xfail": {
+          "type": "boolean",
+          "default": false,
+          "description": "If true, flips any mandatory_success variant for this op to xfail at the variant level. Has no effect on variants already marked xfail or xfail_strict. Use when an op is in supported_ops but not yet stable enough to require passing."
         },
         "dtypes": {
           "type": "array",
-          "items": { "$ref": "#/$defs/DtypeString" },
-          "description": "Override upstream OpInfo.dtypes for this op. Narrows dtype variants generated by @ops upfront rather than skipping them at runtime."
-        },
-        "atol": {
-          "type": "number",
-          "description": "Absolute tolerance override for this op, e.g. 1e-3."
-        },
-        "rtol": {
-          "type": "number",
-          "description": "Relative tolerance override for this op, e.g. 1e-3."
-        }
-      }
-    },
-    "AllowListEntry": {
-      "type": "object",
-      "required": ["test"],
-      "additionalProperties": false,
-      "properties": {
-        "test": {
-          "type": "string",
-          "pattern": "^\\w+::\\w+$",
-          "description": "ClassName::method_name",
-          "examples": ["TestBinaryUfuncs::test_scalar_support"]
-        },
-        "mode": { "$ref": "#/$defs/TestMode" },
-        "tags": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Free-form labels for reporting and traceability, e.g. model names that depend on this test passing."
-        },
-        "edits": { "$ref": "#/$defs/TestEdits" }
-      }
-    },
-    "BlockListEntry": {
-      "type": "object",
-      "required": ["test"],
-      "additionalProperties": false,
-      "properties": {
-        "test": {
-          "type": "string",
-          "pattern": "^\\w+::\\w+$",
-          "description": "ClassName::method_name",
-          "examples": ["TestBinaryUfuncs::test_add"]
+          "items": { "$ref": "#/$defs/SupportedOpDtypeConfig" },
+          "description": "Per-dtype configuration for this op. Narrows dtype variants generated by @ops upfront. Each entry can optionally specify precision overrides for that (op, dtype) combination. Must be a subset of global.supported_dtypes."
         }
       }
     }
