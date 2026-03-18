@@ -1,19 +1,21 @@
 test_suite_config:
   files:
     - rel_path: ${PYTORCH}/test/test_binary_ufuncs.py
-      unlisted_test_mode: block
+      unlisted_test_mode: skip
       tests:
         - test: TestBinaryUfuncs::test_scalar_support
           mode: mandatory_success # mandatory_success (default), xfail, xfail_strict
           tags:
-            - model_name_depending_on_this_test_1
+            - model_1
           edits:
             ops:
               include: # required only if the particular test was not using the op but we want it.
                 - name: add
+                  description: inject add — binary_ufuncs_with_references excludes it if ref is None
               exclude: # required only if the particular test was using the op AND is supported 
                         # but we dont want to run the test with that op.
                 - name: gcd
+                  description: gcd causes buffer alignment errors for this test
             dtypes: # if the op is specifying the dtype too, we take the intersection of edits and global op dtype 
             # if precision is always taken from supported_ops.dtypes.precision section.
 
@@ -21,20 +23,23 @@ test_suite_config:
             # exclude can be just a list of strings (names)
               include:
                 - name: float16
+                  description: float16 not in upstream allowed_dtypes, inject explicitly
                 - name: int64
+                - name: float32
               exclude:
                 - name: bfloat16
+                  description: bfloat16 unsupported on Spyre for this test
             # shapes:
             #   k1: 
             #   k2: 
         - test: TestBinaryUfuncs::test_contig_vs_transposed
           mode: xfail
           tags:
-            - model_name_depending_on_this_test_2
+            - model_2
 
 
     - rel_path: ${PYTORCH}/test/test_ops.py
-      unlisted_test_mode: block
+      unlisted_test_mode: skip
       tests:
         - test: TestCommon::test_compare_cpu # export PYTORCH_TEST_WITH_SLOW=1
           mode: mandatory_success
@@ -46,11 +51,11 @@ test_suite_config:
 
   global:
     supported_dtypes:
-      - float16
-      - int64
+      - name: float16
+      - name: int64
     supported_ops:
       - name: add
-        force_xfail: false
+        force_xfail: true
         # if test mode is mandatory_success, flips the test mode to xfail. 
         # If the test mode is either xfail or xfail_strict, it will remain unchanged. 
         dtypes:
@@ -62,4 +67,3 @@ test_suite_config:
       - name: mul
       - name: sub
       - name: gcd
-        force_xfail: false
