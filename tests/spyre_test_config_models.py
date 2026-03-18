@@ -12,8 +12,8 @@ import torch
 from pydantic import BaseModel, field_validator, model_validator  # type: ignore
 
 from spyre_test_constants import (
-    MODE_BLOCK,
     MODE_MANDATORY_SUCCESS,
+    MODE_SKIP,
     MODE_XFAIL,
     MODE_XFAIL_STRICT,
     REL_PATH_TOKENS,
@@ -45,9 +45,9 @@ _VALID_DTYPE_STRINGS = {
 }
 
 
-_VALID_TEST_MODES = {MODE_MANDATORY_SUCCESS, MODE_XFAIL, MODE_XFAIL_STRICT, MODE_BLOCK}
+_VALID_TEST_MODES = {MODE_MANDATORY_SUCCESS, MODE_XFAIL, MODE_XFAIL_STRICT, MODE_SKIP}
 
-_VALID_UNLISTED_MODES = {"block", "xfail", "xfail_strict", "mandatory_success"}
+_VALID_UNLISTED_MODES = {"skip", "xfail", "xfail_strict", "mandatory_success"}
 
 
 # ---------------------------------------------------------------------------
@@ -57,6 +57,7 @@ class NamedItem(BaseModel):
     """A named item in an include/exclude list."""
 
     name: str
+    description: Optional[str] = None
 
 
 class Precision(BaseModel):
@@ -119,7 +120,7 @@ class TestEntry(BaseModel):
     """A single test entry in the per-file tests list."""
 
     test: str
-    mode: Optional[str] = None  # if None, unlisted_test_mode governs
+    mode: str = MODE_MANDATORY_SUCCESS
     tags: List[str] = []
     edits: TestEdits = TestEdits()
 
@@ -135,8 +136,8 @@ class TestEntry(BaseModel):
 
     @field_validator("mode")
     @classmethod
-    def validate_mode(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v not in _VALID_TEST_MODES:
+    def validate_mode(cls, v: str) -> str:
+        if v not in _VALID_TEST_MODES:
             raise ValueError(
                 f"Invalid mode {v!r}. Valid values: {sorted(_VALID_TEST_MODES)}"
             )
@@ -235,15 +236,16 @@ class SupportedOpConfig(BaseModel):
 
 
 class GlobalConfig(BaseModel):
-    supported_dtypes: List[str] = []
+    supported_dtypes: List[NamedItem] = []
     supported_ops: Optional[List[SupportedOpConfig]] = None
 
     @field_validator("supported_dtypes", mode="before")
     @classmethod
-    def validate_supported_dtypes(cls, v: Optional[List[str]]) -> Optional[List[str]]:
-        for dt in v or []:
-            if dt not in _VALID_DTYPE_STRINGS:
-                raise ValueError(f"Unknown dtype {dt!r} in global.supported_dtypes.")
+    def validate_supported_dtypes(cls, v: list) -> list:
+        for item in v or []:
+            name = item.get("name") if isinstance(item, dict) else item
+            if name not in _VALID_DTYPE_STRINGS:
+                raise ValueError(f"Unknown dtype {name!r} in global.supported_dtypes.")
         return v
 
     @model_validator(mode="before")
@@ -268,7 +270,7 @@ class GlobalConfig(BaseModel):
         """Return supported_dtypes as a set, or None if not specified (no filtering)."""
         if not self.supported_dtypes:
             return None
-        return {parse_dtype(dt) for dt in self.supported_dtypes}
+        return {parse_dtype(item.name) for item in self.supported_dtypes}
 
     def resolved_supported_ops(self) -> Optional[Set[str]]:
         if self.supported_ops is None:

@@ -25,8 +25,9 @@ import torch
 from spyre_test_constants import (
     DEFAULT_FLOATING_PRECISION,
     ENV_TEST_CONFIG,
-    MODE_BLOCK,
+    # MODE_BLOCK,
     MODE_MANDATORY_SUCCESS,
+    MODE_SKIP,
     MODE_XFAIL,
     MODE_XFAIL_STRICT,
     UNLISTED_MODE_XFAIL,
@@ -47,6 +48,7 @@ from spyre_upstream_patcher import (
     _SpyreDtypePatcher,
     _SpyreOnlyOnPatcher,
     _SpyreOpListPatcher,
+    _SpyreOpDtypeExpander,
 )
 from spyre_test_config_models import SupportedOpConfig, TestEntry
 
@@ -155,14 +157,12 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         op_configs = config.global_config.resolved_supported_ops_config()
         if op_configs:
             apply_op_config_overrides(op_configs)
-            cls.SUPPORTED_OPS_CONFIG = op_configs  # NEW: store for force_xfail lookup
+            cls.SUPPORTED_OPS_CONFIG = op_configs
 
-        # global dtype capability ceiling
         cls.GLOBAL_SUPPORTED_DTYPES = config.global_config.resolved_supported_dtypes()
 
         file_entry: FileEntry = resolve_current_file(config, path)
 
-        # NEW: single test entry map instead of separate allow/block/xfail maps
         cls.TEST_ENTRIES = _build_test_entry_map(file_entry)
         cls.UNLISTED_TEST_MODE = file_entry.unlisted_test_mode
 
@@ -175,33 +175,45 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         base_test_name: str,
         generic_cls_name: str,
     ) -> tuple:
-        """Decide variant fate using new RFC mode logic.
+        """Decide the behaviour of test variant based on config modes.
 
         Returns (enabled: bool, reason: Optional[str], xfail: bool, strict: bool)
         """
         # look up the test entry by base_test_name (method name without op/dtype suffix)
         entry: Optional[TestEntry] = cls.TEST_ENTRIES.get(base_test_name)
 
-        # resolve effective mode
-        if entry is not None and entry.mode is not None:
-            effective_mode = entry.mode  # explicit test mode governs
+        # unlisted_test_mode only applies to tests NOT in TEST_ENTRIES
+        if entry is not None:
+            effective_mode = entry.mode  # always set, default is mandatory_success
         else:
-            effective_mode = cls.UNLISTED_TEST_MODE  # file-level default
+            effective_mode = cls.UNLISTED_TEST_MODE  # only for truly unlisted tests
 
         # dtype filtering — extract dtype from method_name and check against supported
         dtype_str = extract_dtype_from_name(method_name)
+
         if dtype_str:
             try:
                 dtype = parse_dtype(dtype_str)
 
-                # check edits.dtypes.exclude first
                 if entry is not None:
                     excluded = entry.edits.dtypes.resolved_exclude()
-                    if dtype in excluded:
-                        return False, f"Excluded dtype: {dtype_str}", False, False
+                    included = entry.edits.dtypes.resolved_include()
+                else:
+                    excluded = set()
+                    included = set()
 
-                # check global supported_dtypes ceiling
-                if cls.GLOBAL_SUPPORTED_DTYPES is not None:
+                if dtype in excluded:
+                    return False, f"Excluded dtype: {dtype_str}", False, False
+
+                # if explicitly included via edits
+                # This is the additive path — dtype is IN ADDITION to global.supported_dtypes
+                if dtype in included:
+                    pass  # allow through regardless of global.supported_dtypes
+
+                # Not explicitly included — apply global ceiling
+                # This is the base intersection path:
+                # (global.supported_dtypes ∩ op.dtypes ∩ test.allowed_dtypes)
+                elif cls.GLOBAL_SUPPORTED_DTYPES is not None:
                     if dtype not in cls.GLOBAL_SUPPORTED_DTYPES:
                         return False, f"Unsupported dtype: {dtype_str}", False, False
 
@@ -212,14 +224,14 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         # extract op name from method_name — format: test_name_opname_device_dtype
         # force_xfail only flips mandatory_success → xfail, leaves others unchanged
         op_name = _extract_op_name_from_method(method_name, base_test_name)
-        if op_name and effective_mode == MODE_MANDATORY_SUCCESS:
-            op_cfg = cls.SUPPORTED_OPS_CONFIG.get(op_name)
+        if effective_mode == MODE_MANDATORY_SUCCESS:
+            op_cfg = cls.SUPPORTED_OPS_CONFIG.get(op_name) if op_name else None
             if op_cfg is not None and op_cfg.force_xfail:
-                effective_mode = MODE_XFAIL  # flipped by force_xfail
+                effective_mode = MODE_XFAIL
 
-        # resolve final fate
-        if effective_mode == MODE_BLOCK:
-            return False, "Blocked for Spyre", False, False
+        # resolve final decision
+        if effective_mode == MODE_SKIP:
+            return False, "Skipped for Spyre", False, False
         elif effective_mode == MODE_XFAIL:
             return True, None, True, False  # run, xfail non-strict
         elif effective_mode == MODE_XFAIL_STRICT:
@@ -260,6 +272,7 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
             extra_dtypes = entry.edits.dtypes.resolved_include()
             if extra_dtypes:
                 _SpyreDtypePatcher(test, extra_dtypes).patch()
+                _SpyreOpDtypeExpander(test, extra_dtypes).patch()
 
         # op exclude from edits.ops.exclude — filter after patcher
         existing_methods = set(cls.__dict__.keys())
@@ -267,7 +280,6 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         new_methods = set(cls.__dict__.keys()) - existing_methods
 
         for method_name in new_methods:
-            # NEW: _should_run now returns 4-tuple
             enabled, reason, is_xfail, is_strict = cls._should_run(
                 method_name=method_name,
                 base_test_name=name,

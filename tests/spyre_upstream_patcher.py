@@ -20,6 +20,7 @@ would not affect these copies.
 """
 
 from typing import Set
+import torch
 
 
 class _SpyreOnlyOnPatcher:
@@ -213,3 +214,64 @@ class _SpyreOpListPatcher:
             return
 
         self._ops_instance.op_list[:] = filtered
+
+
+class _SpyreOpDtypeExpander:
+    """Expands op.dtypes on each OpInfo in @ops.op_list to include extra dtypes.
+
+
+    _parametrize_test computes test variants as:
+    dtypes = set(op.supported_dtypes(device_type))  # reads op.__dict__["dtypes"]
+    if self.allowed_dtypes is not None:
+        dtypes = dtypes.intersection(self.allowed_dtypes)
+
+    If apply_op_config_overrides narrowed op.__dict__["dtypes"] to only
+    global.supported_dtypes, a dtype in edits.dtypes.include won't survive
+    this intersection even if _SpyreDtypePatcher added it to allowed_dtypes.
+
+
+    Expand op.__dict__["dtypes"] directly on each OpInfo in @ops.op_list
+    to include the extra dtypes before super().instantiate_test() runs.
+    Writes to __dict__ directly to bypass OpInfo.__setattr__ validation.
+
+
+    _SpyreDtypePatcher handles @ops.allowed_dtypes (the outer filter).
+    _SpyreOpDtypeExpander handles op.dtypes on each OpInfo (the inner filter).
+    Both must be patched for a variant to be generated.
+
+
+    edits.dtypes.include is intentionally NOT bounded by global.supported_dtypes.
+    A user may want to test a single dtype on a specific test without adding
+    it globally (which would apply it to all tests).
+    """
+
+    def __init__(self, test: object, extra_dtypes: Set[torch.dtype]) -> None:
+        from torch.testing._internal.common_device_type import ops as _ops_cls
+
+        underlying_fn = (
+            test.__func__  # type: ignore[union-attr]
+            if hasattr(test, "__func__")
+            else test
+        )
+        p = getattr(underlying_fn, "parametrize_fn", None)
+        self._ops_instance = (
+            p.__self__
+            if p is not None
+            and hasattr(p, "__self__")
+            and isinstance(p.__self__, _ops_cls)
+            else None
+        )
+        self._extra_dtypes = extra_dtypes
+
+    def patch(self) -> None:
+        if self._ops_instance is None:
+            return
+
+        for op_info in self._ops_instance.op_list:
+            current = op_info.__dict__.get("dtypes")
+            if current is not None:
+                # op.dtypes was overridden as a frozenset by apply_op_config_overrides.
+                # Expand it to include the extra dtypes from edits.dtypes.include.
+                op_info.__dict__["dtypes"] = current | self._extra_dtypes
+            # If current is None, op.dtypes was not overridden and already
+            # contains all upstream dtypes — no expansion needed.
