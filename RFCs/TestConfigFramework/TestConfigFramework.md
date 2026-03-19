@@ -19,7 +19,7 @@ This RFC defines a YAML-based configuration schema that allows an OOT device tea
 
 - Declare which ops and dtypes their device supports
 - Select which upstream tests to run, skip, or mark as expected failures
-- Allow the same framework to control, parameterise device specific custom tests 
+- Allow the same framework to control, parameterise device specific custom tests
 - Express per-op and per-test tolerance overrides
 - Tag tests with model names and other metadata for traceability
 - Gradually expand test coverage as the device matures
@@ -49,7 +49,7 @@ The Spyre framework hooks into this mechanism via `SpyreTestBase` (which can eve
 3. Patches `@onlyOn` to allow the `spyre` device type (`_SpyreOnlyOnPatcher`)
 4. Injects extra dtypes into `@ops.allowed_dtypes` (`_SpyreDtypePatcher`)
 5. Applies skip, xfail, or mandatory_success to each generated variant
-6. Adds custom markers to tests for provenance. 
+6. Adds custom markers to tests for provenance.
 
 ---
 
@@ -183,7 +183,6 @@ Markers must be valid Python identifiers (no spaces or special characters).
 
 ### 5.3 Edits
 
-
 #### 5.3.1 `edits.ops`
 
 Controls which ops are included in `@ops.op_list` for this specific test.
@@ -238,10 +237,10 @@ effective_dtypes =
 
 Where:
 
-- `global.supported_dtypes` — hardware capability. 
+- `global.supported_dtypes` — hardware capability.
 - `op.dtypes` — op-level dtype override from `global.supported_ops[op].dtypes`. If not specified, defaults to `global.supported_dtypes`.
 - `test.allowed_dtypes` — upstream `@ops(allowed_dtypes=(...))` constraint from the test source code.
-- `edits.dtypes.include` — can be mutually exclusive to `global.supported_dtypes`, not necessarily a subset. It can be an additional dtype to 
+- `edits.dtypes.include` — can be mutually exclusive to `global.supported_dtypes`, not necessarily a subset. It can be an additional dtype to
 test for a particular op without affecting other tests.
 - `edits.dtypes.exclude` — applied last, after all inclusions.
 
@@ -314,7 +313,7 @@ test_scalar_support_gcd_float16:
 
 #### 6.2.2 Op-level `dtypes`
 
-Narrows the dtype variants generated for this op across all tests. 
+Narrows the dtype variants generated for this op across all tests.
 
 Each dtype entry can optionally specify tolerance overrides:
 
@@ -483,7 +482,7 @@ global:
 1. `test` must match `ClassName::method_name` pattern
 2. `mode` and `unlisted_test_mode` must be one of `mandatory_success`, `xfail`, `xfail_strict`, `skip`
 3. All dtype strings must be valid PyTorch dtype names
-4. `edits.dtypes.include` may be subset of `global.supported_dtypes` or mutually exclusive to `global.supported_dtypes` 
+4. `edits.dtypes.include` may be subset of `global.supported_dtypes` or mutually exclusive to `global.supported_dtypes`
 5. `supported_ops[*].dtypes` must be a subset of `global.supported_dtypes`
 6. If `supported_ops[*].dtypes` ∩ `global.supported_dtypes` is empty, a warning is emitted
 7. `tags` must be valid Python identifiers (used as pytest mark names)
