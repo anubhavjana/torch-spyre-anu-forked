@@ -526,6 +526,69 @@ global:
 | `TORCH_TEST_DEVICES` | Must point to `spyre_test_base_common.py` |
 | `PYTORCH_TEST_WITH_SLOW` | Must be set to `1` to enable slow tests like `test_compare_cpu` |
 
+## 11. Using the framework
+## Running Tests
+
+### Environment Setup
+
+Export the required environment variables before running tests: (Please make sure you have torch-spyre and pytorch already cloned inside `DTI_PROJECT_ROOT` and are built properly).
+
+```bash
+# Set home directory (if using tmpfs)
+export HOME=/dev/shm
+mkdir -p dt-inductor
+
+# Project root directory
+export DTI_PROJECT_ROOT=/dev/shm/dt-inductor
+cd $DTI_PROJECT_ROOT
+
+# PyTorch test configuration
+export PYTORCH_TESTING_DEVICE_ONLY_FOR="privateuse1"
+
+# Spyre test framework paths
+export PYTHONPATH="$DTI_PROJECT_ROOT/torch-spyre/tests:$PYTHONPATH"
+export TORCH_TEST_DEVICES="$DTI_PROJECT_ROOT/torch-spyre/tests/spyre_test_base_common.py"
+
+# Test configuration file
+export PYTORCH_TEST_CONFIG="$DTI_PROJECT_ROOT/torch-spyre/tests/test_suite_config.yaml"
+
+# Source code locations
+export PYTORCH_ROOT="$DTI_PROJECT_ROOT/pytorch"
+export TORCH_SPYRE_ROOT="$DTI_PROJECT_ROOT/torch-spyre"
+```
+
+**Note:** Replace `torch-spyre` with your actual fork repository name, if required.
+
+### Running Tests
+
+Navigate to the PyTorch test directory and run tests:
+
+```bash
+cd $PYTORCH_ROOT/test/
+python3 -m pytest test_binary_ufuncs.py -v
+```
+
+### Running Specific Test Subsets
+
+```bash
+# Run only tests tagged with a specific model
+python3 -m pytest test_binary_ufuncs.py -v -m model_name_depending_on_this_test_1
+
+# Run tests matching a specific pattern
+python3 -m pytest test_binary_ufuncs.py -v -k "test_scalar_support"
+
+```
+
+### Environment Variables Reference
+
+| Variable | Description |
+|----------|-------------|
+| `PYTORCH_TESTING_DEVICE_ONLY_FOR` | Must be set to `privateuse1` |
+| `TORCH_TEST_DEVICES` | Path to `spyre_test_base_common.py` |
+| `PYTORCH_TEST_CONFIG` | Path to the YAML test configuration file |
+| `PYTORCH_ROOT` | Path to PyTorch source repository |
+| `TORCH_SPYRE_ROOT` | Path to torch-spyre repository |
+
 ## Appendix: Complete Configuration Sample
 
 The following example demonstrates every supported field in a single config file. It is intended as a reference — real configs will use only the fields relevant to their device and test coverage stage.
