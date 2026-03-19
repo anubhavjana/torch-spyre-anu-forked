@@ -1,6 +1,6 @@
 test_suite_config:
   files:
-    - rel_path: ${PYTORCH}/test/test_binary_ufuncs.py
+    - path: ${PYTORCH}/test/test_binary_ufuncs.py
       unlisted_test_mode: skip
       tests:
         - test: TestBinaryUfuncs::test_scalar_support
@@ -38,7 +38,7 @@ test_suite_config:
             - model_2
 
 
-    - rel_path: ${PYTORCH}/test/test_ops.py
+    - path: ${PYTORCH}/test/test_ops.py
       unlisted_test_mode: skip
       tests:
         - test: TestCommon::test_compare_cpu # export PYTORCH_TEST_WITH_SLOW=1

@@ -50,17 +50,17 @@ def load_yaml_config(path: str) -> SpyreTestConfig:
 # ---------------------------------------------------------------------------
 
 
-def resolve_rel_path(rel_path: str) -> str:
+def resolve_rel_path(path: str) -> str:
     """Expand ${PYTORCH} and ${TORCH_SPYRE} tokens using env vars."""
     for token, env_var in REL_PATH_TOKENS:
-        if token in rel_path:
+        if token in path:
             root = os.environ.get(env_var)
             if not root:
                 raise EnvironmentError(
-                    f"rel_path contains {token!r} but ${env_var} is not set."
+                    f"path contains {token!r} but ${env_var} is not set."
                 )
-            rel_path = rel_path.replace(token, root)
-    return rel_path
+            path = path.replace(token, root)
+    return path
 
 
 # ---------------------------------------------------------------------------
@@ -114,9 +114,9 @@ def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry
         )
 
     for file_entry in config.files:
-        entry_resolved = str(Path(resolve_rel_path(file_entry.rel_path)).resolve())
+        entry_resolved = str(Path(resolve_rel_path(file_entry.path)).resolve())
         _debug(
-            f"entry: {file_entry.rel_path!r} -> {entry_resolved!r} match={entry_resolved == current_test_file}"
+            f"entry: {file_entry.path!r} -> {entry_resolved!r} match={entry_resolved == current_test_file}"
         )
         if entry_resolved == current_test_file:
             return file_entry
@@ -126,7 +126,7 @@ def resolve_current_file(config: SpyreTestConfig, config_path: str) -> FileEntry
         f"({current_test_file!r}).\n"
         f"sys.argv={sys.argv!r}\n"
         f"Available entries:\n"
-        + "\n".join(f"  {resolve_rel_path(f.rel_path)}" for f in config.files)
+        + "\n".join(f"  {resolve_rel_path(f.path)}" for f in config.files)
     )
 
 

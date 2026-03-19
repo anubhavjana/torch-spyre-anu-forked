@@ -153,8 +153,8 @@ class TestEntry(BaseModel):
 
 
 class FileEntry(BaseModel):
-    rel_path: str
-    unlisted_test_mode: str = "xfail"
+    path: str
+    unlisted_test_mode: str = MODE_XFAIL
     tests: List[TestEntry] = []
 
     @field_validator("unlisted_test_mode")
@@ -167,14 +167,14 @@ class FileEntry(BaseModel):
             )
         return v
 
-    @field_validator("rel_path")
+    @field_validator("path")
     @classmethod
-    def validate_rel_path(cls, v: str) -> str:
+    def validate_path(cls, v: str) -> str:
         known_tokens = {token for token, _ in REL_PATH_TOKENS}
         has_token = any(token in v for token in known_tokens)
         if not has_token and not Path(v).is_absolute():
             warnings.warn(
-                f"rel_path {v!r} contains no known token "
+                f"path {v!r} contains no known token "
                 f"({sorted(known_tokens)}) and is not absolute. "
                 "Make sure the path is resolvable at runtime.",
                 stacklevel=2,
