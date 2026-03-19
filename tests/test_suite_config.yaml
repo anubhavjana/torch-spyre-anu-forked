@@ -3,7 +3,7 @@ test_suite_config:
     - path: ${PYTORCH}/test/test_binary_ufuncs.py
       unlisted_test_mode: skip
       tests:
-        - name:
+        - names:
             - TestBinaryUfuncs::test_scalar_support
             - TestBinaryUfuncs::test_contig_vs_transposed
           mode: xfail
@@ -20,16 +20,13 @@ test_suite_config:
                   description: gcd causes buffer alignment errors for this test
             dtypes:
               include:
-                - name: float16
-                  description: float16 not in upstream allowed_dtypes, inject explicitly
-                - name: int64
                 - name: float32
               exclude:
                 - name: bfloat16
                   description: bfloat16 unsupported on Spyre for this test
 
         # Single test — name as a list with one entry (or plain string, both accepted)
-        - name:
+        - names:
             - TestBinaryUfuncs::test_add
           mode: mandatory_success
           tags:
@@ -38,7 +35,7 @@ test_suite_config:
     - path: ${PYTORCH}/test/test_ops.py
       unlisted_test_mode: skip
       tests:
-        - name:
+        - names:
             - TestCommon::test_compare_cpu
           mode: mandatory_success
           edits:
@@ -55,7 +52,9 @@ test_suite_config:
       - name: add
         dtypes:
           - name: float16
-            precision: {atol: 1e-3, rtol: 1e-3}
+            precision:
+              atol: 1e-3
+              rtol: 1e-3
           - name: int64
       - name: mul
       - name: sub

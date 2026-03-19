@@ -166,7 +166,7 @@
       "additionalProperties": false,
       "description": "Configuration shared across one or more upstream test methods. All methods in 'name' receive the same mode, tags, and edits.",
       "properties": {
-        "name": {
+        "names": {
           "oneOf": [
             {
               "type": "string",
@@ -198,7 +198,7 @@
             "type": "string",
             "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
           },
-          "description": "Pytest marks applied to all variants of all tests in 'name'."
+          "description": "Pytest marks applied to all variants of all tests in 'names'."
         },
         "edits": { "$ref": "#/$defs/TestEdits" }
       }

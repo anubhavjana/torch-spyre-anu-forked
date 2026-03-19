@@ -169,7 +169,15 @@ def apply_op_config_overrides(
         # _dispatch_dtypes does not.
         resolved_dtypes = cfg.resolved_dtypes()
         if resolved_dtypes is not None:
-            op_info.__dict__["dtypes"] = frozenset(resolved_dtypes)
+            dtype_frozenset = frozenset(resolved_dtypes)
+            op_info.__dict__["dtypes"] = dtype_frozenset
+
+            # also set dtypesIfPrivateUse1 so supported_dtypes(device_type)
+            # returns the correct set for the privateuse1 device path.
+            # _parametrize_test calls op.supported_dtypes("privateuse1") which
+            # checks dtypesIfPrivateUse1 before falling back to dtypes.
+            # Without this, our dtypes override is bypassed for privateuse1 variants.
+            op_info.__dict__["dtypesIfPrivateUse1"] = dtype_frozenset
 
         for dtype_cfg in cfg.dtypes:
             if dtype_cfg.precision is not None:

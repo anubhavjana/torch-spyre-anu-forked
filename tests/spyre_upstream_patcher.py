@@ -219,7 +219,6 @@ class _SpyreOpListPatcher:
 class _SpyreOpDtypeExpander:
     """Expands op.dtypes on each OpInfo in @ops.op_list to include extra dtypes.
 
-
     _parametrize_test computes test variants as:
     dtypes = set(op.supported_dtypes(device_type))  # reads op.__dict__["dtypes"]
     if self.allowed_dtypes is not None:
@@ -229,16 +228,13 @@ class _SpyreOpDtypeExpander:
     global.supported_dtypes, a dtype in edits.dtypes.include won't survive
     this intersection even if _SpyreDtypePatcher added it to allowed_dtypes.
 
-
     Expand op.__dict__["dtypes"] directly on each OpInfo in @ops.op_list
     to include the extra dtypes before super().instantiate_test() runs.
     Writes to __dict__ directly to bypass OpInfo.__setattr__ validation.
 
-
     _SpyreDtypePatcher handles @ops.allowed_dtypes (the outer filter).
     _SpyreOpDtypeExpander handles op.dtypes on each OpInfo (the inner filter).
     Both must be patched for a variant to be generated.
-
 
     edits.dtypes.include is intentionally NOT bounded by global.supported_dtypes.
     A user may want to test a single dtype on a specific test without adding
@@ -275,3 +271,16 @@ class _SpyreOpDtypeExpander:
                 op_info.__dict__["dtypes"] = current | self._extra_dtypes
             # If current is None, op.dtypes was not overridden and already
             # contains all upstream dtypes — no expansion needed.
+
+            # Also expand dtypesIfPrivateUse1 for the same reason —
+            # _parametrize_test reads supported_dtypes("privateuse1") which
+            # checks dtypesIfPrivateUse1 first.
+            current_pu1 = op_info.__dict__.get("dtypesIfPrivateUse1")
+            if current_pu1 is not None:
+                op_info.__dict__["dtypesIfPrivateUse1"] = (
+                    current_pu1 | self._extra_dtypes
+                )
+            elif current is not None:
+                # dtypesIfPrivateUse1 was not set but dtypes was — initialize it
+                # from the already-expanded dtypes so privateuse1 path sees it too
+                op_info.__dict__["dtypesIfPrivateUse1"] = op_info.__dict__["dtypes"]

@@ -117,16 +117,14 @@ class TestEdits(BaseModel):
 
 
 class TestEntry(BaseModel):
-    """A single test entry in the per-file tests list containing name,
-    mode, tags and edits
-    """
+    """A single test entry in the per-file tests: names, mode, tags and edits"""
 
-    name: List[str]
+    names: List[str]
     mode: str = MODE_MANDATORY_SUCCESS
     tags: List[str] = []
     edits: TestEdits = TestEdits()
 
-    @field_validator("name", mode="before")
+    @field_validator("names", mode="before")
     @classmethod
     def validate_name(cls, v) -> List[str]:
         if isinstance(v, str):
@@ -149,16 +147,16 @@ class TestEntry(BaseModel):
         return v
 
     def name_pairs(self) -> List[tuple]:
-        """Return [(class_name, method_name), ...] for all entries in name."""
-        return [tuple(n.split("::")) for n in self.name]
+        """Return [(class_name, method_name), ...] for all entries in names."""
+        return [tuple(n.split("::")) for n in self.names]
 
     def method_names(self) -> List[str]:
         """Return just the method_name part of each entry."""
-        return [n.split("::")[1] for n in self.name]
+        return [n.split("::")[1] for n in self.names]
 
     def class_names(self) -> List[str]:
         """Return just the class_name part of each entry."""
-        return [n.split("::")[0] for n in self.name]
+        return [n.split("::")[0] for n in self.names]
 
 
 class FileEntry(BaseModel):
@@ -201,13 +199,7 @@ class FileEntry(BaseModel):
 
 
 class SupportedOpDtypeConfig(BaseModel):
-    """Model for supported_ops.dtype
-
-    name: str
-
-    precision: Optional[Precision] = None
-
-    """
+    """Model for supported_ops.dtype: name, precision"""
 
     name: str
     precision: Optional[Precision] = None
@@ -224,6 +216,8 @@ class SupportedOpDtypeConfig(BaseModel):
 
 
 class SupportedOpConfig(BaseModel):
+    """Model for storing supported ops config: name, force_xfail, list of dtypes"""
+
     name: str
     force_xfail: bool = False
     dtypes: List[SupportedOpDtypeConfig] = []
@@ -247,6 +241,8 @@ class SupportedOpConfig(BaseModel):
 
 
 class GlobalConfig(BaseModel):
+    """Model for global configs: supported_dtypes, supported_ops"""
+
     supported_dtypes: List[NamedItem] = []
     supported_ops: Optional[List[SupportedOpConfig]] = None
 

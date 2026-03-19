@@ -25,7 +25,6 @@ import torch
 from spyre_test_constants import (
     DEFAULT_FLOATING_PRECISION,
     ENV_TEST_CONFIG,
-    # MODE_BLOCK,
     MODE_MANDATORY_SUCCESS,
     MODE_SKIP,
     MODE_XFAIL,
@@ -284,14 +283,33 @@ class SpyreTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         if supported_ops is not None:
             _SpyreOpListPatcher(test, supported_ops).patch()
 
-        # dtype injection from edits.dtypes.include
+        op_level_dtypes: Set[torch.dtype] = set()
+        if cls.SUPPORTED_OPS_CONFIG:
+            from torch.testing._internal.common_device_type import ops as _ops_cls
+
+            underlying_fn = test.__func__ if hasattr(test, "__func__") else test
+            p = getattr(underlying_fn, "parametrize_fn", None)
+            if (
+                p is not None
+                and hasattr(p, "__self__")
+                and isinstance(p.__self__, _ops_cls)
+            ):
+                for op_info in p.__self__.op_list:
+                    op_cfg = cls.SUPPORTED_OPS_CONFIG.get(op_info.name)
+                    if op_cfg is not None:
+                        resolved = op_cfg.resolved_dtypes()
+                        if resolved is not None:
+                            op_level_dtypes |= resolved
+
+        if op_level_dtypes:
+            _SpyreDtypePatcher(test, op_level_dtypes).patch()
+
         if entry is not None:
             extra_dtypes = entry.edits.dtypes.resolved_include()
             if extra_dtypes:
                 _SpyreDtypePatcher(test, extra_dtypes).patch()
                 _SpyreOpDtypeExpander(test, extra_dtypes).patch()
 
-        # op exclude from edits.ops.exclude — filter after patcher
         existing_methods = set(cls.__dict__.keys())
         super().instantiate_test(name, test, generic_cls=generic_cls)
         new_methods = set(cls.__dict__.keys()) - existing_methods
