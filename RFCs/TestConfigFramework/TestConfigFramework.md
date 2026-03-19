@@ -65,7 +65,11 @@ test_suite_config:
   files:
     - ...   # one entry per upstream test file
   global:
-    supported_dtypes: [...]
+    
+    supported_dtypes:
+      - name: float16
+      - name: int64
+      - ...
     supported_ops:
       - ...
 ```
@@ -124,11 +128,11 @@ Stable device, enforcing correctness:
 
 Each entry under `tests` configures a specific upstream test method. The same test can have multiple entires to define different combinations of behaviour if relevant. The final set will be the union of all tests.
 
-`tests.name` is an array of TEST_CLASS::test_method, so that the same config can be applied to multiple tests/class level etc if required.
+`tests.names` is an array of TEST_CLASS::test_method, so that the same config can be applied to multiple tests/class level etc if required.
 
 ```yaml
 tests: 
-  - name:
+  - names:
       - TestBinaryUfuncs::test_scalar_support
       - TestBinaryUfuncs::test_contig_vs_transposed
     mode: xfail
@@ -153,7 +157,7 @@ tests:
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `name` | Yes | — | list of `ClassName::method_name` identifying the upstream test |
+| `names` | Yes | — | List of `ClassName::method_name` identifying the upstream test |
 | `mode` | No | `mandatory_success` | How to treat this test's variants |
 | `tags` | No | `[]` | Pytest mark labels applied to all variants of this test |
 | `edits` | No | — | Per-test overrides for ops and dtypes |
@@ -200,10 +204,10 @@ edits:
   ops:
     include:
       - name: add    # inject add into @ops.op_list for this test
-        descriptipn: "optional description"
+        description: "optional description"
     exclude:
       - name: gcd    # remove gcd from @ops.op_list for this test
-        descriptipn: "optional description"
+        description: "optional description"
 ```
 
 | Field | When to use |
@@ -352,7 +356,7 @@ test_suite_config:
     - path: ${PYTORCH}/test/*.py
       unlisted_test_mode: skip
       tests:
-        - name: 
+        - names: 
             - TestBinaryUfuncs::test_scalar_support
           mode: mandatory_success
           tags:
@@ -364,7 +368,9 @@ test_suite_config:
             - my_model
 
   global:
-    supported_dtypes: [float16, int64]
+    supported_dtypes:
+      - name: float16
+      - name: int64
     supported_ops:
       - name: add
       - name: mul
@@ -373,7 +379,7 @@ test_suite_config:
 Another model team wants to reuse the same op tests — they add their tag without changing anything else:
 
 ```yaml
-- name: 
+- names: 
   - TestBinaryUfuncs::test_scalar_support
   mode: mandatory_success
   tags:
@@ -391,13 +397,15 @@ test_suite_config:
     - path: ${PYTORCH}/test/test_binary_ufuncs.py
       unlisted_test_mode: xfail       # run everything, failures expected
       tests:
-        - name:
+        - names:
           - ....
           - ....
           mode: mandatory_success
 
   global:
-    supported_dtypes: [float16, int64]
+    supported_dtypes:
+      - name: float16
+      - name: int64
     supported_ops:
       - name: gcd
         force_xfail: true             # all variants expected to fail initially
@@ -410,7 +418,7 @@ As `gcd` stabilises, flip `force_xfail: false` and move specific tests to `manda
 `test_add` causes a segfault. Block it entirely:
 
 ```yaml
-- name: 
+- names: 
     - TestBinaryUfuncs::test_add
   mode: skip
   # Signal 11 - Segmentation fault
@@ -436,7 +444,7 @@ global:
 `test_scalar_support` uses `binary_ufuncs_with_references` which only includes ops with a `ref`. If `gcd` has no `ref`, it is excluded from that list. To test it anyway:
 
 ```yaml
-- name: 
+- names: 
     - TestBinaryUfuncs::test_scalar_support
   mode: xfail
   edits:
@@ -517,3 +525,171 @@ global:
 | `PYTORCH_TESTING_DEVICE_ONLY_FOR` | Must be set to `privateuse1` |
 | `TORCH_TEST_DEVICES` | Must point to `spyre_test_base_common.py` |
 | `PYTORCH_TEST_WITH_SLOW` | Must be set to `1` to enable slow tests like `test_compare_cpu` |
+
+## Appendix: Complete Configuration Sample
+
+The following example demonstrates every supported field in a single config file. It is intended as a reference — real configs will use only the fields relevant to their device and test coverage stage.
+
+```yaml
+test_suite_config:
+
+  files:
+
+    # ── File 1: upstream binary ufunc tests ──────────────────────────────────
+    - path: ${PYTORCH}/test/test_binary_ufuncs.py
+
+      # unlisted_test_mode controls tests NOT listed under `tests`.
+      # skip = only tests explicitly listed below will run.
+      # Options: skip | xfail | xfail_strict | mandatory_success
+      unlisted_test_mode: skip
+
+      tests:
+
+        # ── Entry 1: two tests sharing the same mode, tags, and edits ────────
+        - names:
+            - TestBinaryUfuncs::test_scalar_support
+            - TestBinaryUfuncs::test_contig_vs_transposed
+
+          # mode applies to every (op × dtype) variant of all tests in names.
+          # Default when absent: mandatory_success
+          # Options: mandatory_success | xfail | xfail_strict | skip
+          mode: xfail
+
+          # tags become pytest marks on every variant.
+          # Select with: pytest -m model_1
+          #              pytest -m "model_1 or model_2"
+          #              pytest -m "not model_1"
+          tags:
+            - model_1
+            - model_2
+
+          edits:
+
+            ops:
+              # include: inject an op into @ops.op_list for these tests.
+              # Needed when the upstream test uses a filtered list
+              # (e.g. binary_ufuncs_with_references) that excludes the op,
+              # or the op is not in global.supported_ops but you want to
+              # test it for these tests only.
+              include:
+                - name: add
+                  description: "inject add — binary_ufuncs_with_references excludes it if ref is None"
+
+              # exclude: remove an op from @ops.op_list for these tests only.
+              # Useful when op is in supported_ops globally but causes issues here.
+              exclude:
+                - name: gcd
+                  description: "gcd causes buffer alignment errors for this test"
+
+            dtypes:
+              # include: inject a dtype into @ops.allowed_dtypes for these tests.
+              # NOT required to be a subset of global.supported_dtypes —
+              # allows testing a new dtype on specific tests without enabling globally.
+              include:
+                - name: float32   # not in global.supported_dtypes — injected for this test only
+
+              # exclude: suppress a dtype variant for these tests only.
+              # Applied unconditionally — always wins over include and global.
+              exclude:
+                - name: bfloat16
+                  description: "bfloat16 unsupported on Spyre for this test"
+
+        # ── Entry 2: single test, mode skip ────
+        - names:
+            - TestBinaryUfuncs::test_add
+          mode: skip
+          # Signal 11 - Segmentation fault on Spyre
+
+    # ── File 2: upstream test_ops.py ─────────────────────────────────────────
+    - path: ${PYTORCH}/test/test_ops.py
+      unlisted_test_mode: skip
+      tests:
+
+        # ── Entry: module-level test (no @ops, plain device arg) ─────────────
+        # No op filtering needed — test has no @ops decorator.
+        # Only dtype exclusion and mode apply.
+        - names:
+            - TestCommon::test_compare_cpu
+          # export PYTORCH_TEST_WITH_SLOW=1 required for this test
+          mode: mandatory_success
+          edits:
+            dtypes:
+              exclude:
+                - name: float32
+                  description: "corrupted double-linked list — test_compare_cpu__refs__conversions_float_spyre_float32"
+
+  # ── Global: device-wide capability declaration ─────────────────────────────
+  global:
+
+    # supported_dtypes: positive list of dtypes the hardware supports.
+    # Hard ceiling for the base dtype set across all tests.
+    # Variants outside this list are skipped unless edits.dtypes.include overrides.
+    supported_dtypes:
+      - name: float16
+      - name: int64
+
+    # supported_ops: only ops listed here generate test variants.
+    # _SpyreOpListPatcher filters @ops.op_list to this set before test generation.
+    supported_ops:
+
+      - name: add
+        # force_xfail: flip mandatory_success → xfail at the variant level for this op.
+        # Does not affect xfail, xfail_strict, or skip variants.
+        force_xfail: false
+
+        # dtypes: op-level dtype override. Must be subset of global.supported_dtypes.
+        # Each dtype can specify precision (atol/rtol) for tolerance-sensitive ops.
+        dtypes:
+          - name: float16
+            precision:
+              atol: 1e-3
+              rtol: 1e-3
+          - name: int64
+            # no precision override — uses framework default
+
+      - name: mul
+        # no dtypes override → defaults to global.supported_dtypes [float16, int64]
+        # no force_xfail → defaults to false
+
+      - name: sub
+
+      - name: gcd
+        # force_xfail: true → all mandatory_success variants for gcd are flipped to xfail.
+        # Use when op is supported but not yet stable enough to require passing.
+        # Flip to false once gcd is stable.
+        force_xfail: true
+```
+
+### Dtype effective set (reference)
+
+```
+effective_dtypes =
+    (global.supported_dtypes ∩ op.dtypes ∩ test.allowed_dtypes)  ← base
+    + edits.dtypes.include                                         ← additive, no global ceiling
+    - edits.dtypes.exclude                                         ← always applied last
+```
+
+### Mode precedence (reference)
+
+```
+test listed with explicit mode    → test mode governs
+test listed, no mode field        → mandatory_success (default)
+test not listed at all            → unlisted_test_mode governs
+op has force_xfail: true          → flips mandatory_success → xfail at variant level
+```
+
+### pytest selection with tags (reference)
+
+```bash
+# Run only variants tagged model_1
+pytest test_binary_ufuncs.py -m model_1
+
+# Run variants for either model
+pytest test_binary_ufuncs.py -m "model_1 or model_2"
+
+# Run model_2 variants not also tagged model_1
+pytest test_binary_ufuncs.py -m "model_2 and not model_1"
+
+# Exclude model_1 entirely
+pytest test_binary_ufuncs.py -m "not model_1"
+```
