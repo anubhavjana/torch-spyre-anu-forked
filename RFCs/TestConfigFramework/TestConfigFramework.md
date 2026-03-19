@@ -83,7 +83,7 @@ test_suite_config:
 Each entry under `files` corresponds to one test file.
 
 ```yaml
-- path: ${PYTORCH}/test/test_binary_ufuncs.py
+- path: ${PYTORCH}/test/test_binary_ufuncs.py # or ${PYTORCH}/test/.*py
   unlisted_test_mode: skip
   tests:
     - ...
@@ -91,7 +91,7 @@ Each entry under `files` corresponds to one test file.
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `path` | Yes | — | Path to the test file. Supports `${PYTORCH}` and `${TORCH_SPYRE}` tokens resolved from env vars `PYTORCH_ROOT` and `TORCH_SPYRE_ROOT` || `unlisted_test_mode` | No | `skip` | Mode applied to tests not listed under `tests`, or listed without an explicit `mode` |
+| `path` | Yes | — | Path to the test file or a glob. Supports `${PYTORCH}` and `${TORCH_SPYRE}` tokens resolved from env vars `PYTORCH_ROOT` and `TORCH_SPYRE_ROOT` || `unlisted_test_mode` | No | `skip` | Mode applied to tests not listed under `tests`, or listed without an explicit `mode` |
 | `tests` | No | `[]` | List of test entries with explicit configuration |
 
 ### 4.1 `unlisted_test_mode`
@@ -124,28 +124,36 @@ Stable device, enforcing correctness:
 
 Each entry under `tests` configures a specific upstream test method. The same test can have multiple entires to define different combinations of behaviour if relevant. The final set will be the union of all tests.
 
+`tests.name` is an array of TEST_CLASS::test_method, so that the same config can be applied to multiple tests/class level etc if required.
+
 ```yaml
-- test: TestBinaryUfuncs::test_scalar_support
-  mode: xfail
-  tags:
-    - model_name_depending_on_this_test_1
-  edits:
-    ops:
-      include:
-        - name: add
-      exclude:
-        - name: gcd
-    dtypes:
-      include:
-        - name: float16
-        - name: int64
-      exclude:
-        - name: bfloat16
+tests: 
+  - name:
+      - TestBinaryUfuncs::test_scalar_support
+      - TestBinaryUfuncs::test_contig_vs_transposed
+    mode: xfail
+    tags:
+      - model_name_depending_on_this_test_1
+    edits:
+      ops:
+        include:
+          - name: add
+            description: "add description for ops (optional)"
+        exclude:
+          - name: gcd
+      dtypes:
+        include:
+          - name: float16
+            description: "add description for dtypes include (optional)"
+          - name: int64
+        exclude:
+          - name: bfloat16
+            description: "add description for dtypes exclude (optional)"
 ```
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `test` | Yes | — | `ClassName::method_name` identifying the upstream test |
+| `name` | Yes | — | list of `ClassName::method_name` identifying the upstream test |
 | `mode` | No | `mandatory_success` | How to treat this test's variants |
 | `tags` | No | `[]` | Pytest mark labels applied to all variants of this test |
 | `edits` | No | — | Per-test overrides for ops and dtypes |
@@ -192,8 +200,10 @@ edits:
   ops:
     include:
       - name: add    # inject add into @ops.op_list for this test
+        descriptipn: "optional description"
     exclude:
       - name: gcd    # remove gcd from @ops.op_list for this test
+        descriptipn: "optional description"
 ```
 
 | Field | When to use |
@@ -203,7 +213,7 @@ edits:
 
 > **Note on `include`:** This is only needed when the test uses a filtered list that excludes your op or the op is not in globally supported ops like and you want to selectively enable for this test alone. For example, `binary_ufuncs_with_references = [op for op in binary_ufuncs if op.ref is not None]` excludes ops without a reference implementation. If `gcd` has no `ref`, you cannot test it via `test_scalar_support` without injecting it via `include`.
 
-Both `include` and `exclude` are lists of dicts with a `name` field, kept consistent for future extensibility (e.g. adding per-op precision overrides at the test level).
+Both `include` and `exclude` are lists of dicts with `name` and `description (optional)` field, kept consistent for future extensibility (e.g. adding per-op precision overrides at the test level).
 
 #### 5.3.2 `edits.dtypes`
 
@@ -339,14 +349,16 @@ A model depends on `add` and `mul`. You want to run the tests that exercise thes
 ```yaml
 test_suite_config:
   files:
-    - path: ${PYTORCH}/test/test_binary_ufuncs.py
+    - path: ${PYTORCH}/test/*.py
       unlisted_test_mode: skip
       tests:
-        - test: TestBinaryUfuncs::test_scalar_support
+        - name: 
+            - TestBinaryUfuncs::test_scalar_support
           mode: mandatory_success
           tags:
             - my_model
-        - test: TestBinaryUfuncs::test_contig_vs_transposed
+        - test: 
+            - TestBinaryUfuncs::test_contig_vs_transposed
           mode: mandatory_success
           tags:
             - my_model
@@ -361,7 +373,8 @@ test_suite_config:
 Another model team wants to reuse the same op tests — they add their tag without changing anything else:
 
 ```yaml
-- test: TestBinaryUfuncs::test_scalar_support
+- name: 
+  - TestBinaryUfuncs::test_scalar_support
   mode: mandatory_success
   tags:
     - my_model
@@ -378,7 +391,9 @@ test_suite_config:
     - path: ${PYTORCH}/test/test_binary_ufuncs.py
       unlisted_test_mode: xfail       # run everything, failures expected
       tests:
-        - test: ....
+        - name:
+          - ....
+          - ....
           mode: mandatory_success
 
   global:
@@ -395,7 +410,8 @@ As `gcd` stabilises, flip `force_xfail: false` and move specific tests to `manda
 `test_add` causes a segfault. Block it entirely:
 
 ```yaml
-- test: TestBinaryUfuncs::test_add
+- name: 
+    - TestBinaryUfuncs::test_add
   mode: skip
   # Signal 11 - Segmentation fault
 ```
@@ -420,7 +436,8 @@ global:
 `test_scalar_support` uses `binary_ufuncs_with_references` which only includes ops with a `ref`. If `gcd` has no `ref`, it is excluded from that list. To test it anyway:
 
 ```yaml
-- test: TestBinaryUfuncs::test_scalar_support
+- name: 
+    - TestBinaryUfuncs::test_scalar_support
   mode: xfail
   edits:
     ops:
@@ -479,7 +496,7 @@ global:
 
 ## 9. Validation Rules
 
-1. `test` must match `ClassName::method_name` pattern
+1. `name` must match `ClassName::method_name` pattern
 2. `mode` and `unlisted_test_mode` must be one of `mandatory_success`, `xfail`, `xfail_strict`, `skip`
 3. All dtype strings must be valid PyTorch dtype names
 4. `edits.dtypes.include` may be subset of `global.supported_dtypes` or mutually exclusive to `global.supported_dtypes`
