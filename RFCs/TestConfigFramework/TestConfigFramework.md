@@ -1,4 +1,4 @@
-# RFC: PyTorch Test Suite Configuration for OOT Device
+# RFC: Test Suite Configuration for running upstream pytorch tests from  OOT devices
 
 **Authors:**
 
@@ -13,14 +13,15 @@
 
 PyTorch provides a large suite of upstream tests that validate operator correctness across devices. For out-of-tree (OOT) device backends registered via `privateuse1`, reusing these upstream tests is preferable to writing new ones — it ensures the same correctness bar and reduces maintenance burden.
 
-However, OOT devices typically support a subset of ops and dtypes, and some tests may be known to fail, crash, or require special tolerance settings. Running the full upstream suite without filtering would result in thousands of failures and crashes that obscure real signal.
+However, OOT devices typically support a subset of ops and dtypes, and some tests may be known to fail, crash, or require special tolerance settings. Running the full upstream suite without filtering would result in thousands of failures and crashes that obscure real signal. While the upstream test refactoring is happening, we want to enable a way to selectively enable or edit the tests out of tree even before refactoring of all tests are complete.
 
 This RFC defines a YAML-based configuration schema that allows an OOT device team to:
 
 - Declare which ops and dtypes their device supports
 - Select which upstream tests to run, skip, or mark as expected failures
+- Allow the same framework to control, parameterise device specific custom tests 
 - Express per-op and per-test tolerance overrides
-- Tag tests with model names for traceability
+- Tag tests with model names and other metadata for traceability
 - Gradually expand test coverage as the device matures
 
 ---
@@ -41,19 +42,21 @@ At collection time, `@ops` generates one test variant per `(op, dtype)` combinat
 
 ### 2.2 The Spyre test framework
 
-The Spyre framework hooks into this mechanism via `SpyreTestBase` which:
+The Spyre framework hooks into this mechanism via `SpyreTestBase` (which can eventually be contributed back to `PrivateUse1TestBase`) which:
 
 1. Loads the YAML config on first `instantiate_test` call
 2. Patches `@ops.op_list` directly to restrict which ops generate variants (`_SpyreOpListPatcher`)
 3. Patches `@onlyOn` to allow the `spyre` device type (`_SpyreOnlyOnPatcher`)
 4. Injects extra dtypes into `@ops.allowed_dtypes` (`_SpyreDtypePatcher`)
 5. Applies skip, xfail, or mandatory_success to each generated variant
+6. Adds custom markers to tests for provenance. 
 
 ---
 
 ## 3. Configuration File
 
-The configuration is a YAML file pointed to by the `SPYRE_PYTORCH_TEST_CONFIG` environment variable.
+The configuration is a YAML file pointed to by the `PYTORCH_TEST_CONFIG` environment variable. The downstream can have multiple
+such config files. `PYTORCH_TEST_CONFIG` will govern which config needs to be used by upstream.
 
 ### 3.1 Top-level structure
 
@@ -70,44 +73,43 @@ test_suite_config:
 | Field | Required | Description |
 |---|---|---|
 | `test_suite_config` | Yes | Root key |
-| `files` | Yes | List of upstream test file entries |
+| `files` | Yes | List of test file entries |
 | `global` | No | Device-wide capability declaration |
 
 ---
 
 ## 4. File Entry
 
-Each entry under `files` corresponds to one upstream test file.
+Each entry under `files` corresponds to one test file.
 
 ```yaml
-- rel_path: ${PYTORCH}/test/test_binary_ufuncs.py
-  unlisted_test_mode: xfail
+- path: ${PYTORCH}/test/test_binary_ufuncs.py
+  unlisted_test_mode: skip
   tests:
     - ...
 ```
 
 | Field | Required | Default | Description |
 |---|---|---|---|
-| `rel_path` | Yes | — | Path to the upstream test file. Supports `${PYTORCH}` and `${TORCH_SPYRE}` tokens resolved from env vars `SPYRE_PYTORCH_ROOT` and `SPYRE_TORCH_SPYRE_ROOT` |
-| `unlisted_test_mode` | No | `xfail` | Mode applied to tests not listed under `tests`, or listed without an explicit `mode` |
+| `path` | Yes | — | Path to the test file. Supports `${PYTORCH}` and `${TORCH_SPYRE}` tokens resolved from env vars `PYTORCH_ROOT` and `TORCH_SPYRE_ROOT` || `unlisted_test_mode` | No | `skip` | Mode applied to tests not listed under `tests`, or listed without an explicit `mode` |
 | `tests` | No | `[]` | List of test entries with explicit configuration |
 
 ### 4.1 `unlisted_test_mode`
 
-Controls the behaviour for tests that are **not explicitly listed** in `tests`, or are listed but have **no `mode` field**.
+Controls the behaviour for tests that are **not explicitly listed** in `tests`.
 
 | Value | Behaviour |
 |---|---|
-| `block` | Skip entirely. Use when the file is under active development and most tests are not yet ready |
-| `xfail` | Run but mark as expected failure. **Default.** Use when the device broadly supports the op set but individual tests may still fail |
+| `skip` | Skip entirely (**Default**). Use when the file is under active development and most tests are not yet ready |
+| `xfail` | Run but mark as expected failure. Use when the device broadly supports the op set but individual tests may still fail |
 | `xfail_strict` | Run and mark as `xfail(strict=True)`. Fails the suite if the test unexpectedly passes — use when you want to be notified of unexpected improvements |
-| `mandatory_success` | Must pass. Use with caution — any new upstream test added to the file will immediately break the suite |
+| `mandatory_success` | Must pass. Use with caution — any new test added to the test file will immediately break the suite |
 
 **When to use each:**
 
 ```
 New device, early stage:
-  unlisted_test_mode: block             <- only run what you explicitly list
+  unlisted_test_mode: skip             <- only run what you explicitly list and skip the unlisted tests
 
 Device broadly working, tracking regressions:
   unlisted_test_mode: xfail             <- run everything, failures expected
@@ -120,7 +122,7 @@ Stable device, enforcing correctness:
 
 ## 5. Test Entry
 
-Each entry under `tests` configures a specific upstream test method.
+Each entry under `tests` configures a specific upstream test method. The same test can have multiple entires to define different combinations of behaviour if relevant. The final set will be the union of all tests.
 
 ```yaml
 - test: TestBinaryUfuncs::test_scalar_support
@@ -144,7 +146,7 @@ Each entry under `tests` configures a specific upstream test method.
 | Field | Required | Default | Description |
 |---|---|---|---|
 | `test` | Yes | — | `ClassName::method_name` identifying the upstream test |
-| `mode` | No | `unlisted_test_mode` | How to treat this test's variants |
+| `mode` | No | `mandatory_success` | How to treat this test's variants |
 | `tags` | No | `[]` | Pytest mark labels applied to all variants of this test |
 | `edits` | No | — | Per-test overrides for ops and dtypes |
 
@@ -157,19 +159,19 @@ Applied at the **variant level** — each `(test, op, dtype)` combination is tre
 | `mandatory_success` | Variant must pass. Fails the suite if it does not |
 | `xfail` | Variant is expected to fail. Passes the suite either way |
 | `xfail_strict` | Variant must fail. Fails the suite if it unexpectedly passes |
-| `block` | Variant is skipped entirely with a skip message |
+| `skip` | Variant is skipped entirely with a skip message |
 
 **`mode` vs `unlisted_test_mode` precedence:**
 
 ```
 test listed with explicit mode    → test mode governs
-test listed without mode          → unlisted_test_mode governs
+test listed without mode          → mandatory_success
 test not listed at all            → unlisted_test_mode governs
 ```
 
-### 5.2 Tags
+### 5.2 Markers
 
-Tags are registered as pytest marks on every variant of the test. This enables test selection by model name:
+Markers are registered as pytest marks on every variant of the test. This enables test selection based on various filters like model:
 
 ```bash
 pytest test_binary_ufuncs.py -m model_name_depending_on_this_test_1
@@ -177,11 +179,10 @@ pytest test_binary_ufuncs.py -m "model_a or model_b"
 pytest test_binary_ufuncs.py -m "not model_a"
 ```
 
-Tags must be valid Python identifiers (no spaces or special characters).
+Markers must be valid Python identifiers (no spaces or special characters).
 
 ### 5.3 Edits
 
-`edits` allows per-test overrides on top of the global configuration. All edits are scoped to the specific test — they do not affect other tests.
 
 #### 5.3.1 `edits.ops`
 
@@ -198,10 +199,10 @@ edits:
 
 | Field | When to use |
 |---|---|
-| `include` | The test uses a pre-filtered op list (e.g. `binary_ufuncs_with_references`) that excludes an op you want to test. Injects the op into `@ops.op_list` at instantiation time |
+| `include` | The test uses a pre-filtered op list (e.g. `binary_ufuncs_with_references`) that excludes an op you want to test or a particular op is not in global supported_ops, but anyway you want to override and test it. Injects the op into `@ops.op_list` at instantiation time |
 | `exclude` | The op is in `supported_ops` and in the test's `@ops.op_list`, but you want to suppress it for this specific test only |
 
-> **Note on `include`:** This is only needed when the upstream test uses a filtered list that excludes your op. For example, `binary_ufuncs_with_references = [op for op in binary_ufuncs if op.ref is not None]` excludes ops without a reference implementation. If `gcd` has no `ref`, you cannot test it via `test_scalar_support` without injecting it via `include`.
+> **Note on `include`:** This is only needed when the test uses a filtered list that excludes your op or the op is not in globally supported ops like and you want to selectively enable for this test alone. For example, `binary_ufuncs_with_references = [op for op in binary_ufuncs if op.ref is not None]` excludes ops without a reference implementation. If `gcd` has no `ref`, you cannot test it via `test_scalar_support` without injecting it via `include`.
 
 Both `include` and `exclude` are lists of dicts with a `name` field, kept consistent for future extensibility (e.g. adding per-op precision overrides at the test level).
 
@@ -231,43 +232,34 @@ The effective dtypes for a given test variant are computed as:
 ```
 effective_dtypes =
     (global.supported_dtypes ∩ op.dtypes ∩ test.allowed_dtypes)     <- base intersection
-    + (global.supported_dtypes ∩ op.dtypes ∩ edits.dtypes.include)  <- injected dtypes
+    + edits.dtypes.include <- injected dtypes
     - edits.dtypes.exclude                                          <- removed dtypes
 ```
 
 Where:
 
-- `global.supported_dtypes` — hardware capability ceiling. Acts as a hard cap. Cannot be overridden.
+- `global.supported_dtypes` — hardware capability. 
 - `op.dtypes` — op-level dtype override from `global.supported_ops[op].dtypes`. If not specified, defaults to `global.supported_dtypes`.
 - `test.allowed_dtypes` — upstream `@ops(allowed_dtypes=(...))` constraint from the test source code.
-- `edits.dtypes.include` — must be a subset of `global.supported_dtypes`. A validation error is raised otherwise.
+- `edits.dtypes.include` — can be mutually exclusive to `global.supported_dtypes`, not necessarily a subset. It can be an additional dtype to 
+test for a particular op without affecting other tests.
 - `edits.dtypes.exclude` — applied last, after all inclusions.
-
-**Validation rule:** If `edits.dtypes.include` contains a dtype not in `global.supported_dtypes`, the config is rejected at load time:
-
-```
-ValidationError: edits.dtypes.include contains 'float32' which is not in
-global.supported_dtypes [float16, int64].
-edits.dtypes.include must be a subset of global.supported_dtypes.
-```
 
 ---
 
 ## 6. Global Configuration
 
-Declares the device-wide capability baseline. All file and test entries operate within these bounds.
+Declares the device-wide capability.
 
 ```yaml
 global:
   supported_dtypes:
-    - float16
-    - int64
+    - name: float16
+    - name: int64
   supported_ops:
     - name: add
-      force_xfail: false
       dtypes:
         - name: float16
-          precision:
             atol: 1e-3
             rtol: 1e-3
         - name: int64
@@ -279,12 +271,12 @@ global:
 
 | Field | Required | Description |
 |---|---|---|
-| `supported_dtypes` | Yes | Device-wide supported dtypes. Acts as a hard ceiling for all dtype filtering |
+| `supported_dtypes` | Yes | Device-wide supported dtypes. |
 | `supported_ops` | Yes | List of ops the device supports. Only ops listed here generate test variants |
 
 ### 6.1 `supported_dtypes`
 
-The complete set of dtypes the device hardware supports. This is the outermost constraint — no test variant will run with a dtype outside this list regardless of any other configuration.
+The complete set of dtypes the device hardware supports. No test variant will run with a dtype outside this list will run, unless in the test specific config, it is explicitly set to include.
 
 If omitted, no dtype filtering is applied at the global level.
 
@@ -296,7 +288,7 @@ Each entry declares one op the device supports and configures how tests exercisi
 |---|---|---|---|
 | `name` | Yes | — | Op name matching `OpInfo.name` in upstream `op_db` |
 | `force_xfail` | No | `false` | If `true`, flips any `mandatory_success` variant for this op to `xfail`. Has no effect on variants already marked `xfail` or `xfail_strict` |
-| `dtypes` | No | `global.supported_dtypes` | Op-level dtype override. Must be a subset of `global.supported_dtypes` |
+| `dtypes` | No | `global.supported_dtypes` | Op-level dtype override. |
 
 #### 6.2.1 `force_xfail` behaviour
 
@@ -316,13 +308,13 @@ test_scalar_support_gcd_float16:
   test mode: xfail_strict,      gcd.force_xfail: true   ->  xfail_strict (unchanged)
 ```
 
-`force_xfail` only flips `mandatory_success` → `xfail`. It never changes `xfail`, `xfail_strict`, or `block`.
+`force_xfail` only flips `mandatory_success` -> `xfail`. It never changes `xfail`, `xfail_strict`, or `skip`.
 
 > **When to use `force_xfail: true`:** When an op is in `supported_ops` (so variants are generated) but is not yet stable enough to require passing. This allows tracking which tests exercise the op without committing to a correctness guarantee.
 
 #### 6.2.2 Op-level `dtypes`
 
-Narrows the dtype variants generated for this op across all tests. Must be a subset of `global.supported_dtypes`. If op-level `dtypes` contains a dtype not in `global.supported_dtypes`, a validation error is raised.
+Narrows the dtype variants generated for this op across all tests. 
 
 Each dtype entry can optionally specify tolerance overrides:
 
@@ -348,8 +340,8 @@ A model depends on `add` and `mul`. You want to run the tests that exercise thes
 ```yaml
 test_suite_config:
   files:
-    - rel_path: ${PYTORCH}/test/test_binary_ufuncs.py
-      unlisted_test_mode: block       # only run what is listed
+    - path: ${PYTORCH}/test/test_binary_ufuncs.py
+      unlisted_test_mode: skip
       tests:
         - test: TestBinaryUfuncs::test_scalar_support
           mode: mandatory_success
@@ -384,7 +376,7 @@ Another model team wants to reuse the same op tests — they add their tag witho
 ```yaml
 test_suite_config:
   files:
-    - rel_path: ${PYTORCH}/test/test_binary_ufuncs.py
+    - path: ${PYTORCH}/test/test_binary_ufuncs.py
       unlisted_test_mode: xfail       # run everything, failures expected
       tests:
         - test: ....
@@ -405,7 +397,7 @@ As `gcd` stabilises, flip `force_xfail: false` and move specific tests to `manda
 
 ```yaml
 - test: TestBinaryUfuncs::test_add
-  mode: block
+  mode: skip
   # Signal 11 - Segmentation fault
 ```
 
@@ -446,8 +438,8 @@ global:
 
 | Field | Type | Required | Default |
 |---|---|---|---|
-| `rel_path` | string | Yes | — |
-| `unlisted_test_mode` | enum | No | `xfail` |
+| `path` | string | Yes | — |
+| `unlisted_test_mode` | enum | No | `skip` |
 | `tests` | list | No | `[]` |
 
 ### Test entry
@@ -455,7 +447,7 @@ global:
 | Field | Type | Required | Default |
 |---|---|---|---|
 | `test` | string (`ClassName::method_name`) | Yes | — |
-| `mode` | enum | No | `unlisted_test_mode` |
+| `mode` | enum | No | `mandatory_success` |
 | `tags` | list of strings | No | `[]` |
 | `edits.ops.include` | list of `{name}` | No | `[]` |
 | `edits.ops.exclude` | list of `{name}` | No | `[]` |
@@ -475,7 +467,7 @@ global:
 |---|---|---|---|
 | `name` | string | Yes | — |
 | `force_xfail` | bool | No | `false` |
-| `dtypes` | list of `{name, precision?}` | No | `supported_dtypes` |
+| `dtypes` | list of `{name, precision}` | No | `supported_dtypes` |
 
 ### Precision
 
@@ -489,13 +481,13 @@ global:
 ## 9. Validation Rules
 
 1. `test` must match `ClassName::method_name` pattern
-2. `mode` and `unlisted_test_mode` must be one of `mandatory_success`, `xfail`, `xfail_strict`, `block`
+2. `mode` and `unlisted_test_mode` must be one of `mandatory_success`, `xfail`, `xfail_strict`, `skip`
 3. All dtype strings must be valid PyTorch dtype names
-4. `edits.dtypes.include` must be a subset of `global.supported_dtypes`
+4. `edits.dtypes.include` may be subset of `global.supported_dtypes` or mutually exclusive to `global.supported_dtypes` 
 5. `supported_ops[*].dtypes` must be a subset of `global.supported_dtypes`
 6. If `supported_ops[*].dtypes` ∩ `global.supported_dtypes` is empty, a warning is emitted
 7. `tags` must be valid Python identifiers (used as pytest mark names)
-8. `rel_path` tokens (`${PYTORCH}`, `${TORCH_SPYRE}`) must resolve via environment variables at load time
+8. `path` tokens (`${PYTORCH}`, `${TORCH_SPYRE}`) must resolve via environment variables at load time
 
 ---
 
@@ -503,9 +495,9 @@ global:
 
 | Variable | Description |
 |---|---|
-| `SPYRE_PYTORCH_TEST_CONFIG` | Path to the YAML config file |
-| `SPYRE_PYTORCH_ROOT` | Resolves `${PYTORCH}` token in `rel_path` |
-| `SPYRE_TORCH_SPYRE_ROOT` | Resolves `${TORCH_SPYRE}` token in `rel_path` |
+| `PYTORCH_TEST_CONFIG` | Path to the YAML config file |
+| `PYTORCH_ROOT` | Resolves `${PYTORCH}` token in `path` |
+| `TORCH_SPYRE_ROOT` | Resolves `${TORCH_SPYRE}` token in `path` |
 | `PYTORCH_TESTING_DEVICE_ONLY_FOR` | Must be set to `privateuse1` |
 | `TORCH_TEST_DEVICES` | Must point to `spyre_test_base_common.py` |
 | `PYTORCH_TEST_WITH_SLOW` | Must be set to `1` to enable slow tests like `test_compare_cpu` |
