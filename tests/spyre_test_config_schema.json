@@ -162,29 +162,43 @@
     },
     "TestEntry": {
       "type": "object",
-      "required": ["test"],
+      "required": ["name"],
       "additionalProperties": false,
-      "description": "Configuration for a specific upstream test method.",
+      "description": "Configuration shared across one or more upstream test methods. All methods in 'name' receive the same mode, tags, and edits.",
       "properties": {
-        "test": {
-          "type": "string",
-          "pattern": "^\\w+::\\w+$",
-          "description": "ClassName::method_name identifying the upstream test.",
-          "examples": ["TestBinaryUfuncs::test_scalar_support", "TestCommon::test_compare_cpu"]
+        "name": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^\\w+::\\w+$",
+              "description": "Single test: ClassName::method_name"
+            },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "pattern": "^\\w+::\\w+$"
+              },
+              "description": "Multiple tests sharing the same mode, tags, and edits."
+            }
+          ],
+          "description": "One or more ClassName::method_name identifiers. Tests in this list share mode, tags, and edits.",
+          "examples": [
+            ["TestBinaryUfuncs::test_scalar_support", "TestBinaryUfuncs::test_contig_vs_transposed"]
+          ]
         },
         "mode": {
           "$ref": "#/$defs/TestMode",
-          "default": "mandatory_success",
-          "description": "How to treat variants of this test. Default: mandatory_success. If absent, unlisted_test_mode governs."
+          "default": "mandatory_success"
         },
         "tags": {
           "type": "array",
           "items": {
             "type": "string",
-            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
-            "description": "Must be a valid Python identifier — used as a pytest mark name."
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
           },
-          "description": "Pytest marks applied to all variants of this test. Enables selection via -m. Example: pytest test_binary_ufuncs.py -m my_model"
+          "description": "Pytest marks applied to all variants of all tests in 'name'."
         },
         "edits": { "$ref": "#/$defs/TestEdits" }
       }

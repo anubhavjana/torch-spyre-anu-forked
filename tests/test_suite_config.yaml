@@ -3,24 +3,22 @@ test_suite_config:
     - path: ${PYTORCH}/test/test_binary_ufuncs.py
       unlisted_test_mode: skip
       tests:
-        - test: TestBinaryUfuncs::test_scalar_support
-          mode: mandatory_success # mandatory_success (default), xfail, xfail_strict
+        - name:
+            - TestBinaryUfuncs::test_scalar_support
+            - TestBinaryUfuncs::test_contig_vs_transposed
+          mode: xfail
           tags:
             - model_1
+            - model_2
           edits:
             ops:
-              include: # required only if the particular test was not using the op but we want it.
+              include:
                 - name: add
                   description: inject add — binary_ufuncs_with_references excludes it if ref is None
-              exclude: # required only if the particular test was using the op AND is supported 
-                        # but we dont want to run the test with that op.
+              exclude:
                 - name: gcd
                   description: gcd causes buffer alignment errors for this test
-            dtypes: # if the op is specifying the dtype too, we take the intersection of edits and global op dtype 
-            # if precision is always taken from supported_ops.dtypes.precision section.
-
-            # include is a dict in case if we want to add more fields in future, e.g. precision.
-            # exclude can be just a list of strings (names)
+            dtypes:
               include:
                 - name: float16
                   description: float16 not in upstream allowed_dtypes, inject explicitly
@@ -29,25 +27,25 @@ test_suite_config:
               exclude:
                 - name: bfloat16
                   description: bfloat16 unsupported on Spyre for this test
-            # shapes:
-            #   k1: 
-            #   k2: 
-        - test: TestBinaryUfuncs::test_contig_vs_transposed
-          mode: xfail
-          tags:
-            - model_2
 
+        # Single test — name as a list with one entry (or plain string, both accepted)
+        - name:
+            - TestBinaryUfuncs::test_add
+          mode: mandatory_success
+          tags:
+            - tag_for_add
 
     - path: ${PYTORCH}/test/test_ops.py
       unlisted_test_mode: skip
       tests:
-        - test: TestCommon::test_compare_cpu # export PYTORCH_TEST_WITH_SLOW=1
+        - name:
+            - TestCommon::test_compare_cpu
           mode: mandatory_success
           edits:
             dtypes:
               exclude:
-                - name: float32 # test_ops.py::TestCommonPRIVATEUSE1::test_compare_cpu__refs__conversions_float_spyre_float32
-                        # corrupted double-linked list
+                - name: float32
+                  description: corrupted double-linked list
 
   global:
     supported_dtypes:
@@ -55,15 +53,11 @@ test_suite_config:
       - name: int64
     supported_ops:
       - name: add
-        force_xfail: true
-        # if test mode is mandatory_success, flips the test mode to xfail. 
-        # If the test mode is either xfail or xfail_strict, it will remain unchanged. 
         dtypes:
           - name: float16
-            precision:
-              atol: 1e-3
-              rtol: 1e-3
+            precision: {atol: 1e-3, rtol: 1e-3}
           - name: int64
       - name: mul
       - name: sub
       - name: gcd
+        force_xfail: true

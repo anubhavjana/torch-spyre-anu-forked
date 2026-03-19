@@ -117,21 +117,26 @@ class TestEdits(BaseModel):
 
 
 class TestEntry(BaseModel):
-    """A single test entry in the per-file tests list."""
+    """A single test entry in the per-file tests list containing name,
+    mode, tags and edits
+    """
 
-    test: str
+    name: List[str]
     mode: str = MODE_MANDATORY_SUCCESS
     tags: List[str] = []
     edits: TestEdits = TestEdits()
 
-    @field_validator("test")
+    @field_validator("name", mode="before")
     @classmethod
-    def validate_test_id(cls, v: str) -> str:
-        parts = v.split("::")
-        if len(parts) != 2 or not all(parts):
-            raise ValueError(
-                f"Invalid test id {v!r}, expected 'ClassName::method_name'"
-            )
+    def validate_name(cls, v) -> List[str]:
+        if isinstance(v, str):
+            v = [v]
+        for item in v:
+            parts = item.split("::")
+            if len(parts) != 2 or not all(parts):
+                raise ValueError(
+                    f"Invalid test id {item!r}, expected 'ClassName::method_name'"
+                )
         return v
 
     @field_validator("mode")
@@ -143,16 +148,22 @@ class TestEntry(BaseModel):
             )
         return v
 
-    @property
-    def class_name(self) -> str:
-        return self.test.split("::")[0]
+    def name_pairs(self) -> List[tuple]:
+        """Return [(class_name, method_name), ...] for all entries in name."""
+        return [tuple(n.split("::")) for n in self.name]
 
-    @property
-    def method_name(self) -> str:
-        return self.test.split("::")[1]
+    def method_names(self) -> List[str]:
+        """Return just the method_name part of each entry."""
+        return [n.split("::")[1] for n in self.name]
+
+    def class_names(self) -> List[str]:
+        """Return just the class_name part of each entry."""
+        return [n.split("::")[0] for n in self.name]
 
 
 class FileEntry(BaseModel):
+    """Per file model containing path, unlisted_test_mode and a list of tests"""
+
     path: str
     unlisted_test_mode: str = MODE_XFAIL
     tests: List[TestEntry] = []

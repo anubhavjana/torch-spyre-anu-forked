@@ -94,8 +94,25 @@ remove_builtin_privateuse1_test_base()
 
 
 def _build_test_entry_map(file_entry: FileEntry) -> Dict[str, TestEntry]:
-    """Build {method_name -> TestEntry} from file_entry.tests."""
-    return {entry.method_name: entry for entry in file_entry.tests}
+    """Build {method_name -> TestEntry} from file_entry.tests.
+
+    A single TestEntry can cover multiple test ids via name: [list].
+    Each method_name in the list gets its own entry in the map pointing
+    to the same TestEntry object so _should_run() can look up by method_name.
+    """
+    result: Dict[str, TestEntry] = {}
+    for entry in file_entry.tests:
+        for method_name in entry.method_names():
+            if method_name in result:
+                import warnings
+
+                warnings.warn(
+                    f"test method {method_name!r} appears in multiple TestEntry "
+                    f"blocks in the YAML. The last entry will take precedence.",
+                    stacklevel=2,
+                )
+            result[method_name] = entry
+    return result
 
 
 def _extract_op_name_from_method(
