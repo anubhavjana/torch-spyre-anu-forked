@@ -156,6 +156,19 @@ class TorchTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
     SUPPORTED_OPS_CONFIG: Dict[str, "SupportedOpConfig"] = {}  # {op_name -> config}
     GLOBAL_SUPPORTED_DTYPES: Optional[Set[torch.dtype]] = None  # None = no filtering
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        # PrivateUse1TestBase.setUpClass sets cls.device_type = "spyre"
+        # (the registered backend name). This mutates the base class's
+        # device_type, causing subsequent instantiate_device_type_tests calls
+        # to generate class names like TestOldViewOpsSPYRE instead of
+        # TestOldViewOpsPRIVATEUSE1, which then get filtered out by
+        # PYTORCH_TESTING_DEVICE_ONLY_FOR=privateuse1.
+        # Reset TorchTestBase.device_type to "privateuse1" so subsequent
+        # calls generate the correct class name.
+        TorchTestBase.device_type = "privateuse1"
+
     # ------------------------------------------------------------------
     # Config loading  (called once per test run via instantiate_test)
     # ------------------------------------------------------------------
