@@ -8,7 +8,6 @@ requires = [
     "jinja2",
     "ninja",
     "numpy",
-    "pydantic",
     "pyyaml", # needed for codegen
     "regex",
     "setuptools>=70.1.0,<80.0",
