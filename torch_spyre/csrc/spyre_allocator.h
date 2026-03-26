@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include <c10/core/Allocator.h>
+#include <c10/core/CachingDeviceAllocator.h>
 #include <c10/core/Device.h>
 #include <c10/core/Stream.h>
 
@@ -30,7 +30,7 @@ struct SharedOwnerCtx {
 
 // A custom allocator for our custom device, which returns a handle to the
 // allocated memory, not the actual pointer.
-struct SpyreAllocator final : public at::Allocator {
+struct SpyreAllocator final : public c10::DeviceAllocator {
  private:
   SpyreAllocator();
 
@@ -38,12 +38,24 @@ struct SpyreAllocator final : public at::Allocator {
 
  public:
   static SpyreAllocator& instance();
+  bool initialized() override;
 
-  at::DataPtr allocate(size_t nbytes) override;
+  void emptyCache(c10::MempoolId_t mempool_id) override;
+
+  void recordStream(const c10::DataPtr& ptr, c10::Stream stream) override;
+
+  c10::CachingDeviceAllocator::DeviceStats getDeviceStats(
+      c10::DeviceIndex device) override;
+
+  void resetAccumulatedStats(c10::DeviceIndex device) override;
+
+  void resetPeakStats(c10::DeviceIndex device) override;
+
+  c10::DataPtr allocate(size_t nbytes) override;
 
   static void ReportAndDelete(void* ctx_void);
 
-  at::DeleterFnPtr raw_deleter() const override;
+  c10::DeleterFnPtr raw_deleter() const override;
 
   void copy_data(void* dest, const void* src, std::size_t count) const final;
 };

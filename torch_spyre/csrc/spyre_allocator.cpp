@@ -38,7 +38,25 @@ SpyreAllocator& SpyreAllocator::instance() {
   return allocator;
 }
 
-at::DataPtr SpyreAllocator::allocate(size_t nbytes) {
+bool SpyreAllocator::initialized() {
+  return true;
+}
+
+void SpyreAllocator::emptyCache(c10::MempoolId_t mempool_id) {}
+
+void SpyreAllocator::recordStream(const c10::DataPtr& ptr, c10::Stream stream) {
+}
+
+c10::CachingDeviceAllocator::DeviceStats SpyreAllocator::getDeviceStats(
+    c10::DeviceIndex device) {
+  return {};
+}
+
+void SpyreAllocator::resetAccumulatedStats(c10::DeviceIndex device) {}
+
+void SpyreAllocator::resetPeakStats(c10::DeviceIndex device) {}
+
+c10::DataPtr SpyreAllocator::allocate(size_t nbytes) {
   c10::Device curr_device =
       c10::impl::getDeviceGuardImpl(c10::DeviceType::PrivateUse1)->getDevice();
 
@@ -77,7 +95,7 @@ void SpyreAllocator::ReportAndDelete(void* ctx_void) {
 // create a runtime interface that can correctly free an allocation
 // only based on the data ptr, without the allocation idx from the
 // context
-at::DeleterFnPtr SpyreAllocator::raw_deleter() const {
+c10::DeleterFnPtr SpyreAllocator::raw_deleter() const {
   return nullptr;
 }
 

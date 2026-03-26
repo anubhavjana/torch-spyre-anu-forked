@@ -27,7 +27,6 @@
 #include <util/sen_data_convert.h>
 
 #include <algorithm>
-#include <cassert>
 #include <flex/graph/graph_builder/flex_graph_builder.hpp>
 #include <memory>
 #include <sendnn/graph/graph_builder.hpp>
