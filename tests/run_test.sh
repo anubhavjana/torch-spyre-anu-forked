@@ -1,40 +1,14 @@
 #!/usr/bin/env bash
-# spyre_run.sh -- Single-entry-point test runner for torch-spyre OOT tests.
+# run_test.sh -- Single-entry-point test runner for torch-spyre OOT tests.
 #
 # Usage:
-#   bash spyre_run.sh /path/to/test_suite_config.yaml [extra pytest args...]
+#   bash run_test.sh /path/to/test_suite_config.yaml [extra pytest args...]
 #
-# The only input you control is the YAML config path. Everything else --
-# TORCH_ROOT, TORCH_DEVICE_ROOT, and all framework env vars -- is derived
-# automatically.
-#
-# Layout assumed (pytorch is a sibling of torch-spyre):
-#   /dev/shm/dt-inductor/
-#     pytorch/                     <- TORCH_ROOT
-#     torch-spyre-anu-forked/      <- TORCH_DEVICE_ROOT
-#       tests/
-#         test_suite_config.yaml
-#
-# YAML tokens:
-#   ${TORCH_ROOT}        -> TORCH_ROOT       (PyTorch source tree)
-#   ${TORCH_DEVICE_ROOT} -> TORCH_DEVICE_ROOT (torch-spyre source tree)
-#
-# Root discovery order (all instant, no find/filesystem scan):
-#
-#   TORCH_ROOT        1. Already set in env
-#                     2. Editable install: two dirnames from torch.__file__
-#                     3. Sibling search: check siblings at each ancestor of YAML_DIR
-#
-#   TORCH_DEVICE_ROOT 1. Already set in env
-#                     2. Editable install: direct_url.json from torch_spyre package metadata
-#                     3. importlib.find_spec('spyre_test_base_common') via PYTHONPATH
-#                     4. Walk upward from YAML dir (YAML usually lives in tests/)
+
 
 set -euo pipefail
 
-# ---------------------------------------------------------------------------
-# 0. Args
-# ---------------------------------------------------------------------------
+
 if [[ $# -lt 1 ]]; then
     echo "Usage: $0 <path/to/test_suite_config.yaml> [extra pytest args...]" >&2
     exit 1
@@ -53,7 +27,7 @@ echo "[spyre_run] Using YAML config: $YAML_CONFIG"
 YAML_DIR="$(dirname "$YAML_CONFIG")"
 
 # ---------------------------------------------------------------------------
-# 1. Discovery helpers
+# Discovery helpers
 # ---------------------------------------------------------------------------
 
 # Walk upward from a dir checking each ancestor for a sentinel relative path.
@@ -90,11 +64,6 @@ _find_sibling_with_sentinel() {
 
 # ---------------------------------------------------------------------------
 # 2. Resolve and export TORCH_ROOT
-#
-#   torch is installed as a regular wheel (not editable), so torch.__file__
-#   points into site-packages -- not useful for finding the source tree.
-#   Instead we find pytorch/ as a sibling of torch-spyre/ under the common
-#   parent directory.
 # ---------------------------------------------------------------------------
 echo "[spyre_run] Resolving TORCH_ROOT..."
 if [[ -n "${TORCH_ROOT:-}" && -d "$TORCH_ROOT" ]]; then
@@ -132,10 +101,6 @@ echo "[spyre_run]   TORCH_ROOT=$TORCH_ROOT"
 
 # ---------------------------------------------------------------------------
 # 3. Resolve and export TORCH_DEVICE_ROOT
-#
-#   torch_spyre IS an editable install, so its source path is recorded in
-#   direct_url.json inside the dist-info directory -- the fastest and most
-#   reliable way to find it, requiring no searching at all.
 # ---------------------------------------------------------------------------
 echo "[spyre_run] Resolving TORCH_DEVICE_ROOT..."
 if [[ -n "${TORCH_DEVICE_ROOT:-}" && -d "$TORCH_DEVICE_ROOT" ]]; then
@@ -207,8 +172,6 @@ echo ""
 echo "[spyre_run] Environment set:"
 echo "  TORCH_ROOT                      = $TORCH_ROOT"
 echo "  TORCH_DEVICE_ROOT               = $TORCH_DEVICE_ROOT"
-echo "  PYTORCH_ROOT                    = $PYTORCH_ROOT"
-echo "  TORCH_SPYRE_ROOT                = $TORCH_SPYRE_ROOT"
 echo "  PYTORCH_TESTING_DEVICE_ONLY_FOR = $PYTORCH_TESTING_DEVICE_ONLY_FOR"
 echo "  TORCH_TEST_DEVICES              = $TORCH_TEST_DEVICES"
 echo "  PYTORCH_TEST_CONFIG             = $PYTORCH_TEST_CONFIG"
@@ -217,7 +180,6 @@ echo ""
 
 # ---------------------------------------------------------------------------
 # 5. Extract raw file paths from YAML
-#    Simple awk parser -- handles '- path: val' and 'path: val' at any indent.
 # ---------------------------------------------------------------------------
 _extract_file_paths_from_yaml() {
     awk '
@@ -250,7 +212,7 @@ for p in "${RAW_PATHS[@]}"; do
 done
 
 # ---------------------------------------------------------------------------
-# 6. Token expansion (roots are already exported above)
+# 6. Token expansion
 # ---------------------------------------------------------------------------
 _expand_path() {
     local p="$1"

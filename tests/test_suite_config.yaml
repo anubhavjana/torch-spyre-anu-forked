@@ -1,6 +1,21 @@
 test_suite_config:
   files:
-    - path: ${PYTORCH}/test/test_binary_ufuncs.py
+    - path: ${TORCH_ROOT}/test/test_modules.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            - TestModule::test_forward
+          mode: mandatory_success
+          edits:
+            modules:
+              include:
+                - name: torch.nn.BatchNorm2d
+                  description: add batchnorm even though not in global.supported_modules
+              exclude:
+                - name: torch.nn.Linear
+                  description: Linear causes OOM on this test
+
+    - path: ${TORCH_ROOT}/test/test_binary_ufuncs.py
       unlisted_test_mode: skip
       tests:
         - names:
@@ -32,18 +47,9 @@ test_suite_config:
           tags:
             - tag_for_add
 
-    - path: ${PYTORCH}/test/test_ops.py
+    - path: ${TORCH_DEVICE_ROOT}/tests/test_regex.py
       unlisted_test_mode: skip
-      tests:
-        - names:
-            - TestCommon::test_compare_cpu
-          mode: mandatory_success
-          edits:
-            dtypes:
-              exclude:
-                - name: float32
-                  description: corrupted double-linked list
-
+      tests: []
   global:
     supported_dtypes:
       - name: float16
@@ -59,4 +65,9 @@ test_suite_config:
       - name: mul
       - name: sub
       - name: gcd
+        force_xfail: true
+    supported_modules:
+      - name: torch.nn.Linear
+      - name: torch.nn.Conv2d
+      - name: torch.nn.ReLU
         force_xfail: true
