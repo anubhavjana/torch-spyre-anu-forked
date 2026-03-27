@@ -103,9 +103,6 @@ def resolve_current_file(config: OOTTestConfig, config_path: str) -> FileEntry:
                 current_test_file = str(candidate_resolved)
                 break
 
-    _debug(f"current_test_file: {current_test_file!r}")
-    _debug(f"cwd: {cwd!r}")
-
     if current_test_file is None:
         raise EnvironmentError(
             f"Could not determine the test file being run from sys.argv[1:]={sys.argv[1:]!r}.\n"
