@@ -4,6 +4,12 @@
 # Usage:
 #   bash run_test.sh /path/to/test_suite_config.yaml [extra pytest args...]
 #
+# For each test file, any TestCase subclass that is NOT already passed to
+# instantiate_device_type_tests() is automatically wrapped: a temporary
+# wrapper script is generated that imports the original file and appends
+# the missing instantiate_device_type_tests() calls so the OOT framework
+# can control those classes via the YAML config.  The wrapper is deleted
+# after the run.  No upstream files are modified.
 
 
 set -euo pipefail
@@ -30,7 +36,6 @@ YAML_DIR="$(dirname "$YAML_CONFIG")"
 # Discovery helpers
 # ---------------------------------------------------------------------------
 
-# Walk upward from a dir checking each ancestor for a sentinel relative path.
 _walk_up_for_sentinel() {
     local dir sentinel
     dir="$(realpath "$1")"
@@ -46,8 +51,6 @@ _walk_up_for_sentinel() {
     return 1
 }
 
-# Walk upward from a dir; at each ancestor level check every sibling subdir
-# for a sentinel relative path. Finds e.g. pytorch/ as a sibling of torch-spyre/.
 _find_sibling_with_sentinel() {
     local dir sentinel
     dir="$(realpath "$1")"
@@ -71,8 +74,6 @@ if [[ -n "${TORCH_ROOT:-}" && -d "$TORCH_ROOT" ]]; then
 else
     TORCH_ROOT=""
 
-    # Editable install: torch.__file__ is inside the source tree
-    # (works if torch was installed with pip install -e .)
     _found=$(python3 -c "
 import torch, os
 candidate = os.path.dirname(os.path.dirname(os.path.abspath(torch.__file__)))
@@ -81,7 +82,6 @@ if os.path.isfile(os.path.join(candidate, 'test', 'test_binary_ufuncs.py')):
 " 2>/dev/null) || true
     [[ -n "$_found" ]] && TORCH_ROOT="$_found"
 
-    # Sibling search: pytorch/ sits next to torch-spyre/ under a common parent
     if [[ -z "$TORCH_ROOT" ]]; then
         TORCH_ROOT=$(_find_sibling_with_sentinel "$YAML_DIR" "test/test_binary_ufuncs.py" 2>/dev/null) || true
     fi
@@ -95,7 +95,6 @@ if os.path.isfile(os.path.join(candidate, 'test', 'test_binary_ufuncs.py')):
     fi
 fi
 export TORCH_ROOT
-# Also export as PYTORCH_ROOT for backward compat with upstream test framework
 export PYTORCH_ROOT="$TORCH_ROOT"
 echo "[spyre_run]   TORCH_ROOT=$TORCH_ROOT"
 
@@ -108,7 +107,6 @@ if [[ -n "${TORCH_DEVICE_ROOT:-}" && -d "$TORCH_DEVICE_ROOT" ]]; then
 else
     TORCH_DEVICE_ROOT=""
 
-    # Primary: read source path from torch_spyre editable install metadata
     _found=$(python3 -c "
 import importlib.metadata, json, os
 try:
@@ -126,7 +124,6 @@ except Exception:
 " 2>/dev/null) || true
     [[ -n "$_found" ]] && TORCH_DEVICE_ROOT="$_found"
 
-    # Fallback: already importable via PYTHONPATH
     if [[ -z "$TORCH_DEVICE_ROOT" ]]; then
         _found=$(python3 -c "
 import importlib.util, os
@@ -137,7 +134,6 @@ if spec:
         [[ -n "$_found" ]] && TORCH_DEVICE_ROOT="$_found"
     fi
 
-    # Fallback: walk upward from YAML dir (YAML lives inside tests/)
     if [[ -z "$TORCH_DEVICE_ROOT" ]]; then
         TORCH_DEVICE_ROOT=$(_walk_up_for_sentinel "$YAML_DIR" "tests/spyre_test_base_common.py" 2>/dev/null) || true
     fi
@@ -151,7 +147,6 @@ if spec:
     fi
 fi
 export TORCH_DEVICE_ROOT
-# Also export as TORCH_SPYRE_ROOT for backward compat
 export TORCH_SPYRE_ROOT="$TORCH_DEVICE_ROOT"
 echo "[spyre_run]   TORCH_DEVICE_ROOT=$TORCH_DEVICE_ROOT"
 
@@ -182,17 +177,10 @@ echo ""
 # 5. Extract raw file paths from YAML
 # ---------------------------------------------------------------------------
 _extract_file_paths_from_yaml() {
-    awk '
-        /^[[:space:]]*-[[:space:]]*path:[[:space:]]/ {
-            match($0, /path:[[:space:]]+(.+)/, arr)
-            if (arr[1] != "") print arr[1]
-            next
-        }
-        /^[[:space:]]*path:[[:space:]]/ {
-            match($0, /path:[[:space:]]+(.+)/, arr)
-            if (arr[1] != "") print arr[1]
-        }
-    ' "$1" | sed 's/[[:space:]]*#.*//' | sed '/^[[:space:]]*$/d'
+    grep -E '^\s*(- )?path:\s' "$1" \
+        | sed 's/.*path:[[:space:]]*//' \
+        | sed 's/[[:space:]]*#.*//' \
+        | sed '/^[[:space:]]*$/d'
 }
 
 echo "[spyre_run] Parsing YAML for test file paths..."
@@ -262,25 +250,311 @@ done
 echo ""
 
 # ---------------------------------------------------------------------------
-# 8. Run pytest for each resolved test file
+# 8. AST analyzer
+#    Returns JSON: {all, device_type, parametrized, uncontrolled, plain_no_device}
+#
+#    "uncontrolled" = ALL TestCase subclasses not yet passed to
+#    instantiate_device_type_tests(), regardless of whether their test
+#    methods take a `device` arg or not.  ALL of these get wrapper injection.
+#
+#    Why inject even classes with no `device` arg (e.g. TestProfiler)?
+#      When the YAML says mode:skip or unlisted_test_mode:skip, TorchTestBase
+#      replaces the test method with a unittest.SkipTest wrapper BEFORE the
+#      test body ever executes -- so the `device` arg is never passed to the
+#      original method.  The framework therefore controls all such tests via
+#      the YAML, including plain TestCase classes.
+#
+#    "plain_no_device" = subset of uncontrolled whose test methods have no
+#    `device` arg.  These are reported as warnings when listed in the YAML
+#    with mode:mandatory_success or mode:xfail, because at execution time
+#    the device arg WOULD be injected and cause a TypeError.  The user should
+#    either mark them as mode:skip or add a device arg to the test method.
+# ---------------------------------------------------------------------------
+_ANALYZER_PY='
+import ast, sys, json
+from pathlib import Path
+
+def class_methods_info(classdef):
+    """Return (has_device_method, [all_test_method_names]) for a ClassDef."""
+    methods = []
+    has_device = False
+    for node in ast.walk(classdef):
+        if isinstance(node, ast.FunctionDef) and node.name.startswith("test"):
+            if any(a.arg == "device" for a in node.args.args):
+                has_device = True
+            methods.append(node.name)
+    return has_device, methods
+
+def analyze(path):
+    try:
+        source = Path(path).read_text()
+    except OSError as e:
+        print(json.dumps({"error": str(e)})); return
+    try:
+        tree = ast.parse(source, filename=path)
+    except SyntaxError as e:
+        print(json.dumps({"error": f"SyntaxError: {e}"})); return
+
+    # ALL TestCase subclasses in this file
+    all_classes = {}   # name -> has_device_method
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            for base in node.bases:
+                base_name = ""
+                if isinstance(base, ast.Name):        base_name = base.id
+                elif isinstance(base, ast.Attribute): base_name = base.attr
+                if "TestCase" in base_name or base_name.endswith("TestBase"):
+                    has_device, _ = class_methods_info(node)
+                    all_classes[node.name] = has_device
+                    break
+
+    device_type_instantiated = set()
+    parametrized_instantiated = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call): continue
+        func = node.func
+        fname = ""
+        if isinstance(func, ast.Name):        fname = func.id
+        elif isinstance(func, ast.Attribute): fname = func.attr
+        if fname == "instantiate_device_type_tests" and node.args:
+            arg = node.args[0]
+            if isinstance(arg, ast.Name): device_type_instantiated.add(arg.id)
+        elif fname == "instantiate_parametrized_tests" and node.args:
+            arg = node.args[0]
+            if isinstance(arg, ast.Name): parametrized_instantiated.add(arg.id)
+
+    already_handled = device_type_instantiated | parametrized_instantiated
+    uncontrolled = sorted(set(all_classes) - already_handled)
+
+    # Plain classes (no device arg in any test method) within uncontrolled
+    plain_no_device = sorted(
+        cls for cls in uncontrolled if not all_classes[cls]
+    )
+
+    print(json.dumps({
+        "all":                  sorted(all_classes),
+        "device_type":          sorted(device_type_instantiated),
+        "parametrized":         sorted(parametrized_instantiated),
+        "uncontrolled":         uncontrolled,
+        "plain_no_device":      plain_no_device,
+    }))
+
+analyze(sys.argv[1])
+'
+
+# ---------------------------------------------------------------------------
+# 9. Wrapper generator
+#
+#    For any test file that has uncontrolled classes (of ANY kind), generate
+#    a temporary wrapper .py placed beside the original so that conftest.py
+#    discovery, relative imports, and sys.path all work identically.
+#
+#    The wrapper star-imports the original module (picking up all existing
+#    instantiate_* calls) then appends one instantiate_device_type_tests()
+#    call per uncontrolled class.
+#
+#    Safety for plain (no-device) classes:
+#      TorchTestBase._should_run() replaces test methods with a SkipTest
+#      wrapper BEFORE the test body executes.  The `device` arg injected
+#      by instantiate_device_type_tests() is therefore never seen by the
+#      original method body when YAML mode is skip.  If a plain test is
+#      listed as mandatory_success/xfail a warning is emitted (it would
+#      fail at runtime with a device-arg TypeError).
+#
+#    Naming:  <original_stem>__oot_wrapper.py  (deleted by EXIT trap)
+# ---------------------------------------------------------------------------
+
+WRAPPER_FILES=()
+
+_cleanup_wrappers() {
+    for wf in "${WRAPPER_FILES[@]+"${WRAPPER_FILES[@]}"}"; do
+        [[ -f "$wf" ]] && rm -f "$wf" && \
+            echo "[spyre_run] Cleaned up wrapper: $wf"
+    done
+}
+trap _cleanup_wrappers EXIT
+
+# generate_wrapper_if_needed <test_file>
+# Sets global _RUN_FILE to the path pytest should actually run.
+_RUN_FILE=""
+generate_wrapper_if_needed() {
+    local test_file="$1"
+    _RUN_FILE="$test_file"
+
+    local result
+    if ! result=$(python3 -c "$_ANALYZER_PY" "$test_file" 2>/dev/null); then
+        echo "[spyre_run] WARNING: could not analyze $test_file -- running as-is" >&2
+        return 0
+    fi
+
+    local err
+    err=$(echo "$result" | python3 -c "
+import json,sys; d=json.load(sys.stdin); print(d.get('error',''))
+" 2>/dev/null) || true
+    if [[ -n "$err" ]]; then
+        echo "[spyre_run] WARNING: parse error in $test_file: $err -- running as-is" >&2
+        return 0
+    fi
+
+    local uncontrolled_str plain_str
+    uncontrolled_str=$(echo "$result" | python3 -c "
+import json,sys; d=json.load(sys.stdin); print(' '.join(d['uncontrolled']))
+")
+    plain_str=$(echo "$result" | python3 -c "
+import json,sys; d=json.load(sys.stdin); print(' '.join(d['plain_no_device']))
+")
+
+    if [[ -z "$uncontrolled_str" ]]; then
+        return 0   # all classes already framework-controlled
+    fi
+
+    read -r -a UNCONTROLLED_CLASSES <<< "$uncontrolled_str"
+    local -a PLAIN_CLASSES=()
+    [[ -n "$plain_str" ]] && read -r -a PLAIN_CLASSES <<< "$plain_str"
+
+    # Warn about plain classes -- they are safe only when YAML skips them.
+    # If the user listed any as mandatory_success/xfail they will hit a
+    # device-arg TypeError at runtime.
+    if [[ ${#PLAIN_CLASSES[@]} -gt 0 ]]; then
+        echo "[spyre_run] NOTE: the following classes have no 'device' arg in their"
+        echo "[spyre_run]       test methods. They are safe under mode:skip but will"
+        echo "[spyre_run]       fail at runtime if listed as mandatory_success/xfail:"
+        for cls in "${PLAIN_CLASSES[@]}"; do
+            echo "[spyre_run]         $cls"
+        done
+    fi
+
+    local original_dir original_stem module_name wrapper_path
+    original_dir="$(dirname "$test_file")"
+    original_stem="$(basename "$test_file" .py)"
+    module_name="$original_stem"
+    wrapper_path="${original_dir}/${original_stem}__oot_wrapper.py"
+
+    echo "[spyre_run] Injecting instantiate_device_type_tests for uncontrolled classes in: $(basename "$test_file")"
+    for cls in "${UNCONTROLLED_CLASSES[@]}"; do
+        echo "[spyre_run]   -> $cls"
+    done
+    echo "[spyre_run] Generating wrapper: $(basename "$wrapper_path")"
+
+    {
+        echo "# Auto-generated by run_test.sh -- DO NOT EDIT -- deleted after run"
+        echo "# Wrapper for: $test_file"
+        echo "#"
+        echo "# Injects instantiate_device_type_tests() for ALL TestCase subclasses"
+        echo "# not already registered, so TorchTestBase controls them via YAML."
+        echo "# Classes with no 'device' arg are safe when YAML mode is 'skip'."
+        echo ""
+        echo "import sys as _sys, os as _os"
+        echo "_sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))"
+        echo ""
+        echo "# Star-import brings in all classes, helpers, and existing"
+        echo "# instantiate_device_type_tests / instantiate_parametrized_tests calls."
+        echo "from ${module_name} import *  # noqa: F401,F403"
+        echo ""
+        echo "import inspect as _inspect"
+        echo "from torch.testing._internal.common_device_type import ("
+        echo "    instantiate_device_type_tests as _instantiate,"
+        echo ")"
+        echo ""
+        echo "# ---------------------------------------------------------------------------"
+        echo "# @staticmethod preservation"
+        echo "#"
+        echo "# instantiate_device_type_tests copies non-test class members via"
+        echo "# getattr(), which UNWRAPS @staticmethod descriptors into plain functions."
+        echo "# When test methods subsequently call self.static_helper(), Python treats"
+        echo "# the plain function as an instance method and injects self as the first"
+        echo "# positional arg, causing:"
+        echo "#   TypeError: Cls.method() takes 0 positional arguments but 1 was given"
+        echo "#"
+        echo "# _restore_staticmethods() uses inspect.getattr_static (which does NOT"
+        echo "# unwrap descriptors) to find all @staticmethod members on the original"
+        echo "# class, then re-applies them on every generated device-specific subclass."
+        echo "# ---------------------------------------------------------------------------"
+        echo "def _restore_staticmethods(original_cls, scope):"
+        echo "    prefix = original_cls.__name__"
+        echo "    for name, obj in list(scope.items()):"
+        echo "        if (isinstance(obj, type)"
+        echo "                and name.startswith(prefix)"
+        echo "                and name != prefix):"
+        echo "            for attr in dir(original_cls):"
+        echo "                desc = _inspect.getattr_static(original_cls, attr, None)"
+        echo "                if isinstance(desc, staticmethod):"
+        echo "                    setattr(obj, attr, desc)"
+        echo ""
+        echo "# Inject instantiate_device_type_tests for every uncontrolled class."
+        echo "# TorchTestBase replaces skipped tests before their body executes so"
+        echo "# the injected device arg never reaches plain-test method bodies."
+        echo "# After each injection, restore @staticmethod descriptors that"
+        echo "# instantiate_device_type_tests unwrapped during member copying."
+        for cls in "${UNCONTROLLED_CLASSES[@]}"; do
+            # Save the class reference before _instantiate deletes it from globals().
+            # instantiate_device_type_tests() calls del scope[class_name] at the end,
+            # so the name is no longer resolvable after the call.
+            echo "_cls_${cls} = ${cls}"
+            echo "_instantiate(_cls_${cls}, globals())"
+            echo "_restore_staticmethods(_cls_${cls}, globals())"
+        done
+    } > "$wrapper_path"
+
+    WRAPPER_FILES+=("$wrapper_path")
+    _RUN_FILE="$wrapper_path"
+}
+
+# ---------------------------------------------------------------------------
+# 10. Clean up any stale wrappers from previous crashed/interrupted runs
+#     before generating new ones, so pytest never picks up an old wrapper.
+# ---------------------------------------------------------------------------
+echo "[spyre_run] Cleaning up any stale OOT wrappers from previous runs..."
+for test_file in "${TEST_FILES[@]}"; do
+    original_dir="$(dirname "$test_file")"
+    original_stem="$(basename "$test_file" .py)"
+    stale_wrapper="${original_dir}/${original_stem}__oot_wrapper.py"
+    if [[ -f "$stale_wrapper" ]]; then
+        echo "[spyre_run]   Removing stale wrapper: $stale_wrapper"
+        rm -f "$stale_wrapper"
+    fi
+done
+
+# ---------------------------------------------------------------------------
+# 11. Build the final run list (original or wrapper per file)
+# ---------------------------------------------------------------------------
+echo "[spyre_run] Checking for uncontrolled TestCase classes..."
+echo ""
+
+RUN_FILES=()
+for test_file in "${TEST_FILES[@]}"; do
+    generate_wrapper_if_needed "$test_file"
+    RUN_FILES+=("$_RUN_FILE")
+done
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# 12. Run pytest for each file (original or wrapper)
 # ---------------------------------------------------------------------------
 OVERALL_EXIT=0
 
-for test_file in "${TEST_FILES[@]}"; do
-    test_dir="$(dirname "$test_file")"
-    test_basename="$(basename "$test_file")"
+for i in "${!RUN_FILES[@]}"; do
+    run_file="${RUN_FILES[$i]}"
+    original_file="${TEST_FILES[$i]}"
+    run_dir="$(dirname "$run_file")"
+    run_basename="$(basename "$run_file")"
 
     echo "========================================================================"
-    echo "[spyre_run] Running: $test_file"
+    if [[ "$run_file" != "$original_file" ]]; then
+        echo "[spyre_run] Running (via OOT wrapper): $original_file"
+    else
+        echo "[spyre_run] Running: $run_file"
+    fi
     echo "========================================================================"
 
     (
-        cd "$test_dir"
-        python3 -m pytest "$test_basename" "${EXTRA_PYTEST_ARGS[@]}" || true
+        cd "$run_dir"
+        python3 -m pytest "$run_basename" "${EXTRA_PYTEST_ARGS[@]}" || true
     )
     _exit=$?
     if [[ $_exit -ne 0 ]]; then
-        echo "[spyre_run] WARNING: pytest exited with code $_exit for $test_file" >&2
+        echo "[spyre_run] WARNING: pytest exited with code $_exit for $original_file" >&2
         OVERALL_EXIT=$_exit
     fi
 done
