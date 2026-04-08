@@ -257,18 +257,12 @@ echo ""
 #    instantiate_device_type_tests(), regardless of whether their test
 #    methods take a `device` arg or not.  ALL of these get wrapper injection.
 #
-#    Why inject even classes with no `device` arg (e.g. TestProfiler)?
+#   
 #      When the YAML says mode:skip or unlisted_test_mode:skip, TorchTestBase
 #      replaces the test method with a unittest.SkipTest wrapper BEFORE the
-#      test body ever executes -- so the `device` arg is never passed to the
+#      test body ever executes -- the `device` arg is never passed to the
 #      original method.  The framework therefore controls all such tests via
 #      the YAML, including plain TestCase classes.
-#
-#    "plain_no_device" = subset of uncontrolled whose test methods have no
-#    `device` arg.  These are reported as warnings when listed in the YAML
-#    with mode:mandatory_success or mode:xfail, because at execution time
-#    the device arg WOULD be injected and cause a TypeError.  The user should
-#    either mark them as mode:skip or add a device arg to the test method.
 # ---------------------------------------------------------------------------
 _ANALYZER_PY='
 import ast, sys, json
