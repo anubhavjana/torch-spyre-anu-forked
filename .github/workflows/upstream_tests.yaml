@@ -1,0 +1,79 @@
+name: upstream-pytorch-tests
+
+# on:
+#   # Run automatically on every merge to main
+#   push:
+#     branches: [main]
+on:
+  push:
+    branches:
+      - main
+      - anu_ga_upstream_torch_test_workflow  # temporary, remove before merge
+
+  # Allow manual triggering from any branch — useful for testing on a feature
+  # branch before raising a PR.
+  # To add a new suite later: add its config filename to the matrix below.
+  workflow_dispatch: null
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  upstream-tests:
+    name: ${{ matrix.suite.name }}
+    runs-on: official-aiu-x86-64-arc-runner-set-v3
+    timeout-minutes: 720
+
+    # ---------------------------------------------------------------------------
+    # To add a new upstream test suite, append an entry here:
+    #   - name: <human-readable label shown in the GHA UI>
+    #     config: <filename inside tests/configs/>
+    # ---------------------------------------------------------------------------
+    strategy:
+      fail-fast: false   # run all suites even if one fails
+      matrix:
+        suite:
+          - name: Test View Ops
+            config: test_suite_config.yaml
+          - name: Test Profiler
+            config: test_profiler_config.yaml
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Gather environment info
+        run: |
+          echo 'gather info start'
+          pwd
+          ls -la
+          whoami
+          id
+          echo "GHA_RUNNER_POD_NODE_NAME $GHA_RUNNER_POD_NODE_NAME"
+          echo "PATH $PATH"
+          echo "HOME $HOME"
+          python3 --version
+          python3 -c 'import sys; print(sys.path)'
+          echo 'gather info end'
+
+      - name: Install torch-spyre package and dependencies
+        run: |
+          echo 'installing with dependencies, this could take a while...'
+          pip install uv
+          uv sync --all-extras --active --inexact --reinstall-package torch-spyre -v
+
+      - name: Run ${{ matrix.suite.name }} upstream test suite
+        working-directory: tests
+        run: |-
+          echo 'Running ${{ matrix.suite.name }} upstream tests...'
+          bash run_test.sh configs/${{ matrix.suite.config }} -v
+          echo '${{ matrix.suite.name }} upstream tests done'
