@@ -1,17 +1,16 @@
 name: upstream-pytorch-tests
 
-# on:
-#   # Run automatically on every merge to main
-#   push:
-#     branches: [main]
 on:
+  # Run automatically on every merge to main
   push:
-    branches:
-      - main
-
+    branches: [main]
   pull_request:
     branches: [main]      # fires on EVERY commit pushed to a PR
 
+  # Allow manual triggering from any branch — useful for testing on a feature
+  # branch before raising a PR.
+  # To add a new suite later: add its config filename to the matrix below.
+  workflow_dispatch: null
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -40,14 +39,27 @@ jobs:
       fail-fast: false   # run all suites even if one fails
       matrix:
         suite:
-          - name: Test View Ops
+          - name: View ops
             config: test_suite_config.yaml
-          - name: Test Profiler
+          - name: Profiler
             config: test_profiler_config.yaml
 
     steps:
-      - name: Checkout repository
+      - name: Checkout torch-spyre repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          path: torch-spyre
+
+      - name: Checkout PyTorch source at release/2.10
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          repository: pytorch/pytorch
+          ref: release/2.10
+          submodules: recursive
+          path: pytorch
+
+      - name: Set TORCH_ROOT
+        run: echo "TORCH_ROOT=$GITHUB_WORKSPACE/pytorch" >> "$GITHUB_ENV"
 
       - name: Gather environment info
         run: |
@@ -59,18 +71,21 @@ jobs:
           echo "GHA_RUNNER_POD_NODE_NAME $GHA_RUNNER_POD_NODE_NAME"
           echo "PATH $PATH"
           echo "HOME $HOME"
+          echo "TORCH_ROOT $TORCH_ROOT"
           python3 --version
           python3 -c 'import sys; print(sys.path)'
           echo 'gather info end'
 
       - name: Install torch-spyre package and dependencies
+        working-directory: torch-spyre
         run: |
           echo 'installing with dependencies, this could take a while...'
           pip install uv
           uv sync --all-extras --active --inexact --reinstall-package torch-spyre -v
+          uv pip install pydantic
 
       - name: Run ${{ matrix.suite.name }} upstream test suite
-        working-directory: tests
+        working-directory: torch-spyre/tests
         run: |-
           echo 'Running ${{ matrix.suite.name }} upstream tests...'
           bash run_test.sh configs/${{ matrix.suite.config }} -v
