@@ -4,10 +4,6 @@ on:
   # Run automatically on every merge to main
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
-
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
