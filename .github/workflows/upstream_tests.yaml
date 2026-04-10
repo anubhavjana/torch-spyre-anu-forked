@@ -5,12 +5,8 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]      # fires on EVERY commit pushed to a PR
+    branches: [main]
 
-  # Allow manual triggering from any branch — useful for testing on a feature
-  # branch before raising a PR.
-  # To add a new suite later: add its config filename to the matrix below.
-  workflow_dispatch: null
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -50,7 +46,32 @@ jobs:
         with:
           path: torch-spyre
 
+      # ---------------------------------------------------------------------------
+      # PyTorch source caching
+      #
+      # Cloning pytorch/pytorch at release/2.10 with all submodules is expensive.
+      # We cache the entire checkout keyed on the latest commit SHA of release/2.10
+      # so the clone only happens when the branch actually updates upstream.
+      #
+      # Cache hit  --> restore from cache, skip checkout (saves several minutes)
+      # Cache miss --> shallow clone + submodules, then save to cache for next run
+      # ---------------------------------------------------------------------------
+      - name: Get latest commit SHA of pytorch release/2.10
+        id: pytorch-sha
+        run: |
+          SHA=$(git ls-remote https://github.com/pytorch/pytorch.git refs/heads/release/2.10 | cut -f1)
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "PyTorch release/2.10 HEAD: $SHA"
+
+      - name: Restore PyTorch source from cache
+        id: pytorch-cache
+        uses: actions/cache@v4
+        with:
+          path: pytorch
+          key: pytorch-release-2.10-${{ steps.pytorch-sha.outputs.sha }}
+
       - name: Checkout PyTorch source at release/2.10
+        if: steps.pytorch-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: pytorch/pytorch
