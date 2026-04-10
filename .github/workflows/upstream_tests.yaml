@@ -8,15 +8,10 @@ on:
   push:
     branches:
       - main
-      - anu_ga_upstream_torch_test_workflow  # temporary, remove before merge
 
   pull_request:
     branches: [main]      # fires on EVERY commit pushed to a PR
 
-  # Allow manual triggering from any branch — useful for testing on a feature
-  # branch before raising a PR.
-  # To add a new suite later: add its config filename to the matrix below.
-  workflow_dispatch: null
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
