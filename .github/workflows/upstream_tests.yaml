@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+  pull_request:
+    branches: [main]
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -57,20 +60,20 @@ jobs:
         run: |
           # Extract the version constraint, e.g. "2.10.0" from "torch~=2.10.0"
           VERSION=$(python3 - <<'PYEOF'
-          import re
-          with open("pyproject.toml") as f:
-              content = f.read()
-          # Match torch~=X.Y.Z or torch>=X.Y.Z under [project] dependencies
-          match = re.search(r'"torch[^"]*~=(\d+\.\d+)', content)
-          if not match:
-              match = re.search(r'"torch[^"]*>=(\d+\.\d+)', content)
-          print(match.group(1))
-          PYEOF
-                    )
-                    BRANCH="release/${VERSION}"
-                    echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-                    echo "Derived PyTorch branch: $BRANCH"
+          import tomllib
 
+          with open("pyproject.toml", "rb") as f:
+              data = tomllib.load(f)
+
+          requires = data.get('build-system', {}).get('requires', [])
+          torch_dep = next(x for x in requires if x.startswith('torch'))
+          version = torch_dep.removeprefix('torch~=')   # e.g. "2.10.0"
+          print('.'.join(version.split('.')[:2]))        # --> "2.10"
+          PYEOF
+          )
+          BRANCH="release/${VERSION}"
+          echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "Derived PyTorch branch: $BRANCH"
       # ---------------------------------------------------------------------------
       # PyTorch source caching
       #
