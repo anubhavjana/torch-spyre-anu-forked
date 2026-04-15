@@ -1,4 +1,4 @@
-# Customization of Input Arguments for Tests -- Tensors, Keyword Arguments 
+# Customization of Input Arguments for Tests -- Tensors, Keyword Arguments
 
 - Authors: Anubhav Jana, Ashok Pon Kumar Sree Prakash (IBM Research, India)
 
@@ -163,16 +163,17 @@ args:
   - value: null       # None
   - value: false      # False
 ```
+
 `value` covers the non-tensor positional arguments that appear in most op call signatures -- things like a `dim` axis, a `repeats` count, an `alpha` scaling factor, or a `None` where an optional argument is not used.
- 
+
 Consider `torch.transpose(input, dim0, dim1)`. In Python you would call it as:
- 
+
 ```python
 torch.transpose(tensor, 1, 2)
 ```
- 
+
 The equivalent config — one tensor followed by two integer `value` entries:
- 
+
 ```yaml
 args:
   - tensor:
@@ -183,13 +184,13 @@ args:
   - value: 1          # dim0
   - value: 2          # dim1
 ```
- 
+
 Or `torch.clamp(input, min, max)` where one bound is disabled:
- 
+
 ```python
 torch.clamp(tensor, min=None, max=7.0)
 ```
- 
+
 ```yaml
 args:
   - tensor:
@@ -200,6 +201,7 @@ args:
   - value: null       # min -- disabled
   - value: 7.0        # max
 ```
+
 ---
 
 ### 4. `py` — a Python literal expression
@@ -430,6 +432,7 @@ output = torch.nn.functional.embedding(
 ---
 
 ### Tensor list (torch.cat style)
+
 ```python
 # Python
 output = torch.cat(
@@ -530,6 +533,7 @@ output = tensor.index_copy_(
 ### Large matmul shapes from model tracing
 
 Pin inputs to shapes observed in a GPT model trace:
+
 ```python
 # Python
 output = torch.bmm(
