@@ -95,14 +95,49 @@ When `stride` is specified, the framework allocates an appropriately-sized backi
 | `arange` | `torch.arange(shape[0], ...)` | Shape must be 1-D |
 | `eye` | `torch.eye(shape[0], ...)` | Shape must be 2-D with equal dimensions |
 | `full` | `torch.full(shape, fill_value, ...)` | Requires `init_args.fill_value` |
+| `file` | `torch.load(path)` or format-equivalent | Load tensor from a file on disk. Requires `init_args.path`. Supported formats: `.pt`, `.npy`, `.safetensors` |
 
 `init_args` sub-fields:
 
 ```yaml
 init_args:
-  low: 0            # randint only -- lower bound (default 0)
-  high: 1000        # randint only -- upper bound (required)
-  fill_value: 3.14  # full only -- scalar fill value (required)
+  low: 0                            # randint only -- lower bound (default 0)
+  high: 1000                        # randint only -- upper bound (required)
+  fill_value: 3.14                  # full only -- scalar fill value (required)
+  path: /path/to/tensor.pt          # file only -- path to tensor file (required)
+  key: weight                       # file only -- key to load from file (optional, for safetensors / dict-based .pt)
+```
+
+`path` accepts `.pt`, `.npy`, and `.safetensors` files. Use this when a tensor is too large or too specific to reconstruct from a simple init strategy — for example, a weight matrix captured during model tracing, or a reference input required for numerical comparison. The `shape` and `dtype` fields are still required and are validated against the loaded tensor at config load time; a mismatch raises an error.
+
+```yaml
+# Load a tensor saved from a model trace
+- tensor:
+    shape: [201088, 2880]
+    dtype: float16
+    device: spyre
+    init: file
+    init_args:
+      path: ${TORCH_DEVICE_ROOT}/tests/fixtures/embed_weight.pt
+
+# Load a specific key from a safetensors checkpoint
+- tensor:
+    shape: [4096, 2880]
+    dtype: float16
+    device: spyre
+    init: file
+    init_args:
+      path: ${TORCH_DEVICE_ROOT}/tests/fixtures/model.safetensors
+      key: model.layers.0.self_attn.q_proj.weight
+
+# Load a numpy array saved with np.save
+- tensor:
+    shape: [1, 11, 2880]
+    dtype: float16
+    device: spyre
+    init: file
+    init_args:
+      path: ${TORCH_DEVICE_ROOT}/tests/fixtures/hidden_states.npy
 ```
 
 `fill_value` accepts any number and populates every element of the tensor with that constant -- we may use it when an op's behaviour is sensitive to a specific input value, such as a padding sentinel, a fixed denominator, or a known mask value:
@@ -615,6 +650,10 @@ output = torch.nn.functional.softmax(
 | `eye` | Shape must be 2-D with equal dimensions |
 | `py` values | Must be parseable by `ast.literal_eval`. Arbitrary code execution is not permitted |
 | dtype mismatch with `@ops` variant | Warning emitted; variant dtype takes precedence and the tensor is cast |
+| `init_args.path` | Required when `init: file`. Must resolve to an existing file with a supported extension (`.pt`, `.npy`, `.safetensors`) |
+| `init_args.key` | Optional when `init: file`. Required when the `.pt` file contains a `dict` or the `.safetensors` file holds multiple tensors and no default can be inferred |
+| `tensor.shape` when `init: file` | Must match the shape of the loaded tensor exactly. Mismatch raises a validation error at config load time |
+| `tensor.dtype` when `init: file` | Must match the dtype of the loaded tensor. Mismatch raises a validation error at config load time |
 
 ---
 
@@ -633,6 +672,8 @@ edits.inputs
 │   │           low:         int               optional (randint)
 │   │           high:        int               required for randint
 │   │           fill_value:  number            required for full
+│   │           path:        string            required for file          
+│   │           key:         string            optional for file     
 │   │       stride:          [int, ...]        optional
 │   │       storage_offset:  int               optional
 │   │
