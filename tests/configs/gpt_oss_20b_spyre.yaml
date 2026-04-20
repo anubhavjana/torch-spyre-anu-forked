@@ -5,7 +5,7 @@ test_suite_config:
       tests:
         - names:
             - TestSpyreModelOps::test_model_ops_db
-          mode: xfail
+          mode: mandatory_success
           tags:
             - gpt-oss-20b-spyre
             - constant
@@ -17,6 +17,7 @@ test_suite_config:
             ops:
               include:
                 - name: torch.nn.functional.embedding
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:471 in forward, code: inputs_embeds = self.embed_tokens(input_ids)'
                   inputs:
                     args:
@@ -43,6 +44,7 @@ test_suite_config:
                       - value: false
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:201 in forward, code: inv_freq_expanded = self.inv_freq[None,
                     :, None].float().expand(position_ids.shape[0], -1, 1).to(x.device)'
                   inputs:
@@ -70,6 +72,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.Tensor.expand
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:201 in forward, code: inv_freq_expanded = self.inv_freq[None,
                     :, None].float().expand(position_ids.shape[0], -1, 1).to(x.device)'
                   inputs:
@@ -86,6 +89,7 @@ test_suite_config:
                       - value: 1
 
                 - name: torch.to
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:201 in forward, code: inv_freq_expanded = self.inv_freq[None,
                     :, None].float().expand(position_ids.shape[0], -1, 1).to(x.device)'
                   inputs:
@@ -100,6 +104,7 @@ test_suite_config:
                       - value: cuda:0
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:202 in forward, code: position_ids_expanded = position_ids[:,
                     None, :].float()'
                   inputs:
@@ -164,6 +169,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.transpose
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:206 in forward, code: freqs = (inv_freq_expanded.float() @
                     position_ids_expanded.float()).transpose(1, 2)'
                   inputs:
@@ -191,6 +197,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:208 in forward, code: cos = emb.cos() * self.attention_scaling'
                   inputs:
                     args:
@@ -216,6 +223,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.pow
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:60 in forward, code: variance = hidden_states.pow(2).mean(-1,
                     keepdim=True)'
                   inputs:
@@ -230,6 +238,7 @@ test_suite_config:
                       - value: 2
 
                 - name: torch.mean
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:60 in forward, code: variance = hidden_states.pow(2).mean(-1,
                     keepdim=True)'
                   inputs:
@@ -246,6 +255,7 @@ test_suite_config:
                       keepdim: true
 
                 - name: torch.add
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:61 in forward, code: hidden_states = hidden_states * torch.rsqrt(variance
                     + self.variance_epsilon)'
                   inputs:
@@ -339,6 +349,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.Tensor.view
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:317 in forward, code: query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1,
                     2)'
                   inputs:
@@ -353,6 +364,7 @@ test_suite_config:
                       - value: (1, 11, -1, 64)
 
                 - name: torch.transpose
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:317 in forward, code: query_states = self.q_proj(hidden_states).view(hidden_shape).transpose(1,
                     2)'
                   inputs:
@@ -395,6 +407,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.Tensor.view
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:318 in forward, code: key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1,
                     2)'
                   inputs:
@@ -409,6 +422,7 @@ test_suite_config:
                       - value: (1, 11, -1, 64)
 
                 - name: torch.transpose
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:318 in forward, code: key_states = self.k_proj(hidden_states).view(hidden_shape).transpose(1,
                     2)'
                   inputs:
@@ -424,6 +438,7 @@ test_suite_config:
                       - value: 2
 
                 - name: torch.unsqueeze
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:238 in apply_rotary_pos_emb, code: cos = cos.unsqueeze(unsqueeze_dim)'
                   inputs:
                     args:
@@ -437,6 +452,7 @@ test_suite_config:
                       - value: 1
 
                 - name: torch.chunk
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:231 in _apply_rotary_emb, code: first_half, second_half =
                     torch.chunk(x, 2, dim=-1)'
                   inputs:
@@ -453,6 +469,7 @@ test_suite_config:
                       dim: -1
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:231 in _apply_rotary_emb, code: first_half, second_half =
                     torch.chunk(x, 2, dim=-1)'
                   inputs:
@@ -547,6 +564,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.cat
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:234 in _apply_rotary_emb, code: return torch.cat((first_,
                     second_), dim=-1)'
                   inputs:
@@ -568,6 +586,7 @@ test_suite_config:
                       dim: -1
 
                 - name: torch.chunk
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:231 in _apply_rotary_emb, code: first_half, second_half =
                     torch.chunk(x, 2, dim=-1)'
                   inputs:
@@ -584,6 +603,7 @@ test_suite_config:
                       dim: -1
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:231 in _apply_rotary_emb, code: first_half, second_half =
                     torch.chunk(x, 2, dim=-1)'
                   inputs:
@@ -678,6 +698,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.cat
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:234 in _apply_rotary_emb, code: return torch.cat((first_,
                     second_), dim=-1)'
                   inputs:
@@ -699,6 +720,7 @@ test_suite_config:
                       dim: -1
 
                 - name: torch.zeros
+                  tags: [constant]
                   description: 'site-packages/transformers/cache_utils.py:290 in lazy_initialization, code: self.keys = torch.zeros('
                   inputs:
                     args:
@@ -708,6 +730,7 @@ test_suite_config:
                       device: cuda:0
 
                 - name: torch.index_copy_
+                  tags: [constant]
                   description: 'site-packages/transformers/cache_utils.py:451 in update, code: self.keys.index_copy_(2, cache_position, key_states)'
                   inputs:
                     args:
@@ -737,6 +760,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.index_copy_
+                  tags: [constant]
                   description: 'site-packages/transformers/cache_utils.py:452 in update, code: self.values.index_copy_(2, cache_position, value_states)'
                   inputs:
                     args:
@@ -766,6 +790,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:222 in repeat_kv, code: hidden_states = hidden_states[:, :,
                     None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)'
                   inputs:
@@ -780,6 +805,7 @@ test_suite_config:
                       - py: (slice(None, None, None), slice(None, None, None), None, slice(None, None, None), slice(None, None, None))
 
                 - name: torch.Tensor.expand
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:222 in repeat_kv, code: hidden_states = hidden_states[:, :,
                     None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)'
                   inputs:
@@ -798,6 +824,7 @@ test_suite_config:
                       - value: 64
 
                 - name: torch.reshape
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:223 in repeat_kv, code: return hidden_states.reshape(batch,
                     num_key_value_heads * n_rep, slen, head_dim)'
                   inputs:
@@ -812,6 +839,7 @@ test_suite_config:
                       - value: (1, 64, 128, 64)
 
                 - name: torch.transpose
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:257 in eager_attention_forward, code: attn_weights = torch.matmul(query,
                     key_states.transpose(2, 3)) * scaling'
                   inputs:
@@ -847,6 +875,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:257 in eager_attention_forward, code: attn_weights = torch.matmul(query,
                     key_states.transpose(2, 3)) * scaling'
                   inputs:
@@ -881,6 +910,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.reshape
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:261 in eager_attention_forward, code: sinks = module.sinks.reshape(1,
                     -1, 1, 1).expand(query.shape[0], -1, query.shape[-2], -1)'
                   inputs:
@@ -895,6 +925,7 @@ test_suite_config:
                       - value: (1, -1, 1, 1)
 
                 - name: torch.Tensor.expand
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:261 in eager_attention_forward, code: sinks = module.sinks.reshape(1,
                     -1, 1, 1).expand(query.shape[0], -1, query.shape[-2], -1)'
                   inputs:
@@ -949,6 +980,7 @@ test_suite_config:
                       keepdim: true
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:267 in eager_attention_forward, code: combined_logits = combined_logits
                     - combined_logits.max(dim=-1, keepdim=True).values'
                   inputs:
@@ -1001,6 +1033,7 @@ test_suite_config:
                       dtype: torch.float16
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:269 in eager_attention_forward, code: scores = probs[...,
                     :-1]'
                   inputs:
@@ -1051,6 +1084,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.transpose
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:272 in eager_attention_forward, code: attn_output = attn_output.transpose(1,
                     2).contiguous()'
                   inputs:
@@ -1079,6 +1113,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.reshape
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:345 in forward, code: attn_output = attn_output.reshape(*input_shape,
                     -1).contiguous()'
                   inputs:
@@ -1165,6 +1200,7 @@ test_suite_config:
                       - value: (-1, 2880)
 
                 - name: torch.nn.functional.linear
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:127 in forward, code: router_logits = F.linear(hidden_states,
                     self.weight, self.bias)'
                   inputs:
@@ -1208,6 +1244,7 @@ test_suite_config:
                       dim: -1
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:128 in forward, code: router_top_value, router_indices = torch.topk(router_logits,
                     self.top_k, dim=-1)'
                   inputs:
@@ -1224,6 +1261,7 @@ test_suite_config:
                       - value: 0
 
                 - name: torch.nn.functional.softmax
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:129 in forward, code: router_scores = torch.nn.functional.softmax(router_top_value,
                     dim=1, dtype=router_top_value.dtype)'
                   inputs:
@@ -1249,6 +1287,7 @@ test_suite_config:
                       device: cuda:0
 
                 - name: torch.unsqueeze
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:115 in batched_mm_experts_forward, code: token_idx = torch.arange(num_tokens,
                     device=device).unsqueeze(1).expand(-1, num_top_k).reshape(-1)'
                   inputs:
@@ -1265,6 +1304,7 @@ test_suite_config:
                       - value: 1
 
                 - name: torch.Tensor.expand
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:115 in batched_mm_experts_forward, code: token_idx = torch.arange(num_tokens,
                     device=device).unsqueeze(1).expand(-1, num_top_k).reshape(-1)'
                   inputs:
@@ -1282,6 +1322,7 @@ test_suite_config:
                       - value: 4
 
                 - name: torch.reshape
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:115 in batched_mm_experts_forward, code: token_idx = torch.arange(num_tokens,
                     device=device).unsqueeze(1).expand(-1, num_top_k).reshape(-1)'
                   inputs:
@@ -1298,6 +1339,7 @@ test_suite_config:
                       - value: (-1,)
 
                 - name: torch.reshape
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:116 in batched_mm_experts_forward, code: sample_weights = top_k_weights.reshape(-1)'
                   inputs:
                     args:
@@ -1311,6 +1353,7 @@ test_suite_config:
                       - value: (-1,)
 
                 - name: torch.reshape
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:117 in batched_mm_experts_forward, code: expert_ids = top_k_index.reshape(-1)'
                   inputs:
                     args:
@@ -1326,6 +1369,7 @@ test_suite_config:
                       - value: (-1,)
 
                 - name: torch.lt
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:121 in batched_mm_experts_forward, code: valid_mask = expert_ids < self.num_experts'
                   inputs:
                     args:
@@ -1341,6 +1385,7 @@ test_suite_config:
                       - value: 32
 
                 - name: torch.clamp
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:122 in batched_mm_experts_forward, code: expert_ids_clamped = expert_ids.clamp(0,
                     self.num_experts - 1)'
                   inputs:
@@ -1358,6 +1403,7 @@ test_suite_config:
                       - value: 31
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:125 in batched_mm_experts_forward, code: selected_hidden_states = hidden_states[token_idx]'
                   inputs:
                     args:
@@ -1379,6 +1425,7 @@ test_suite_config:
                             high: 11
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:128 in batched_mm_experts_forward, code: selected_gate_up = self.gate_up_proj[expert_ids_clamped]'
                   inputs:
                     args:
@@ -1497,6 +1544,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.squeeze
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:91 in _batched_linear, code: out = torch.bmm(input.unsqueeze(1), weight).squeeze(1)'
                   inputs:
                     args:
@@ -1529,6 +1577,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:83 in _apply_gate, code: gate, up = gate_up[..., ::2], gate_up[...,
                     1::2]'
                   inputs:
@@ -1558,6 +1607,7 @@ test_suite_config:
                       max: 7.0
 
                 - name: torch.clamp
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:85 in _apply_gate, code: up = up.clamp(min=-self.limit, max=self.limit)'
                   inputs:
                     args:
@@ -1600,6 +1650,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:86 in _apply_gate, code: glu = gate * torch.sigmoid(gate *
                     self.alpha)'
                   inputs:
@@ -1633,6 +1684,7 @@ test_suite_config:
                       - value: 1
 
                 - name: torch.bmm
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:91 in _batched_linear, code: out = torch.bmm(input.unsqueeze(1), weight).squeeze(1)'
                   inputs:
                     args:
@@ -1684,6 +1736,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.unsqueeze
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:149 in batched_mm_experts_forward, code: out_per_sample = out_per_sample
                     * sample_weights.unsqueeze(-1)'
                   inputs:
@@ -1718,6 +1771,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.unsqueeze
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:150 in batched_mm_experts_forward, code: out_per_sample = out_per_sample
                     * valid_mask.unsqueeze(-1).to(out_per_sample.dtype)'
                   inputs:
@@ -1732,6 +1786,7 @@ test_suite_config:
                       - value: -1
 
                 - name: torch.Tensor.view
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:154 in batched_mm_experts_forward, code: final_hidden_states = out_per_sample.view(num_tokens,
                     num_top_k, hidden_dim).sum(dim=1)'
                   inputs:
@@ -1763,6 +1818,7 @@ test_suite_config:
                       dim: 1
 
                 - name: torch.reshape
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:145 in forward, code: hidden_states = hidden_states.reshape(batch_size,
                     sequence_length, hidden_dim)'
                   inputs:
@@ -1777,6 +1833,7 @@ test_suite_config:
                       - value: (1, 11, 2880)
 
                 - name: torch.zeros
+                  tags: [constant]
                   description: 'site-packages/transformers/cache_utils.py:290 in lazy_initialization, code: self.keys = torch.zeros('
                   inputs:
                     args:
@@ -1786,6 +1843,7 @@ test_suite_config:
                       device: cuda:0
 
                 - name: torch.index_copy_
+                  tags: [constant]
                   description: 'site-packages/transformers/cache_utils.py:340 in update, code: self.keys.index_copy_(2, cache_position, key_states)'
                   inputs:
                     args:
@@ -1815,6 +1873,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.index_copy_
+                  tags: [constant]
                   description: 'site-packages/transformers/cache_utils.py:341 in update, code: self.values.index_copy_(2, cache_position, value_states)'
                   inputs:
                     args:
@@ -1844,6 +1903,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:222 in repeat_kv, code: hidden_states = hidden_states[:, :,
                     None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)'
                   inputs:
@@ -1858,6 +1918,7 @@ test_suite_config:
                       - py: (slice(None, None, None), slice(None, None, None), None, slice(None, None, None), slice(None, None, None))
 
                 - name: torch.Tensor.expand
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:222 in repeat_kv, code: hidden_states = hidden_states[:, :,
                     None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)'
                   inputs:
@@ -1876,6 +1937,7 @@ test_suite_config:
                       - value: 64
 
                 - name: torch.reshape
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:223 in repeat_kv, code: return hidden_states.reshape(batch,
                     num_key_value_heads * n_rep, slen, head_dim)'
                   inputs:
@@ -1996,6 +2058,7 @@ test_suite_config:
                       keepdim: true
 
                 - name: torch.sub
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:267 in eager_attention_forward, code: combined_logits = combined_logits
                     - combined_logits.max(dim=-1, keepdim=True).values'
                   inputs:
@@ -2016,6 +2079,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.nn.functional.softmax
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:268 in eager_attention_forward, code: probs = F.softmax(combined_logits,
                     dim=-1, dtype=combined_logits.dtype)'
                   inputs:
@@ -2046,6 +2110,7 @@ test_suite_config:
                       - py: (Ellipsis, slice(None, -1, None))
 
                 - name: torch.nn.functional.dropout
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:270 in eager_attention_forward, code: attn_weights = nn.functional.dropout(scores,
                     p=dropout, training=module.training).to(value_states.dtype)'
                   inputs:
@@ -2062,6 +2127,7 @@ test_suite_config:
                       training: false
 
                 - name: torch.matmul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:271 in eager_attention_forward, code: attn_output = torch.matmul(attn_weights,
                     value_states)'
                   inputs:
@@ -2161,6 +2227,7 @@ test_suite_config:
                       - py: (slice(None, None, None), None, slice(None, None, None))
 
                 - name: torch.float
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:202 in forward, code: position_ids_expanded = position_ids[:,
                     None, :].float()'
                   inputs:
@@ -2176,6 +2243,7 @@ test_suite_config:
                             high: 1000
 
                 - name: torch.float
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:206 in forward, code: freqs = (inv_freq_expanded.float() @
                     position_ids_expanded.float()).transpose(1, 2)'
                   inputs:
@@ -2209,6 +2277,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.transpose
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:206 in forward, code: freqs = (inv_freq_expanded.float() @
                     position_ids_expanded.float()).transpose(1, 2)'
                   inputs:
@@ -2236,6 +2305,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:208 in forward, code: cos = emb.cos() * self.attention_scaling'
                   inputs:
                     args:
@@ -2249,6 +2319,7 @@ test_suite_config:
                       - value: 1.3465735902799727
 
                 - name: torch.sin
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:209 in forward, code: sin = emb.sin() * self.attention_scaling'
                   inputs:
                     args:
@@ -2261,6 +2332,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.pow
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:60 in forward, code: variance = hidden_states.pow(2).mean(-1,
                     keepdim=True)'
                   inputs:
@@ -2275,6 +2347,7 @@ test_suite_config:
                       - value: 2
 
                 - name: torch.mean
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:60 in forward, code: variance = hidden_states.pow(2).mean(-1,
                     keepdim=True)'
                   inputs:
@@ -2291,6 +2364,7 @@ test_suite_config:
                       keepdim: true
 
                 - name: torch.add
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:61 in forward, code: hidden_states = hidden_states * torch.rsqrt(variance
                     + self.variance_epsilon)'
                   inputs:
@@ -2305,6 +2379,7 @@ test_suite_config:
                       - value: 1.0e-05
 
                 - name: torch.rsqrt
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:61 in forward, code: hidden_states = hidden_states * torch.rsqrt(variance
                     + self.variance_epsilon)'
                   inputs:
@@ -2318,6 +2393,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:61 in forward, code: hidden_states = hidden_states * torch.rsqrt(variance
                     + self.variance_epsilon)'
                   inputs:
@@ -2469,6 +2545,7 @@ test_suite_config:
                       - value: 2
 
                 - name: torch.unsqueeze
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:238 in apply_rotary_pos_emb, code: cos = cos.unsqueeze(unsqueeze_dim)'
                   inputs:
                     args:
@@ -2512,6 +2589,7 @@ test_suite_config:
                       - value: 0
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:232 in _apply_rotary_emb, code: first_ = first_half * cos
                     - second_half * sin'
                   inputs:
@@ -2532,6 +2610,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:232 in _apply_rotary_emb, code: first_ = first_half * cos
                     - second_half * sin'
                   inputs:
@@ -2552,6 +2631,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.sub
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:232 in _apply_rotary_emb, code: first_ = first_half * cos
                     - second_half * sin'
                   inputs:
@@ -2572,6 +2652,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.add
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:233 in _apply_rotary_emb, code: second_ = second_half * cos
                     + first_half * sin'
                   inputs:
@@ -2643,6 +2724,7 @@ test_suite_config:
                       - value: 0
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:232 in _apply_rotary_emb, code: first_ = first_half * cos
                     - second_half * sin'
                   inputs:
@@ -2663,6 +2745,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:232 in _apply_rotary_emb, code: first_ = first_half * cos
                     - second_half * sin'
                   inputs:
@@ -2683,6 +2766,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.sub
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:232 in _apply_rotary_emb, code: first_ = first_half * cos
                     - second_half * sin'
                   inputs:
@@ -2723,6 +2807,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.cat
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:234 in _apply_rotary_emb, code: return torch.cat((first_,
                     second_), dim=-1)'
                   inputs:
@@ -2744,6 +2829,7 @@ test_suite_config:
                       dim: -1
 
                 - name: torch.index_copy_
+                  tags: [constant]
                   description: 'site-packages/transformers/cache_utils.py:451 in update, code: self.keys.index_copy_(2, cache_position, key_states)'
                   inputs:
                     args:
@@ -2822,6 +2908,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:257 in eager_attention_forward, code: attn_weights = torch.matmul(query,
                     key_states.transpose(2, 3)) * scaling'
                   inputs:
@@ -2836,6 +2923,7 @@ test_suite_config:
                       - value: 0.125
 
                 - name: torch.add
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:259 in eager_attention_forward, code: attn_weights = attn_weights
                     + attention_mask'
                   inputs:
@@ -2856,6 +2944,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.cat
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:262 in eager_attention_forward, code: combined_logits = torch.cat([attn_weights,
                     sinks], dim=-1)'
                   inputs:
@@ -2877,6 +2966,7 @@ test_suite_config:
                       dim: -1
 
                 - name: torch.max
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:267 in eager_attention_forward, code: combined_logits = combined_logits
                     - combined_logits.max(dim=-1, keepdim=True).values'
                   inputs:
@@ -2893,6 +2983,7 @@ test_suite_config:
                       keepdim: true
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:267 in eager_attention_forward, code: combined_logits = combined_logits
                     - combined_logits.max(dim=-1, keepdim=True).values'
                   inputs:
@@ -2909,6 +3000,7 @@ test_suite_config:
                       - value: 0
 
                 - name: torch.sub
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:267 in eager_attention_forward, code: combined_logits = combined_logits
                     - combined_logits.max(dim=-1, keepdim=True).values'
                   inputs:
@@ -2929,6 +3021,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.nn.functional.softmax
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:268 in eager_attention_forward, code: probs = F.softmax(combined_logits,
                     dim=-1, dtype=combined_logits.dtype)'
                   inputs:
@@ -2945,6 +3038,7 @@ test_suite_config:
                       dtype: torch.float16
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:269 in eager_attention_forward, code: scores = probs[...,
                     :-1]'
                   inputs:
@@ -2975,6 +3069,7 @@ test_suite_config:
                       training: false
 
                 - name: torch.matmul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:271 in eager_attention_forward, code: attn_output = torch.matmul(attn_weights,
                     value_states)'
                   inputs:
@@ -2995,6 +3090,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.transpose
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:272 in eager_attention_forward, code: attn_output = attn_output.transpose(1,
                     2).contiguous()'
                   inputs:
@@ -3010,6 +3106,7 @@ test_suite_config:
                       - value: 2
 
                 - name: torch.Tensor.contiguous
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:272 in eager_attention_forward, code: attn_output = attn_output.transpose(1,
                     2).contiguous()'
                   inputs:
@@ -3023,6 +3120,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.reshape
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:345 in forward, code: attn_output = attn_output.reshape(*input_shape,
                     -1).contiguous()'
                   inputs:
@@ -3037,6 +3135,7 @@ test_suite_config:
                       - value: (1, 1, -1)
 
                 - name: torch.Tensor.contiguous
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:345 in forward, code: attn_output = attn_output.reshape(*input_shape,
                     -1).contiguous()'
                   inputs:
@@ -3152,6 +3251,7 @@ test_suite_config:
                       dim: -1
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:128 in forward, code: router_top_value, router_indices = torch.topk(router_logits,
                     self.top_k, dim=-1)'
                   inputs:
@@ -3184,6 +3284,7 @@ test_suite_config:
                       dtype: torch.float16
 
                 - name: torch.unsqueeze
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:115 in batched_mm_experts_forward, code: token_idx = torch.arange(num_tokens,
                     device=device).unsqueeze(1).expand(-1, num_top_k).reshape(-1)'
                   inputs:
@@ -3217,6 +3318,7 @@ test_suite_config:
                       - value: 4
 
                 - name: torch.reshape
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:115 in batched_mm_experts_forward, code: token_idx = torch.arange(num_tokens,
                     device=device).unsqueeze(1).expand(-1, num_top_k).reshape(-1)'
                   inputs:
@@ -3261,6 +3363,7 @@ test_suite_config:
                       - value: (-1,)
 
                 - name: torch.lt
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:121 in batched_mm_experts_forward, code: valid_mask = expert_ids < self.num_experts'
                   inputs:
                     args:
@@ -3293,6 +3396,7 @@ test_suite_config:
                       - value: 31
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:125 in batched_mm_experts_forward, code: selected_hidden_states = hidden_states[token_idx]'
                   inputs:
                     args:
@@ -3335,6 +3439,7 @@ test_suite_config:
                             high: 32
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:129 in batched_mm_experts_forward, code: selected_down = self.down_proj[expert_ids_clamped]'
                   inputs:
                     args:
@@ -3400,6 +3505,7 @@ test_suite_config:
                             high: 32
 
                 - name: torch.unsqueeze
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:91 in _batched_linear, code: out = torch.bmm(input.unsqueeze(1), weight).squeeze(1)'
                   inputs:
                     args:
@@ -3445,6 +3551,7 @@ test_suite_config:
                       - value: 1
 
                 - name: torch.add
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:97 in _batched_linear, code: out = out + bias'
                   inputs:
                     args:
@@ -3478,6 +3585,7 @@ test_suite_config:
                       - py: (Ellipsis, slice(None, None, 2))
 
                 - name: torch.clamp
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:84 in _apply_gate, code: gate = gate.clamp(min=None, max=self.limit)'
                   inputs:
                     args:
@@ -3493,6 +3601,7 @@ test_suite_config:
                       max: 7.0
 
                 - name: torch.clamp
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:85 in _apply_gate, code: up = up.clamp(min=-self.limit, max=self.limit)'
                   inputs:
                     args:
@@ -3522,6 +3631,7 @@ test_suite_config:
                       - value: 1.702
 
                 - name: torch.sigmoid
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:86 in _apply_gate, code: glu = gate * torch.sigmoid(gate *
                     self.alpha)'
                   inputs:
@@ -3535,6 +3645,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:86 in _apply_gate, code: glu = gate * torch.sigmoid(gate *
                     self.alpha)'
                   inputs:
@@ -3633,6 +3744,7 @@ test_suite_config:
                       - value: -1
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:149 in batched_mm_experts_forward, code: out_per_sample = out_per_sample
                     * sample_weights.unsqueeze(-1)'
                   inputs:
@@ -3683,6 +3795,7 @@ test_suite_config:
                       - value: 2880
 
                 - name: torch.sum
+                  tags: [constant]
                   description: 'site-packages/transformers/integrations/moe.py:154 in batched_mm_experts_forward, code: final_hidden_states = out_per_sample.view(num_tokens,
                     num_top_k, hidden_dim).sum(dim=1)'
                   inputs:
@@ -3741,6 +3854,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.index_copy_
+                  tags: [constant]
                   description: 'site-packages/transformers/cache_utils.py:341 in update, code: self.values.index_copy_(2, cache_position, value_states)'
                   inputs:
                     args:
@@ -3770,6 +3884,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.matmul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:257 in eager_attention_forward, code: attn_weights = torch.matmul(query,
                     key_states.transpose(2, 3)) * scaling'
                   inputs:
@@ -3790,6 +3905,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.mul
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:257 in eager_attention_forward, code: attn_weights = torch.matmul(query,
                     key_states.transpose(2, 3)) * scaling'
                   inputs:
@@ -3824,6 +3940,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.cat
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:262 in eager_attention_forward, code: combined_logits = torch.cat([attn_weights,
                     sinks], dim=-1)'
                   inputs:
@@ -3897,6 +4014,7 @@ test_suite_config:
                       dtype: torch.float16
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:269 in eager_attention_forward, code: scores = probs[...,
                     :-1]'
                   inputs:
@@ -3947,6 +4065,7 @@ test_suite_config:
                           init: rand
 
                 - name: torch.getitem
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:675 in forward, code: logits = self.lm_head(hidden_states[:,
                     slice_indices, :])'
                   inputs:
@@ -3961,6 +4080,7 @@ test_suite_config:
                       - py: (slice(None, None, None), slice(-1, None, None), slice(None, None, None))
 
                 - name: torch.nn.functional.linear
+                  tags: [constant]
                   description: 'site-packages/transformers/models/gpt_oss/modeling_gpt_oss.py:675 in forward, code: logits = self.lm_head(hidden_states[:,
                     slice_indices, :])'
                   inputs:
