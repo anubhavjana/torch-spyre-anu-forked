@@ -7,7 +7,7 @@ test_suite_config:
             - TestSpyreModelOps::test_model_ops_db
           mode: mandatory_success
           tags:
-            - gpt-oss-20b-spyre
+            - gpt-oss-20b
             - constant
           seed: 123
           edits:
