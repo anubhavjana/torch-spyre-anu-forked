@@ -569,28 +569,6 @@ class OpsNamedItem(BaseModel):
         rest = tuple(cpu_args[1:]) if len(cpu_args) > 1 else ()
         return SampleInput(inp, args=rest, kwargs=resolved_kw)
 
-    def build_sample_input(
-        self,
-        *,
-        seed: Optional[int],
-        test_device: Optional[torch.device],
-        SampleInput,
-    ) -> Any:
-        """Build a SampleInput from the config inputs.
-
-        SampleInput is passed in as an argument to avoid importing
-        torch.testing internals into this models file.
-        """
-        cpu_args = self.inputs.build_cpu_args(
-            seed=seed,
-            op_name=self.name,
-            test_device=test_device,
-        )
-        resolved_kw = self.inputs.resolved_kwargs(test_device=test_device)
-        inp = cpu_args[0] if cpu_args else None
-        rest = tuple(cpu_args[1:]) if len(cpu_args) > 1 else ()
-        return SampleInput(inp, args=rest, kwargs=resolved_kw)
-
 
 class DtypeNamedItem(BaseModel):
     """A dtype item with optional precision override."""

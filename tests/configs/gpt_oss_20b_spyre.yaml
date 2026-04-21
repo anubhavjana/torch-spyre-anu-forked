@@ -10,9 +10,6 @@ test_suite_config:
             - gpt-oss-20b-spyre
             - constant
           seed: 123
-          precision:
-            atol: 0.005
-            rtol: 0.005
           edits:
             ops:
               include:
@@ -4100,3 +4097,10 @@ test_suite_config:
                           device: cuda:0
                           init: rand
                       - value: null
+
+  global:
+    supported_dtypes:
+      - name: float16
+        precision:
+          atol: 0.005
+          rtol: 0.005

@@ -269,6 +269,18 @@ def _get_global_dtype_precision() -> dict:
         return {}
 
 
+def _get_global_dtype_precision() -> dict:
+    """Load global dtype precision map from YAML config."""
+    path = os.environ.get(ENV_TEST_CONFIG)
+    if not path:
+        return {}
+    try:
+        config: OOTTestConfig = load_yaml_config(path)
+        return config.global_config.resolved_supported_dtypes_precision()
+    except Exception:
+        return {}
+
+
 # ---------------------------------------------------------------------------
 # TestSpyreModelOps
 #
