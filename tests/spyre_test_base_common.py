@@ -402,29 +402,6 @@ class TorchTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         super().instantiate_test(name, test, generic_cls=generic_cls)
         new_methods = set(cls.__dict__.keys()) - existing_methods
 
-        # Rename generated methods to embed all_tags in the method name.
-        # e.g. test_model_ops_db_torch_nn_functional_embedding__0_spyre_float16
-        #   -> test_model_ops_db_torch_nn_functional_embedding__gpt_oss_20b__constant__0_spyre_float16
-        if all_tags:
-            tag_suffix = "__".join(re.sub(r"[^a-zA-Z0-9]+", "_", t) for t in all_tags)
-            renamed: Set[str] = set()
-            for method_name in new_methods:
-                # Insert tag_suffix before the device+dtype suffix at the end.
-                # e.g test_model_ops_db_torch_mean__14__gpt_oss_20b__constant_spyre_float16
-                m = re.match(
-                    rf"^(.+)_({_SPYRE_DEVICE_TYPE}_[^_]+)$",
-                    method_name,
-                )
-                if m:
-                    new_name = f"{m.group(1)}__{tag_suffix}_{m.group(2)}"
-                    fn = cls.__dict__[method_name]
-                    setattr(cls, new_name, fn)
-                    delattr(cls, method_name)
-                    renamed.add(new_name)
-                else:
-                    renamed.add(method_name)
-            new_methods = renamed
-
         for method_name in new_methods:
             enabled, reason, is_xfail, is_strict = cls._should_run(
                 method_name=method_name,
