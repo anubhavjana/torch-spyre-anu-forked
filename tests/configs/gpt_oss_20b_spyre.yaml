@@ -9,7 +9,6 @@ test_suite_config:
           tags:
             - gpt-oss-20b
             - constant
-          seed: 123
           edits:
             ops:
               include:
@@ -4104,3 +4103,5 @@ test_suite_config:
         precision:
           atol: 0.005
           rtol: 0.005
+    input_config:
+      seed: 123
