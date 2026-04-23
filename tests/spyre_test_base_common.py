@@ -33,6 +33,7 @@ from spyre_test_parsing import (
 
 from spyre_upstream_patcher import (
     _OOTDtypePatcher,
+    _OOTModuleMarkerPatcher,
     _OOTOnlyOnPatcher,
     _OOTOpDtypeExpander,
     _OOTOpListPatcher,
@@ -376,7 +377,10 @@ class TorchTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
                 and isinstance(p.__self__, _modules_cls)
             ):
                 for mod_info in p.__self__.module_info_list:
-                    mod_cfg = cls.SUPPORTED_MODULES_CONFIG.get(mod_info.name)
+                    mod_cfg = cls.SUPPORTED_MODULES_CONFIG.get(
+                        mod_info.name
+                    ) or cls.SUPPORTED_MODULES_CONFIG.get(f"torch.{mod_info.name}")
+
                     if mod_cfg is not None:
                         resolved = mod_cfg.resolved_dtypes()
                         if resolved is not None:
@@ -403,6 +407,9 @@ class TorchTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
 
         # Dynamically adds pytest marker to each of ops and dtype passed to @ops
         _OOTOpMarkerPatcher(test).patch()
+
+        # Dynamically adds pytest marker to each of modules and dtype passed to @modules
+        _OOTModuleMarkerPatcher(test).patch()
 
         existing_methods = set(cls.__dict__.keys())
         super().instantiate_test(name, test, generic_cls=generic_cls)
