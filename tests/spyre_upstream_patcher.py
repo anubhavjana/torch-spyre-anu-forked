@@ -460,3 +460,65 @@ class _OOTPrecisionOverridePatcher:
                 # setdefault for global, direct assign for include (already merged above
                 # so just assign - include already won priority during merge)
                 self._underlying_fn.precision_overrides[dtype] = atol
+
+
+class _OOTOpMarkerPatcher:
+    """Patches @ops._parametrize_test to attach pytest markers directly on
+    each test_wrapper as it is yielded, before super().instantiate_test()
+    installs it as a class method.
+
+    """
+
+    def __init__(self, test: object) -> None:
+        from torch.testing._internal.common_device_type import ops as _ops_cls
+
+        underlying_fn = test.__func__ if hasattr(test, "__func__") else test
+        p = getattr(underlying_fn, "parametrize_fn", None)
+        self._ops_instance = (
+            p.__self__
+            if p is not None
+            and hasattr(p, "__self__")
+            and isinstance(p.__self__, _ops_cls)
+            else None
+        )
+        self._underlying_fn = underlying_fn
+
+    def patch(self) -> None:
+        if self._ops_instance is None:
+            return
+
+        import pytest
+        import re
+
+        original_parametrize_fn = (
+            self._underlying_fn.parametrize_fn
+        )  # bound method on fn
+
+        def patched_parametrize_fn(test, generic_cls, device_cls):
+            for (
+                test_wrapper,
+                test_name,
+                param_kwargs,
+                decorator_fn,
+            ) in original_parametrize_fn(test, generic_cls, device_cls):
+                op = param_kwargs.get("op")
+                dtype = param_kwargs.get("dtype")
+
+                if op is not None:
+                    op_safe = re.sub(r"[^a-zA-Z0-9_]", "_", op.name).strip("_")
+                    op_safe = re.sub(r"__\d+$", "", op_safe).strip("_")
+                    if op_safe:
+                        test_wrapper = pytest.mark.__getattr__(op_safe)(test_wrapper)
+
+                if dtype is not None:
+                    dtype_safe = re.sub(
+                        r"[^a-zA-Z0-9_]", "_", str(dtype).replace("torch.", "")
+                    ).strip("_")
+                    dtype_safe = re.sub(r"__\d+$", "", dtype_safe).strip("_")
+                    if dtype_safe:
+                        test_wrapper = pytest.mark.__getattr__(dtype_safe)(test_wrapper)
+
+                yield test_wrapper, test_name, param_kwargs, decorator_fn
+
+        # Replacing on the function object itself because this is what the upstream reads.
+        self._underlying_fn.parametrize_fn = patched_parametrize_fn
