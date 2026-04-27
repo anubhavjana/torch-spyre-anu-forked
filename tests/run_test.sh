@@ -44,7 +44,7 @@ if [[ $# -lt 1 ]]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Multi-config support (NEW)
+# Multi-config support
 #
 # Collect all leading *.yaml / *.yml arguments that resolve to real files as
 # YAML configs.  The first non-YAML argument (or anything after "--") is the
@@ -520,7 +520,7 @@ _cleanup_wrappers() {
         [[ -f "$wf" ]] && rm -f "$wf" && \
             echo "[spyre_run] Cleaned up wrapper: $wf"
     done
-    # Remove merged config temp file (only if we created it). (NEW)
+    # Remove merged config temp file (only if we created it)
     if [[ $MERGED_CONFIG_IS_TEMP -eq 1 && -n "${YAML_CONFIG:-}" && -f "$YAML_CONFIG" ]]; then
         rm -f "$YAML_CONFIG"
         echo "[spyre_run] Removed merged temp config: $YAML_CONFIG"
