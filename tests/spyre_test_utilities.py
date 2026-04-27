@@ -40,7 +40,10 @@ except ImportError as _yaml_err:  # pragma: no cover
 #     python3 spyre_test_utilities.py config_a.yaml config_b.yaml
 #     # prints the path of the merged (temp) YAML to stdout
 
-def _deep_merge_globals(base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[str, Any]:
+
+def _deep_merge_globals(
+    base: Dict[str, Any], incoming: Dict[str, Any]
+) -> Dict[str, Any]:
     """Merge two `global:` dicts according to the superset rules.
 
     Rules (per key):
@@ -48,7 +51,7 @@ def _deep_merge_globals(base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[
     - Key present in both, values equal  -> keep as-is (no duplication).
     - Key present in both, values differ:
         * If both values are lists       -> append unique incoming items
-                        
+
         * Otherwise (scalar)             -> raise ValueError; callers should
                                            not have conflicting scalar globals.
 
@@ -77,7 +80,9 @@ def _deep_merge_globals(base: Dict[str, Any], incoming: Dict[str, Any]) -> Dict[
         if isinstance(base_val, list) and isinstance(incoming_val, list):
             # Use serialised YAML as the deduplication key so dict elements
             # are compared by value, not by Python object identity.
-            existing_keys = {yaml.dump(item, default_flow_style=True) for item in base_val}
+            existing_keys = {
+                yaml.dump(item, default_flow_style=True) for item in base_val
+            }
             merged_list = list(base_val)
             for item in incoming_val:
                 serialised = yaml.dump(item, default_flow_style=True)
@@ -153,6 +158,7 @@ def _merge_file_entries(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def merge_yaml_configs(
     config_paths: Sequence[str | os.PathLike],
     *,
@@ -180,8 +186,7 @@ def merge_yaml_configs(
     Returns
     -------
     str
-        Absolute path to the merged temporary YAML file.  **The caller is
-        responsible for deleting this file when done.**
+        Absolute path to the merged temporary YAML file.
 
     Raises
     ------
@@ -198,14 +203,12 @@ def merge_yaml_configs(
         if not p.is_file():
             raise ValueError(f"Config file not found: {p}")
 
-    # Fast path: single config — just create a temp copy so the caller always
+    # single config - just create a temp copy so the caller always
     # gets a temp file it can safely delete.
     if len(paths) == 1:
         raw = paths[0].read_text(encoding="utf-8")
         dest_dir = output_dir or paths[0].parent
-        fd, tmp_path = tempfile.mkstemp(
-            prefix=prefix, suffix=suffix, dir=str(dest_dir)
-        )
+        fd, tmp_path = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=str(dest_dir))
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(raw)
         return tmp_path
@@ -225,9 +228,7 @@ def merge_yaml_configs(
     for i, (data, p) in enumerate(zip(loaded, paths)):
         suite = data.get("test_suite_config")
         if not isinstance(suite, dict):
-            raise ValueError(
-                f"Missing or invalid 'test_suite_config' key in: {p}"
-            )
+            raise ValueError(f"Missing or invalid 'test_suite_config' key in: {p}")
         suites.append(suite)
 
     # ---- Merge `files` entries ----------------------------------------
@@ -255,9 +256,7 @@ def merge_yaml_configs(
 
     # ---- Write to temp file ------------------------------------------
     dest_dir = output_dir or paths[0].parent
-    fd, tmp_path = tempfile.mkstemp(
-        prefix=prefix, suffix=suffix, dir=str(dest_dir)
-    )
+    fd, tmp_path = tempfile.mkstemp(prefix=prefix, suffix=suffix, dir=str(dest_dir))
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
         yaml.dump(
             merged_doc,
@@ -273,6 +272,7 @@ def merge_yaml_configs(
 # ---------------------------------------------------------------------------
 # CLI entry-point (used by run_test.sh)
 # ---------------------------------------------------------------------------
+
 
 def _cli() -> None:
     """Print the merged temp-file path to stdout; all other output goes to stderr."""
@@ -313,7 +313,7 @@ def _cli() -> None:
         f"[spyre_merge] Merged {len(args.configs)} config(s) -> {merged}",
         file=sys.stderr,
     )
-    # The path (and only the path) goes to stdout for shell capture.
+    # The path goes to stdout for shell capture.
     print(merged)
 
 
