@@ -4,8 +4,7 @@ on:
   # Run automatically on every merge to main
   push:
     branches: [main]
-  
-  pull_requests:
+  pull_request:
     branches: [main]
 
 concurrency:
