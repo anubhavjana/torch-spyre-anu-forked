@@ -6,6 +6,7 @@
 <title>Spyre · Model Coverage Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
+/* Dark Mode v2.1 - Fixed spacing */
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -17,6 +18,13 @@
   --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
   --radius:8px;--radius-lg:12px;
 }
+[data-theme="dark"]{
+  --bg:#0f172a;--bg2:#1e293b;--bg3:#334155;--bg4:#475569;
+  --border:rgba(255,255,255,0.10);--border2:rgba(255,255,255,0.16);
+  --text:#f1f5f9;--text2:#cbd5e1;--text3:#94a3b8;
+  --accent:#3b82f6;--accent2:#2563eb;
+  --pass:#22c55e;--fail:#ef4444;--xfail:#f59e0b;--skip:#9ca3af;--xpass:#818cf8;
+}
 html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.6;min-height:100vh;margin:0;padding:0}
 ::-webkit-scrollbar{width:6px;height:6px}
@@ -24,49 +32,64 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 ::-webkit-scrollbar-thumb{background:var(--bg4);border-radius:3px}
 .main{width:100%;margin:0;padding:0;box-sizing:border-box;display:flex;min-height:100vh}
 .panel{display:none}.panel.active{display:block}
-.sidebar{position:sticky;top:0;background:linear-gradient(180deg, #1e293b 0%, #0f172a 100%);border-right:1px solid rgba(255,255,255,0.1);padding:0;height:100vh;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;transition:all .3s ease;width:280px;flex-shrink:0}
+.sidebar{position:sticky;top:0;background:#f8fafc;box-shadow:2px 0 8px rgba(0,0,0,0.06);padding:0;height:100vh;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;transition:all .3s ease;width:280px;flex-shrink:0}
+[data-theme="dark"] .sidebar{background:#1e293b;box-shadow:2px 0 12px rgba(0,0,0,0.4)}
 .main.sidebar-collapsed .sidebar{width:70px}
-.sidebar-header{height:58px;padding:0 24px;border-bottom:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;gap:12px;transition:all .3s ease}
+.sidebar-header{height:58px;padding:0 24px;box-shadow:0 1px 0 rgba(0,0,0,0.06);display:flex;align-items:center;gap:12px;transition:all .3s ease}
+[data-theme="dark"] .sidebar-header{box-shadow:0 1px 0 rgba(255,255,255,0.1)}
 .main.sidebar-collapsed .sidebar-header{padding:0 12px;justify-content:center}
 .sidebar-logo{width:32px;height:32px;background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;box-shadow:0 2px 8px rgba(37,99,235,0.3)}
-.sidebar-logo-text{font-family:var(--mono);font-size:14px;font-weight:600;color:#fff;letter-spacing:.05em;white-space:nowrap;transition:opacity .2s}
+.sidebar-logo-text{font-family:var(--mono);font-size:14px;font-weight:600;color:var(--text);letter-spacing:.05em;white-space:nowrap;transition:opacity .2s}
+[data-theme="dark"] .sidebar-logo-text{color:#fff}
 .main.sidebar-collapsed .sidebar-logo-text{opacity:0;width:0;overflow:hidden}
-.sidebar-toggle{width:28px;height:28px;background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);border:2px solid rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s;box-shadow:0 2px 8px rgba(0,0,0,0.3);margin:16px 24px 20px auto}
+.sidebar-toggle{width:28px;height:28px;background:linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);border:2px solid var(--border2);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .3s;box-shadow:0 2px 8px rgba(37,99,235,0.2);margin:16px 24px 20px auto}
+[data-theme="dark"] .sidebar-toggle{border:2px solid rgba(255,255,255,0.2);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
 .main.sidebar-collapsed .sidebar-toggle{margin:16px auto 20px}
 .sidebar-toggle:hover{background:linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);transform:scale(1.1);box-shadow:0 4px 12px rgba(37,99,235,0.4)}
 .sidebar-toggle svg{width:12px;height:12px;color:#fff;transition:transform .3s ease}
 .main.sidebar-collapsed .sidebar-toggle svg{transform:rotate(180deg)}
-.sidebar-title{font-family:var(--mono);font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:.1em;margin-bottom:16px;padding:0 24px;white-space:nowrap;transition:opacity .2s;margin-top:24px}
+.sidebar-title{font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.1em;margin-bottom:16px;padding:0 24px;white-space:nowrap;transition:opacity .2s;margin-top:24px}
+[data-theme="dark"] .sidebar-title{color:rgba(255,255,255,0.5)}
 .main.sidebar-collapsed .sidebar-title{opacity:0;pointer-events:none}
 .main-content-wrapper{flex:1;display:flex;flex-direction:column;min-width:0}
-.topbar{position:sticky;top:0;z-index:100;background:rgba(248,250,252,0.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 24px;height:58px;display:flex;align-items:center;gap:16px}
+.topbar{position:sticky;top:0;z-index:100;background:var(--bg);backdrop-filter:blur(12px);box-shadow:0 1px 3px rgba(0,0,0,0.06);padding:0 24px;height:58px;display:flex;align-items:center;gap:16px}
+[data-theme="dark"] .topbar{background:#1e293b !important;backdrop-filter:none !important;box-shadow:0 1px 6px rgba(0,0,0,0.3)}
 .topbar-tabs{display:flex;gap:6px;margin-left:auto}
 .tab-btn{font-family:var(--sans);font-size:12px;padding:7px 12px;border-radius:var(--radius);border:1px solid transparent;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s}
 .tab-btn:hover{background:var(--bg3);color:var(--text);border-color:var(--border)}
 .tab-btn.active{background:var(--bg2);color:var(--accent);border-color:var(--border2)}
 .app-shell{flex:1;display:flex;flex-direction:column}
 .nav-list{display:flex;flex-direction:column;gap:4px;padding:0 12px;flex:1}
-.nav-item{padding:12px 16px;border:none;border-radius:var(--radius);background:transparent;color:rgba(255,255,255,0.7);font-size:13px;text-align:left;cursor:pointer;transition:all .2s;border-left:3px solid transparent;margin:0 12px;white-space:nowrap;overflow:visible;position:relative;display:flex;align-items:center;gap:8px}
+.nav-item{padding:12px 16px;border:none;border-radius:var(--radius);background:transparent;color:var(--text2);font-size:13px;text-align:left;cursor:pointer;transition:all .2s;border-left:3px solid transparent;margin:0 12px;white-space:nowrap;overflow:visible;position:relative;display:flex;align-items:center;gap:8px}
+[data-theme="dark"] .nav-item{color:rgba(255,255,255,0.7)}
 .main.sidebar-collapsed .nav-item{padding:0;margin:6px auto;justify-content:center;text-align:center;font-size:20px;border-left:none;width:48px;height:48px;border-radius:50%;display:flex;align-items:center}
 .main.sidebar-collapsed .nav-item .nav-text{display:none}
-.main.sidebar-collapsed .nav-item::after{content:attr(data-tooltip);position:fixed;left:82px;background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);color:#fff;padding:8px 14px;border-radius:8px;font-size:12px;white-space:nowrap;opacity:0;pointer-events:none;transition:all .2s;z-index:10000;box-shadow:0 8px 24px rgba(0,0,0,0.4);border:1px solid rgba(59,130,246,0.3);font-family:var(--sans);font-weight:400}
+.main.sidebar-collapsed .nav-item::after{content:attr(data-tooltip);position:fixed;left:82px;background:var(--bg2);color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;white-space:nowrap;opacity:0;pointer-events:none;transition:all .2s;z-index:10000;box-shadow:0 8px 24px rgba(0,0,0,0.2);border:1px solid var(--border2);font-family:var(--sans);font-weight:400}
+[data-theme="dark"] .main.sidebar-collapsed .nav-item::after{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);color:#fff;box-shadow:0 8px 24px rgba(0,0,0,0.4);border:1px solid rgba(59,130,246,0.3)}
 .main.sidebar-collapsed .nav-item:hover::after{opacity:1;left:78px}
-.nav-item:hover{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.95)}
-.main.sidebar-collapsed .nav-item:hover{background:rgba(255,255,255,0.12);transform:scale(1.05)}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+[data-theme="dark"] .nav-item:hover{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.95)}
+.main.sidebar-collapsed .nav-item:hover{transform:scale(1.05)}
+[data-theme="dark"] .main.sidebar-collapsed .nav-item:hover{background:rgba(255,255,255,0.12)}
 .nav-item.active{background:rgba(37,99,235,0.15);color:#60a5fa;border-left-color:#2563eb;font-weight:500}
 .main.sidebar-collapsed .nav-item.active{background:rgba(37,99,235,0.25);border-left:none;box-shadow:0 0 0 2px rgba(59,130,246,0.4)}
-.nav-help{margin-top:auto;padding:16px 24px;border-top:1px solid rgba(255,255,255,0.1);font-size:11px;color:rgba(255,255,255,0.4);line-height:1.5;transition:opacity .2s}
+.nav-help{margin-top:auto;padding:16px 24px;box-shadow:0 -1px 0 rgba(0,0,0,0.06);font-size:11px;color:var(--text3);line-height:1.5;transition:opacity .2s}
+[data-theme="dark"] .nav-help{box-shadow:0 -1px 0 rgba(255,255,255,0.1);color:rgba(255,255,255,0.4)}
 .main.sidebar-collapsed .nav-help{opacity:0;pointer-events:none;padding:16px 8px}
 .content-area{padding:24px;background:var(--bg)}
 .content-area{display:flex;flex-direction:column;gap:18px}
-.hero-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px}
+.panel-content{display:flex;flex-direction:column;gap:18px}
+.hero-row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--bg2);box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:var(--radius-lg);padding:18px}
+[data-theme="dark"] .hero-row{box-shadow:0 1px 3px rgba(0,0,0,0.3)}
 .hero-kicker{font-family:var(--mono);font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em}
 .hero-title{font-family:var(--mono);font-size:16px;color:var(--text);font-weight:500}
 .hero-sub{font-size:12px;color:var(--text3);margin-top:3px}
 .split-grid{display:grid;grid-template-columns:320px minmax(0,1fr);gap:18px;align-items:start}
-.surface{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px}
+.surface{background:var(--bg2);box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:var(--radius-lg);padding:16px}
+[data-theme="dark"] .surface{box-shadow:0 1px 3px rgba(0,0,0,0.3)}
 .control-stack{display:flex;flex-direction:column;gap:16px}
-.chart-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px}
+.chart-card{background:var(--bg2);box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:var(--radius-lg);padding:16px}
+[data-theme="dark"] .chart-card{box-shadow:0 1px 3px rgba(0,0,0,0.3)}
 .chart-mini{height:220px}
 .run-list-compact{display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto}
 @media(max-width:980px){
@@ -98,10 +121,15 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .btn-primary:hover{background:var(--accent);color:#fff}
 .btn-sm{padding:5px 10px;font-size:11px}
 .btn-danger{border-color:rgba(240,82,82,.4);color:var(--fail)}
+.theme-toggle{width:32px;height:32px;border-radius:50%;border:1px solid var(--border2);background:var(--bg2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .2s;margin-left:8px}
+.theme-toggle:hover{background:var(--bg3);border-color:var(--accent);transform:scale(1.05)}
+.theme-toggle svg{width:16px;height:16px;color:var(--text2);transition:all .2s}
+.theme-toggle:hover svg{color:var(--accent)}
 .btn-danger:hover{background:rgba(240,82,82,.1)}
 .or-divider{text-align:center;color:var(--text3);font-size:12px;margin:16px 0}
 .run-list{display:flex;flex-direction:column;gap:8px;margin-top:20px}
-.run-item{display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--radius);padding:10px 14px}
+.run-item{display:flex;align-items:center;gap:10px;background:var(--bg3);box-shadow:0 1px 2px rgba(0,0,0,0.06);border-radius:var(--radius);padding:10px 14px}
+[data-theme="dark"] .run-item{box-shadow:0 1px 2px rgba(0,0,0,0.25)}
 .run-item-name{font-family:var(--mono);font-size:12px;color:var(--text);flex:1}
 .run-item-meta{font-size:11px;color:var(--text3)}
 .run-badge{font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:10px}
@@ -109,7 +137,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .rb-fail{background:rgba(240,82,82,.15);color:var(--fail)}
 /* metrics */
 .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:24px}
-.metric{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px}
+.metric{background:var(--bg2);box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:var(--radius-lg);padding:16px}
+[data-theme="dark"] .metric{box-shadow:0 1px 3px rgba(0,0,0,0.3)}
 .metric-label{font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
 .metric-value{font-size:26px;font-weight:300;line-height:1}
 .metric-sub{font-size:11px;color:var(--text3);margin-top:4px}
@@ -141,8 +170,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .search-input::placeholder{color:var(--text3)}
 /* cards */
 .model-cards{display:grid;gap:10px}
-.model-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer;transition:border-color .15s}
-.model-card:hover{border-color:var(--border2)}
+.model-card{background:var(--bg2);box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:var(--radius-lg);padding:14px 16px;cursor:pointer;transition:all .15s}
+[data-theme="dark"] .model-card{box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+.model-card:hover{box-shadow:0 2px 6px rgba(0,0,0,0.12);transform:translateY(-1px)}
+[data-theme="dark"] .model-card:hover{box-shadow:0 2px 6px rgba(0,0,0,0.4)}
 .model-card.selected{border-color:var(--accent)}
 .mc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .mc-name{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--text)}
@@ -157,7 +188,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
 .leg-dot{width:9px;height:9px;border-radius:2px}
 /* drawer */
-.drawer{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);margin-top:10px;overflow:hidden}
+.drawer{background:var(--bg2);box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:var(--radius-lg);margin-top:10px;overflow:hidden}
+[data-theme="dark"] .drawer{box-shadow:0 1px 3px rgba(0,0,0,0.3)}
 .drawer-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
 .drawer-title{font-family:var(--mono);font-size:12px;color:var(--text2)}
 .drawer-actions{display:flex;gap:6px}
@@ -182,7 +214,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .trend-empty{text-align:center;padding:60px 20px;color:var(--text3);font-size:13px}
 .trend-empty code{font-family:var(--mono);font-size:12px;background:var(--bg3);padding:2px 6px;border-radius:4px}
 .run-timeline{display:flex;flex-direction:column;gap:16px}
-.run-block{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px 16px}
+.run-block{background:var(--bg2);box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:var(--radius-lg);padding:14px 16px}
+[data-theme="dark"] .run-block{box-shadow:0 1px 3px rgba(0,0,0,0.3)}
 .run-block-hd{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap}
 .run-num{font-family:var(--mono);font-size:11px;color:var(--text3)}
 .run-filename{font-family:var(--mono);font-size:12px;color:var(--text)}
@@ -193,7 +226,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .overall-bar-label{font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:5px}
 .overall-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;gap:1px}
 /* toast */
-.toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 16px;font-size:13px;color:var(--text);z-index:9999;transform:translateY(80px);opacity:0;transition:all .25s}
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);box-shadow:0 4px 12px rgba(0,0,0,0.15);border-radius:var(--radius);padding:10px 16px;font-size:13px;color:var(--text);z-index:9999;transform:translateY(80px);opacity:0;transition:all .25s}
+[data-theme="dark"] .toast{box-shadow:0 4px 12px rgba(0,0,0,0.4)}
 .toast.show{transform:translateY(0);opacity:1}
 .empty{text-align:center;padding:40px;color:var(--text3);font-size:13px}
 .export-row{display:flex;gap:8px;flex-wrap:wrap}
@@ -209,9 +243,11 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 /* submenu styles */
 .nav-submenu{padding:8px 0 8px 8px;margin:8px 12px 8px 24px;border-left:2px solid rgba(59,130,246,0.3);transition:all .2s;background:rgba(255,255,255,0.02);border-radius:0 8px 8px 0}
 .sidebar-collapsed .nav-submenu{display:none!important}
-.nav-subitem{width:100%;text-align:left;padding:10px 14px;font-size:12px;background:transparent;border:none;color:rgba(255,255,255,0.65);cursor:pointer;border-radius:6px;transition:all .2s;font-family:var(--sans);position:relative;margin:2px 0;font-weight:400}
+.nav-subitem{width:100%;text-align:left;padding:10px 14px;font-size:12px;background:transparent;border:none;color:var(--text2);cursor:pointer;border-radius:6px;transition:all .2s;font-family:var(--sans);position:relative;margin:2px 0;font-weight:400}
+[data-theme="dark"] .nav-subitem{color:rgba(255,255,255,0.65)}
 .nav-subitem::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:0;background:linear-gradient(180deg,#3b82f6,#2563eb);border-radius:0 2px 2px 0;transition:height .2s}
-.nav-subitem:hover{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.95);padding-left:18px}
+.nav-subitem:hover{background:var(--bg3);color:var(--text);padding-left:18px}
+[data-theme="dark"] .nav-subitem:hover{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.95)}
 .nav-subitem:hover::before{height:60%}
 .nav-subitem.active{background:linear-gradient(90deg,rgba(37,99,235,0.25),rgba(37,99,235,0.15));color:#60a5fa;font-weight:500;padding-left:18px;box-shadow:inset 0 0 0 1px rgba(59,130,246,0.3)}
 .nav-subitem.active::before{height:80%;background:linear-gradient(180deg,#60a5fa,#3b82f6)}
@@ -324,6 +360,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
           <button class="btn btn-sm" onclick="exportCSV()" title="Export CSV">↓ CSV</button>
           <button class="btn btn-sm" onclick="exportPDF()" title="Export PDF">↓ PDF</button>
         </div>
+        <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode" id="theme-toggle">
+          <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="display:none">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+          </svg>
+          <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+          </svg>
+        </button>
       </div>
 
       <div class="app-shell">
@@ -422,7 +466,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
                 <div class="section-hd" style="margin:0 0 14px">
                   <span class="section-title">top failures</span>
                 </div>
-                <div id="top-failures-list"></div>
+                <div id="top-failures-list" style="max-height:300px;overflow-y:auto"></div>
               </div>
 
               <!-- Pass Rate by Model with Coverage -->
@@ -730,8 +774,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
           No historical data yet.<br><br>
           Upload multiple XML files to see pass-rate trends over time.
         </div>
-        <div id="trend-content" style="display:none">
-          <div class="hero-row" style="margin-bottom:18px">
+        <div id="trend-content" class="panel-content" style="display:none">
+          <div class="hero-row">
             <div>
               <div class="hero-kicker">historical quality</div>
               <div class="hero-title">suite pass rate over time</div>
@@ -741,7 +785,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
               <button class="btn btn-sm" onclick="exportTrendCSV()">↓ export trend CSV</button>
             </div>
           </div>
-          <div class="chart-card" style="margin-bottom:18px">
+          <div class="chart-card">
             <div class="chart-container" style="height:280px">
               <canvas id="trend-chart" role="img" aria-label="Line chart showing pass/xpass/fail rate trend across runs"></canvas>
             </div>
@@ -761,6 +805,68 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 <div class="toast" id="toast"></div>
 
 <script>
+// ─── theme toggle ────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const html = document.documentElement;
+  const currentTheme = html.getAttribute('data-theme');
+  const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+  html.setAttribute('data-theme', newTheme);
+  localStorage.setItem('theme', newTheme);
+  updateThemeIcon(newTheme);
+  
+  // Refresh current view to update all colors
+  if (runs.length > 0) {
+    const activePanel = document.querySelector('.panel.active');
+    if (activePanel) {
+      const panelId = activePanel.id;
+      if (panelId === 'panel-overview') {
+        renderOverview();
+      } else if (panelId === 'panel-details') {
+        renderTestDetails();
+      } else if (panelId === 'panel-explorer') {
+        renderCoverageExplorer();
+      } else if (panelId === 'panel-trend') {
+        renderTrend();
+      }
+    }
+  }
+}
+
+function updateThemeIcon(theme) {
+  const sunIcon = document.getElementById('theme-icon-sun');
+  const moonIcon = document.getElementById('theme-icon-moon');
+  if (theme === 'dark') {
+    sunIcon.style.display = 'block';
+    moonIcon.style.display = 'none';
+  } else {
+    sunIcon.style.display = 'none';
+    moonIcon.style.display = 'block';
+  }
+}
+
+function initTheme() {
+  const savedTheme = localStorage.getItem('theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = savedTheme || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
+  updateThemeIcon(theme);
+}
+
+// Initialize theme on page load
+initTheme();
+
+// Helper function to get chart colors based on theme
+function getChartColors() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  return {
+    text: isDark ? '#f1f5f9' : '#0f172a',
+    text2: isDark ? '#cbd5e1' : '#475569',
+    text3: isDark ? '#94a3b8' : '#64748b',
+    border: isDark ? '#334155' : '#ffffff',
+    gridColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)'
+  };
+}
+
 // ─── state ───────────────────────────────────────────────────────────────────
 let runs = [];
 let groupBy = 'model';   // model | test | op | dtype | class
@@ -993,6 +1099,9 @@ function parseXML(text) {
       testMethod = parts.slice(0,3).join('_');
       opName = parts.slice(3).join('_') || '(no op)';
     }
+    
+    // Remove __number suffix from operation name (e.g., db_torch_add__113 -> db_torch_add)
+    opName = opName.replace(/__\d+$/, '');
 
     const clsParts = cls.split('.');
     const clsShort = clsParts[clsParts.length-1] || cls;
@@ -1007,8 +1116,16 @@ function buildGroupMap(tests, by) {
   tests.forEach(t => {
     let keys = [];
     if (by === 'model') {
-      // Use properties for model tags, fallback to brackets tags if no properties
-      keys = (t.properties && t.properties.length) ? t.properties : (t.tags.length ? t.tags : ['(untagged)']);
+      // Filter both properties and tags to only include those starting with "model__"
+      if (t.properties && t.properties.length) {
+        keys = t.properties.filter(prop => prop.startsWith('model__'));
+      } else if (t.tags && t.tags.length) {
+        keys = t.tags.filter(tag => /^model__.+/.test(tag));
+      }
+      // If no model tags found, mark as untagged
+      if (!keys || keys.length === 0) {
+        keys = ['(untagged)'];
+      }
     } else if (by === 'test') {
       keys = [t.testMethod || '(unknown)'];
     } else if (by === 'op') {
@@ -1324,6 +1441,11 @@ function renderCoverageExplorer() {
   filterExplorerTests();
 }
 
+// ─── helper function to display model name without prefix ────────────────────
+function displayModelName(model) {
+  return model.startsWith('model__') ? model.substring(7) : model;
+}
+
 // ─── explorer model filter ────────────────────────────────────────────────────
 function populateExplorerModelSelector() {
   const run = currentRun();
@@ -1336,15 +1458,24 @@ function populateExplorerModelSelector() {
   container.style.display = 'flex';
   
   // Extract models from test properties (XML <property> tags)
+  // Only include tags that start with "model__"
   const modelSet = new Set();
   run.tests.forEach(test => {
     // First check properties (from XML <property> tags)
     if (test.properties && test.properties.length > 0) {
-      test.properties.forEach(prop => modelSet.add(prop));
+      test.properties.forEach(prop => {
+        if (prop.startsWith('model__')) {
+          modelSet.add(prop);
+        }
+      });
     }
     // Fallback to tags (from test name brackets) if no properties
     else if (test.tags && test.tags.length > 0) {
-      test.tags.forEach(tag => modelSet.add(tag));
+      test.tags.forEach(tag => {
+        if (tag.startsWith('model__')) {
+          modelSet.add(tag);
+        }
+      });
     }
   });
   const models = Array.from(modelSet).sort();
@@ -1354,7 +1485,7 @@ function populateExplorerModelSelector() {
     selector.disabled = true;
   } else {
     selector.innerHTML = '<option value="">All Models</option>' +
-      models.map(model => `<option value="${escAttr(model)}">${esc(model)}</option>`).join('');
+      models.map(model => `<option value="${escAttr(model)}">${esc(displayModelName(model))}</option>`).join('');
     selector.disabled = false;
   }
 }
@@ -1466,6 +1597,7 @@ function renderSummary() {
   const ctx = document.getElementById('summary-pie-chart');
   if (ctx) {
     if (summaryPieChart) summaryPieChart.destroy();
+    const colors = getChartColors();
     summaryPieChart = new Chart(ctx.getContext('2d'), {
       type: 'doughnut',
       data: {
@@ -1474,7 +1606,7 @@ function renderSummary() {
           data: [cnt.passed, cnt.failed, cnt.xfail, cnt.xpass, cnt.skipped],
           backgroundColor: ['#16a34a', '#dc2626', '#d97706', '#6366f1', '#6b7280'],
           borderWidth: 2,
-          borderColor: '#fff'
+          borderColor: colors.border
         }]
       },
       options: {
@@ -1513,7 +1645,7 @@ function renderSummary() {
     const pct = tests.length ? Math.round((c.passed + c.xpass) / tests.length * 100) : 0;
     return `<div style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
-        <span style="color:var(--text);font-family:var(--mono)">${esc(key)}</span>
+        <span style="color:var(--text);font-family:var(--mono)">${esc(displayModelName(key))}</span>
         <span style="color:var(--text2)">${pct}%</span>
       </div>
       <div class="bar-track" style="height:6px">
@@ -1542,7 +1674,9 @@ function renderOverallCoverage(tests) {
   });
   
   const totalOps = Object.keys(opMap).length;
-  const fullyPassingOps = Object.values(opMap).filter(o => o.failed === 0 && o.total > 0).length;
+  // Fully passing: 100% pass rate (all tests passed, no failures, no skips, no xfail)
+  const fullyPassingOps = Object.values(opMap).filter(o => o.passed === o.total && o.total > 0).length;
+  // Partially failing: has at least one failed test
   const partiallyFailingOps = Object.values(opMap).filter(o => o.failed > 0).length;
   
   document.getElementById('model-op-coverage').innerHTML = [
@@ -1591,6 +1725,7 @@ function populateModelSelector() {
   if (!run || !selector) return;
   
   // Extract unique models from test properties (looking for "tag" properties)
+  // Only include tags that start with "model__"
   availableModels = [];
   const modelSet = new Set();
   
@@ -1600,7 +1735,8 @@ function populateModelSelector() {
         // Properties are stored as property names from XML <property name="tag" value="model_name"/>
         // The property name itself is the tag (e.g., "paddedtensor", "bf16operation", etc.)
         // But we want the actual model tags which are stored as property names
-        if (prop && !modelSet.has(prop)) {
+        // Only include tags that start with "model__"
+        if (prop && prop.startsWith('model__') && !modelSet.has(prop)) {
           modelSet.add(prop);
           availableModels.push(prop);
         }
@@ -1622,7 +1758,7 @@ function populateModelSelector() {
   } else {
     // Populate dropdown with models
     selector.innerHTML = availableModels.map(model =>
-      `<option value="${escAttr(model)}">${esc(model)}</option>`
+      `<option value="${escAttr(model)}">${esc(displayModelName(model))}</option>`
     ).join('');
     selector.disabled = false;
     
@@ -1678,6 +1814,7 @@ function updateModelPieChart() {
   const ctx = document.getElementById('model-pie-chart');
   if (ctx) {
     if (modelPieChart) modelPieChart.destroy();
+    const colors = getChartColors();
     
     modelPieChart = new Chart(ctx.getContext('2d'), {
       type: 'doughnut',
@@ -1687,20 +1824,21 @@ function updateModelPieChart() {
           data: [cnt.passed, cnt.failed, cnt.xfail, cnt.xpass, cnt.skipped],
           backgroundColor: ['#16a34a', '#dc2626', '#d97706', '#6366f1', '#6b7280'],
           borderWidth: 2,
-          borderColor: '#fff'
+          borderColor: colors.border
         }]
       },
       options: {
         responsive: true,
         maintainAspectRatio: true,
         plugins: {
-          legend: { 
+          legend: {
             display: true,
             position: 'bottom',
             labels: {
               font: { family: 'IBM Plex Sans', size: 11 },
               padding: 12,
-              usePointStyle: true
+              usePointStyle: true,
+              color: colors.text2
             }
           },
           tooltip: {
@@ -1713,9 +1851,10 @@ function updateModelPieChart() {
           },
           title: {
             display: true,
-            text: selectedModelName,
+            text: displayModelName(selectedModelName),
             font: { family: 'IBM Plex Mono', size: 14, weight: '500' },
-            padding: { bottom: 16 }
+            padding: { bottom: 16 },
+            color: colors.text
           }
         }
       }
@@ -2187,8 +2326,9 @@ function filterGroupsTable() {
     const rowId = 'group-row-' + idx;
     const menuId = 'group-action-menu-' + idx;
     
+    const displayKey = groupBy === 'model' ? displayModelName(g.key) : g.key;
     return `<tr id="${rowId}">
-      <td style="font-family:var(--mono);font-size:12px">${esc(g.key)}</td>
+      <td style="font-family:var(--mono);font-size:12px">${esc(displayKey)}</td>
       <td style="text-align:left">${g.total}</td>
       <td style="text-align:left;color:var(--pass)">${g.cnt.passed}</td>
       <td style="text-align:left;color:var(--fail)">${g.cnt.failed}</td>
@@ -2955,6 +3095,7 @@ function renderTrend() {
   const xfailRates = runs.map(r => { const c=countStatuses(r.tests); return r.tests.length ? Math.round(c.xfail/r.tests.length*100):0; });
 
   if (trendChart) trendChart.destroy();
+  const colors = getChartColors();
   trendChart = new Chart(document.getElementById('trend-chart'), {
     type:'line',
     data:{labels,datasets:[
@@ -2963,10 +3104,10 @@ function renderTrend() {
       {label:'Xfail %',     data:xfailRates,borderColor:'#d97706',backgroundColor:'rgba(217,119,6,.06)',tension:.3,pointRadius:4,pointBackgroundColor:'#d97706',borderDash:[2,3]},
     ]},
     options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{display:true}},
+      plugins:{legend:{display:true,labels:{color:colors.text2}}},
       scales:{
-        x:{ticks:{color:'#64748b',font:{family:'IBM Plex Mono',size:10}},grid:{color:'rgba(148,163,184,.18)'}},
-        y:{min:0,max:100,ticks:{color:'#64748b',font:{family:'IBM Plex Mono',size:10},callback:v=>v+'%'},grid:{color:'rgba(148,163,184,.18)'}},
+        x:{ticks:{color:colors.text3,font:{family:'IBM Plex Mono',size:10}},grid:{color:colors.gridColor}},
+        y:{min:0,max:100,ticks:{color:colors.text3,font:{family:'IBM Plex Mono',size:10},callback:v=>v+'%'},grid:{color:colors.gridColor}},
       }
     }
   });
