@@ -31,11 +31,11 @@ security:
 
 resources:
   requests:
-    cpu: "100m"
-    memory: "64Mi"
+    cpu: 100m
+    memory: 64Mi
   limits:
-    cpu: "500m"
-    memory: "128Mi"
+    cpu: 500m
+    memory: 128Mi
 
 service:
   port: 80
@@ -45,7 +45,7 @@ route:
   enabled: true
   # Leave host empty to let OpenShift auto-generate:
   #   <release-name>-<namespace>.apps.<cluster-domain>
-  host: ""
+  host: ''
   tls:
     termination: edge
     insecureEdgeTerminationPolicy: Redirect
