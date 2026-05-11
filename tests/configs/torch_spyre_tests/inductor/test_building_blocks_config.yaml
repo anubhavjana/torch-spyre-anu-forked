@@ -1,0 +1,13 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/inductor/test_building_blocks.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            - TestBuildingBlocks::test_scalar_support
+            - TestBuildingBlocks::test_contig_vs_transposed
+            - TestBuildingBlocks::test_softplus
+            - TestBuildingBlocks::test__simple_attn
+            - TestBuildingBlocks::test_mlp
+            - TestBuildingBlocks::test_rms_norm
+          mode: mandatory_success

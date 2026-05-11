@@ -1,0 +1,25 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/inductor/test_inductor_fx_passes.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            # TestOps - parameterized tests
+            - TestOps::test_linear_decomposition_graph_2d
+            - TestOps::test_linear_decomposition_graph_3d
+            - TestOps::test_linear_decomposition_graph_2d_bias
+            - TestOps::test_linear_decomposition_graph_3d_bias
+            - TestOps::test_unflatten_bmm_pass_graph_3d_2d
+            - TestOps::test_unflatten_bmm_pass_graph_3d_3d
+            - TestOps::test_unflatten_bmm_pass_graph_3d_3d_bcast
+            - TestOps::test_unflatten_bmm_pass_graph_4d_4d
+            - TestOps::test_unflatten_bmm_pass_graph_4d_4d_bcast
+            # TestOps - unparameterized tests
+            - TestOps::test_mixed_device_seq
+            # TestInsertPadding
+            - TestInsertPadding::test_mm_unaligned_reduction_dim_gets_padded
+            - TestInsertPadding::test_mm_aligned_reduction_dim_no_padding
+            - TestInsertPadding::test_bmm_unaligned_reduction_dim_gets_padded
+            - TestInsertPadding::test_mm_reduction_dim_1_skipped
+            - TestInsertPadding::test_mm_padded_arg_has_correct_shape
+          mode: mandatory_success

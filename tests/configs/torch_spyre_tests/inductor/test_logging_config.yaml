@@ -1,0 +1,13 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/inductor/test_logging.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            # TestLoggingConfiguration
+            - TestLoggingConfiguration::test_default_is_disabled
+            - TestLoggingConfiguration::test_enabled_defaults_to_info_level
+            # TestLoggingOperations
+            - TestLoggingOperations::test_create_logger
+            - TestLoggingOperations::test_logging_does_not_crash
+          mode: mandatory_success

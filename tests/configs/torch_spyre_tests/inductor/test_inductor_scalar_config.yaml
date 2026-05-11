@@ -1,0 +1,39 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/inductor/test_inductor_scalar.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            # TestTensorScalarCoreArithmetic
+            - TestTensorScalarCoreArithmetic::test_complex64_add_mul_div_python_complex_scalars[eager]
+            - TestTensorScalarCoreArithmetic::test_complex64_add_mul_div_python_complex_scalars[compiled]
+            - TestTensorScalarCoreArithmetic::test_fp16_fp32_tensors_fp32_literal_and_fp64_scalar_tensor[eager]
+            - TestTensorScalarCoreArithmetic::test_fp16_fp32_tensors_fp32_literal_and_fp64_scalar_tensor[compiled]
+            - TestTensorScalarCoreArithmetic::test_scalar_add_mul_sub_zero_one_and_ndim_tensors[eager]
+            - TestTensorScalarCoreArithmetic::test_scalar_add_mul_sub_zero_one_and_ndim_tensors[compiled]
+            - TestTensorScalarCoreArithmetic::test_inplace_add_mul_div_scalar_after_clone[eager]
+            - TestTensorScalarCoreArithmetic::test_inplace_add_mul_div_scalar_after_clone[compiled]
+            - TestTensorScalarCoreArithmetic::test_parenthesized_chain_add_mul_sub_div_scalars[eager]
+            - TestTensorScalarCoreArithmetic::test_parenthesized_chain_add_mul_sub_div_scalars[compiled]
+            # TestSdpaScalarHyperparameters
+            - TestSdpaScalarHyperparameters::test_sdpa_masked_fill_scalar_constant_finite_neg_fp16[eager]
+            - TestSdpaScalarHyperparameters::test_sdpa_masked_fill_scalar_constant_finite_neg_fp16[compiled]
+            - TestSdpaScalarHyperparameters::test_sdpa_masked_fill_zero_dim_tensor_scalar_fp16[eager]
+            - TestSdpaScalarHyperparameters::test_sdpa_masked_fill_zero_dim_tensor_scalar_fp16[compiled]
+            - TestSdpaScalarHyperparameters::test_sdpa_dropout_scalar_p[eager]
+            - TestSdpaScalarHyperparameters::test_sdpa_dropout_scalar_p[compiled]
+            - TestSdpaScalarHyperparameters::test_sdpa_score_temperature_divisor_scalar[eager]
+            - TestSdpaScalarHyperparameters::test_sdpa_score_temperature_divisor_scalar[compiled]
+            - TestSdpaScalarHyperparameters::test_sdpa_broadcast_kv_heads[eager]
+            - TestSdpaScalarHyperparameters::test_sdpa_broadcast_kv_heads[compiled]
+            - TestSdpaScalarHyperparameters::test_sdpa_local_window_mask_scalar[eager]
+            - TestSdpaScalarHyperparameters::test_sdpa_local_window_mask_scalar[compiled]
+            - TestSdpaScalarHyperparameters::test_sdpa_cross_sequence_length[eager]
+            - TestSdpaScalarHyperparameters::test_sdpa_cross_sequence_length[compiled]
+            - TestSdpaScalarHyperparameters::test_sdpa_self_attention_single_tensor[eager]
+            - TestSdpaScalarHyperparameters::test_sdpa_self_attention_single_tensor[compiled]
+            - TestSdpaScalarHyperparameters::test_sdpa_causal_triu_mask_neg_inf[eager]
+            - TestSdpaScalarHyperparameters::test_sdpa_causal_triu_mask_neg_inf[compiled]
+            - TestSdpaScalarHyperparameters::test_sdpa_additive_score_bias_scalar[eager]
+            - TestSdpaScalarHyperparameters::test_sdpa_additive_score_bias_scalar[compiled]
+          mode: mandatory_success

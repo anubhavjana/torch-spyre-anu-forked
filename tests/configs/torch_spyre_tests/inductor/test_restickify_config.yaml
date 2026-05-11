@@ -1,0 +1,115 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/inductor/test_restickify.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            # 2-arg pointwise tests — SIZES_2D_FULL fixtures
+            - test_2arg_at_plus_x[256x128]
+            - test_2arg_at_plus_x[128x256]
+            - test_2arg_at_plus_x[128x128]
+            - test_2arg_at_plus_x[64x128]
+            - test_2arg_at_plus_x[128x64]
+            - test_2arg_x_plus_at[256x128]
+            - test_2arg_x_plus_at[128x256]
+            - test_2arg_x_plus_at[128x128]
+            - test_2arg_x_plus_at[64x128]
+            - test_2arg_x_plus_at[128x64]
+            - test_2arg_xt_plus_a[256x128]
+            - test_2arg_xt_plus_a[128x256]
+            - test_2arg_xt_plus_a[128x128]
+            - test_2arg_xt_plus_a[64x128]
+            - test_2arg_xt_plus_a[128x64]
+            - test_2arg_a_plus_xt[256x128]
+            - test_2arg_a_plus_xt[128x256]
+            - test_2arg_a_plus_xt[128x128]
+            - test_2arg_a_plus_xt[64x128]
+            - test_2arg_a_plus_xt[128x64]
+            # 3-arg and 4-arg pointwise tests — SIZES_2D_SMALL fixtures
+            - test_3arg_at_bt_x[256x128]
+            - test_3arg_at_bt_x[128x128]
+            - test_3arg_at_x_bt[256x128]
+            - test_3arg_at_x_bt[128x128]
+            - test_3arg_x_at_bt[256x128]
+            - test_3arg_x_at_bt[128x128]
+            - test_3arg_at_x_y[256x128]
+            - test_3arg_at_x_y[128x128]
+            - test_4arg_at_bt_x_y[256x128]
+            - test_4arg_at_bt_x_y[128x128]
+            - test_4arg_at_x_bt_y[256x128]
+            - test_4arg_at_x_bt_y[128x128]
+            - test_4arg_x_at_y_bt[256x128]
+            - test_4arg_x_at_y_bt[128x128]
+            - test_4arg_at_x_y_bt[256x128]
+            - test_4arg_at_x_y_bt[128x128]
+            - test_4arg_at_x_y_z[256x128]
+            - test_4arg_at_x_y_z[128x128]
+            - test_4arg_x_at_y_z[256x128]
+            - test_4arg_x_at_y_z[128x128]
+            - test_4arg_x_y_at_z[256x128]
+            - test_4arg_x_y_at_z[128x128]
+            - test_4arg_x_y_z_at[256x128]
+            - test_4arg_x_y_z_at[128x128]
+            # 3D tests — SIZES_3D fixtures
+            - test_3d_transpose12_plus_x[2x256x128]
+            - test_3d_transpose12_plus_x[4x128x64]
+            - test_3d_x_plus_transpose12[2x256x128]
+            - test_3d_x_plus_transpose12[4x128x64]
+            # 4D tests — SIZES_4D fixtures
+            - test_4d_transpose13_plus_x[2x256x3x128]
+            - test_4d_transpose13_plus_x[2x128x4x64]
+            - test_4d_x_plus_transpose13[2x256x3x128]
+            - test_4d_x_plus_transpose13[2x128x4x64]
+            # View + unsqueeze tests
+            - test_view_unsqueeze_add
+            # Expand tests — SIZES_EXPAND fixtures
+            - test_expand_x_plus_yt_expand[128x256]
+            - test_expand_yt_expand_plus_x[128x256]
+            # Expand + transpose tests
+            - test_expand_unsqueeze0_expand_plus_at
+            - test_expand_at_plus_unsqueeze0_expand
+            - test_expand_unsqueeze1_expand_plus_at
+            - test_expand_at_plus_unsqueeze1_expand
+            # cat after two-stick add
+            - test_cat_after_at_plus_b
+            # 2-arg size-1 tests — SIZES_4D_SIZE1 fixtures
+            - test_2arg_size1_x_plus_yt13[1x128x1x256]
+            - test_2arg_size1_yt13_plus_x[1x128x1x256]
+            # Matmul tests — MATMUL_SIZES fixtures
+            - test_matmul_x_y[128x256]
+            - test_matmul_x_y[64x128]
+            - test_matmul_xt_y[128x256]
+            - test_matmul_xt_y[64x128]
+            - test_matmul_x_yt[128x256]
+            - test_matmul_x_yt[64x128]
+            - test_matmul_xt_yt[128x256]
+            - test_matmul_xt_yt[64x128]
+            # Batched matmul tests — BMM_SIZES fixtures
+            - test_bmm_xt_y[3x128x64]
+            - test_bmm_x_yt[3x128x64]
+            - test_bmm_xt_yt[3x128x64]
+            # Mutation + restickify regression test
+            - test_bmm_with_inplace_mutation
+            # Optimizer correctness + optimality tests
+            - test_opt_parens_one_conflict
+            - test_opt_adds_then_matmul_x
+            - test_opt_adds_then_matmul_y
+            - test_opt_adds_then_matmul_y_long_chain
+            - test_opt_matmul_x_and_y_conflict
+            - test_opt_matmul_then_adds
+            - test_opt_matmul_then_long_adds
+            - test_opt_chained_matmuls
+            - test_opt_two_independent_conflicts
+            - test_opt_fanout_intermediate
+            - test_opt_diamond
+            - test_opt_matmul_rect_x_wrong_stick
+            - test_opt_sum_between_pointwise
+            - test_opt_chain_transposed_intermediate
+            - test_opt_beam_trim
+            - test_opt_4d_one_conflict
+            - test_opt_4d_mixed_conflicts
+            - test_opt_4d_majority_wins
+            - test_opt_4d_chain_transposed_intermediate
+            - test_opt_two_matmuls_wrong_inputs
+            - test_opt_matmul_both_inputs_upstream_conflict
+          mode: mandatory_success
