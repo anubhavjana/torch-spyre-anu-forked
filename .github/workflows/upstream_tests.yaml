@@ -62,7 +62,7 @@ jobs:
         id: pytorch-branch
         working-directory: torch-spyre
         run: |
-          # Extract the version constraint, e.g. "2.11.0" from "torch~=2.11.0"
+          # Extract the version constraint, e.g. "2.11" from "torch~=2.11.0"
           VERSION=$(python3 - <<'PYEOF'
           import tomllib
 
@@ -104,14 +104,42 @@ jobs:
           path: pytorch
           key: pytorch-${{ steps.pytorch-branch.outputs.branch }}-${{ steps.pytorch-sha.outputs.sha }}
 
+      # ---------------------------------------------------------------------------
+      # PyTorch checkout with targeted FP16 submodule workaround
+      #
+      # PyTorch release/2.11 pins third_party/FP16 to commit 4dfe081c which is
+      # an orphaned commit in Maratyszcza/FP16 — not reachable via any branch or
+      # tag, so the default shallow submodule fetch (--depth=1) fails.
+      #
+      # Fix: disable automatic submodule fetching in actions/checkout, then:
+      #   - Fetch FP16 with a full clone (no --depth=1) so the orphaned commit
+      #     is reachable
+      #   - Fetch all other submodules shallowly as normal
+      # ---------------------------------------------------------------------------
       - name: Checkout PyTorch source
         if: steps.pytorch-cache.outputs.cache-hit != 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: pytorch/pytorch
           ref: ${{ steps.pytorch-branch.outputs.branch }}
-          submodules: recursive
+          submodules: false          # submodules fetched manually in next step
           path: pytorch
+
+      - name: Fetch submodules (FP16 full, rest shallow)
+        if: steps.pytorch-cache.outputs.cache-hit != 'true'
+        working-directory: pytorch
+        run: |
+          git submodule sync --recursive
+
+          # FP16 is pinned to an orphaned commit (4dfe081c) not reachable via
+          # any ref — fetch without --depth=1 so the full object store is available
+          echo "Fetching FP16 submodule (full clone)..."
+          git submodule update --init --force third_party/FP16
+
+          # All other submodules use shallow fetch as normal
+          echo "Fetching remaining submodules (shallow)..."
+          git submodule update --init --force --depth=1 --recursive \
+            $(git submodule status | grep -v third_party/FP16 | awk '{print $2}')
 
       - name: Set TORCH_ROOT
         run: echo "TORCH_ROOT=$GITHUB_WORKSPACE/pytorch" >> "$GITHUB_ENV"
