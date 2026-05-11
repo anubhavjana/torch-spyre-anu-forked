@@ -534,11 +534,35 @@ def analyze(path):
                             elif isinstance(fn, ast.Attribute): dec_name = fn.attr
                         if dec_name == "instantiate_parametrized_tests":
                             if all_parametrized:
-                                # All methods are @parametrize — pure class, skip injection.
                                 class_level_parametrized_pure.add(node.name)
                             else:
-                                # Mixed class — needs injection + cleanup.
-                                class_level_parametrized_mixed.add(node.name)
+                                # Mixed class: needs injection only if this is an
+                                # upstream PyTorch file (under TORCH_ROOT). For
+                                # OOT-native files (under TORCH_DEVICE_ROOT),
+                                # @instantiate_parametrized_tests is sufficient
+                                # and injection into instantiate_device_type_tests
+                                # would produce unwanted device-type subclasses.
+                                import os as _os
+                                torch_root = _os.environ.get("TORCH_ROOT", "")
+                                torch_device_root = _os.environ.get("TORCH_DEVICE_ROOT", "")
+                                is_upstream = (
+                                    torch_root
+                                    and _os.path.abspath(path).startswith(
+                                        _os.path.abspath(torch_root)
+                                    )
+                                )
+                                is_oot = (
+                                    torch_device_root
+                                    and _os.path.abspath(path).startswith(
+                                        _os.path.abspath(torch_device_root)
+                                    )
+                                )
+                                if is_upstream and not is_oot:
+                                    class_level_parametrized_mixed.add(node.name)
+                                else:
+                                    # OOT-native mixed class: fully handled by
+                                    # @instantiate_parametrized_tests, no injection needed.
+                                    class_level_parametrized_pure.add(node.name)
                     break
 
     # Classify instantiate_device_type_tests() calls:

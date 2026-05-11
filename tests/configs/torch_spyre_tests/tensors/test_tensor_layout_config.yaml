@@ -1,0 +1,95 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/tensor/test_tensor_layout.py
+      # This file uses @instantiate_parametrized_tests which is a pure parametrize
+      # class (all methods are @parametrize-decorated), so run_test.sh does NOT
+      # inject instantiate_device_type_tests for it. The wrapper is not generated
+      # and pytest collects the original TestSpyreTensorLayout class directly.
+      # The skipped test (test_to_spyre_layout_explicit_expanded_*) is excluded
+      # via @unittest.skip and will not be collected.
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            - TestSpyreTensorLayout::test_add_with_mixed_layout_dim_orders
+            - TestSpyreTensorLayout::test_default_layout
+            - TestSpyreTensorLayout::test_device_alloc
+            - TestSpyreTensorLayout::test_dim_order
+            - TestSpyreTensorLayout::test_empty_layout_patched
+            - TestSpyreTensorLayout::test_equality_and_hashable
+            - TestSpyreTensorLayout::test_explicit_stl_constructor
+            - TestSpyreTensorLayout::test_initializes
+            - TestSpyreTensorLayout::test_sparse_dim_order
+            - TestSpyreTensorLayout::test_spyre_tensor_layout_guard
+            - TestSpyreTensorLayout::test_stl_copyable
+            - TestSpyreTensorLayout::test_stl_pickleable
+            - TestSpyreTensorLayout::test_stl_str
+            - TestSpyreTensorLayout::test_to_layout_patched
+            - TestSpyreTensorLayout::test_to_sparse_layout_patched
+            - TestSpyreTensorLayout::test_to_spyre_layout
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_expanding_sizes0_strides0_device_size0_stride_map0
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_folding_sizes0_strides0_device_size0_stride_map0
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_leading_ones_sizes0_strides0_device_size0_stride_map0
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_leading_ones_sizes1_strides1_device_size1_stride_map1
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_leading_ones_sizes2_strides2_device_size2_stride_map2
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_leading_ones_sizes3_strides3_device_size3_stride_map3
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes0_strides0_device_size0_stride_map0
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes1_strides1_device_size1_stride_map1
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes2_strides2_device_size2_stride_map2
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes3_strides3_device_size3_stride_map3
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes4_strides4_device_size4_stride_map4
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes5_strides5_device_size5_stride_map5
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes6_strides6_device_size6_stride_map6
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes7_strides7_device_size7_stride_map7
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes8_strides8_device_size8_stride_map8
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes9_strides9_device_size9_stride_map9
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes10_strides10_device_size10_stride_map10
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_padding_sizes11_strides11_device_size11_stride_map11
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_permuted_sizes0_strides0_device_size0_stride_map0
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_permuted_sizes1_strides1_device_size1_stride_map1
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes0_strides0_device_size0_stride_map0
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes1_strides1_device_size1_stride_map1
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes2_strides2_device_size2_stride_map2
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes3_strides3_device_size3_stride_map3
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes4_strides4_device_size4_stride_map4
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes5_strides5_device_size5_stride_map5
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes6_strides6_device_size6_stride_map6
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes7_strides7_device_size7_stride_map7
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes8_strides8_device_size8_stride_map8
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes9_strides9_device_size9_stride_map9
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes10_strides10_device_size10_stride_map10
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes11_strides11_device_size11_stride_map11
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes12_strides12_device_size12_stride_map12
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes13_strides13_device_size13_stride_map13
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes14_strides14_device_size14_stride_map14
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes15_strides15_device_size15_stride_map15
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes16_strides16_device_size16_stride_map16
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sizes17_strides17_device_size17_stride_map17
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sliced_batch_sizes0_strides0_device_size0_stride_map0
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sliced_batch_sizes1_strides1_device_size1_stride_map1
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sliced_batch_sizes2_strides2_device_size2_stride_map2
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sliced_batch_sizes3_strides3_device_size3_stride_map3
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sliced_batch_sizes4_strides4_device_size4_stride_map4
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_sliced_batch_sizes5_strides5_device_size5_stride_map5
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_tiling_sizes0_strides0_device_size0_stride_map0
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_tiling_sizes1_strides1_device_size1_stride_map1
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_tiling_sizes2_strides2_device_size2_stride_map2
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_tiling_sizes3_strides3_device_size3_stride_map3
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_tiling_sizes4_strides4_device_size4_stride_map4
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_trailing_ones_sizes0_strides0_device_size0_stride_map0
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_trailing_ones_sizes1_strides1_device_size1_stride_map1
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_trailing_ones_sizes2_strides2_device_size2_stride_map2
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_trailing_ones_sizes3_strides3_device_size3_stride_map3
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes0_strides0_device_size0_stride_map0
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes1_strides1_device_size1_stride_map1
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes2_strides2_device_size2_stride_map2
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes3_strides3_device_size3_stride_map3
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes4_strides4_device_size4_stride_map4
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes5_strides5_device_size5_stride_map5
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes6_strides6_device_size6_stride_map6
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes7_strides7_device_size7_stride_map7
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes8_strides8_device_size8_stride_map8
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes9_strides9_device_size9_stride_map9
+            - TestSpyreTensorLayout::test_to_spyre_layout_explicit_viewing_sizes10_strides10_device_size10_stride_map10
+            - TestSpyreTensorLayout::test_to_spyre_sliced_other_sizes0_strides0
+            - TestSpyreTensorLayout::test_to_spyre_sliced_other_sizes1_strides1
+          mode: mandatory_success
