@@ -64,11 +64,11 @@ jobs:
           - name: Inductor Codegen
             config: torch_spyre_tests/inductor/test_codegen_config.yaml
           - name: Inductor Decomp
-            config: torch_spyre_tests/inductor/test_inductor_decomp_config.yaml
+            config: torch_spyre_tests/inductor/test_decomp_config.yaml
           - name: Inductor FX Passes
-            config: torch_spyre_tests/inductor/test_inductor_fx_passes_config.yaml
+            config: torch_spyre_tests/inductor/test_fx_passes_config.yaml
           - name: Inductor Normalization Scalars
-            config: torch_spyre_tests/inductor/test_inductor_normalization_scalars_config.yaml
+            config: torch_spyre_tests/inductor/test_normalization_scalars_config.yaml
           - name: Inductor Ops
             config: torch_spyre_tests/inductor/test_inductor_ops_config.yaml
           - name: Inductor Ops LX Planning
@@ -182,17 +182,6 @@ jobs:
           REPORT_PATH="${CLONED_TORCH_SPYRE_DIR}/tests/${REPORT_NAME}"
 
           echo "Running ${{ matrix.suite.name }} tests..."
-          bash tests/run_test.sh "tests/configs/${CONFIG}" -v --junit-xml="${REPORT_PATH}"
+          bash tests/run_test.sh "tests/configs/${CONFIG}" -v
           echo "${{ matrix.suite.name }} tests done"
 
-          echo "REPORT_PATH=${REPORT_PATH}" >> "$GITHUB_ENV"
-          echo "REPORT_NAME=${REPORT_NAME}" >> "$GITHUB_ENV"
-
-      # - name: Upload JUnit XML report
-      #   if: always()
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: ${{ env.REPORT_NAME }}
-      #     path: ${{ env.REPORT_PATH }}
-      #     if-no-files-found: warn
-      #     retention-days: 10
