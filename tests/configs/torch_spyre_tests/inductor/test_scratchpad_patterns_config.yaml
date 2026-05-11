@@ -1,25 +1,4 @@
 test_suite_config:
   files:
     - path: ${TORCH_DEVICE_ROOT}/tests/inductor/test_scratchpad_patterns.py
-      unlisted_test_mode: skip
-      tests:
-        - names:
-            # verify_* tests are plain unparameterized tests that validate the
-            # "good allocation" patterns; these are expected to always pass.
-            - TestExamplePattern::test_verify_simple_fragmentation_pattern
-            - TestExamplePattern::test_verify_staircase_pattern
-            - TestExamplePattern::test_verify_downward_staircase_pattern
-            - TestExamplePattern::test_verify_simple_eviction_pattern
-            - TestExamplePattern::test_verify_eviction_reallocation_pattern
-            - TestExamplePattern::test_verify_gqattention_pattern
-            - TestExamplePattern::test_verify_moe_mlp_pattern
-            # run_pattern tests are decorated with @usuallyExpectedFailure, meaning
-            # the test framework already handles their xfail state internally.
-            - TestExamplePattern::test_simple_fragmentation_pattern
-            - TestExamplePattern::test_staircase_pattern
-            - TestExamplePattern::test_downward_staircase_pattern
-            - TestExamplePattern::test_simple_eviction_pattern
-            - TestExamplePattern::test_eviction_reallocation_pattern
-            - TestExamplePattern::test_gqattention_pattern
-            - TestExamplePattern::test_moe_mlp_pattern
-          mode: mandatory_success
+      unlisted_test_mode: mandatory_success

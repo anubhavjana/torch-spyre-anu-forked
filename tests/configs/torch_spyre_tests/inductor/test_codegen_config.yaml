@@ -1,10 +1,4 @@
 test_suite_config:
   files:
     - path: ${TORCH_DEVICE_ROOT}/tests/inductor/test_codegen.py
-      unlisted_test_mode: skip
-      tests:
-        - names:
-            - TestSpyreConfig::test_config_default
-            - TestSpyreConfig::test_config_too_many_sencores
-            - TestSpyreConfig::test_sencores_16
-          mode: mandatory_success
+      unlisted_test_mode: mandatory_success

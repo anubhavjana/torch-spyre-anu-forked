@@ -1,14 +1,4 @@
 test_suite_config:
   files:
     - path: ${TORCH_DEVICE_ROOT}/tests/test_modules.py
-      unlisted_test_mode: skip
-      tests:
-        - names:
-            - TestOps::test_linear
-            - TestOps::test_softmax
-            - TestOps::test_roberta_self_attention
-            - TestOps::test_roberta_layer
-            - TestOps::test_roberta_encoder
-            - TestOps::test_llama_attention
-            - TestOps::test_llama_layer
-          mode: mandatory_success
+      unlisted_test_mode: mandatory_success
