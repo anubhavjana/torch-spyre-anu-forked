@@ -57,7 +57,8 @@ test_suite_config:
             - TestViewOps::test_squeeze_inplace_view   # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80
             - TestViewOps::test_squeeze_view   # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80
             - TestViewOps::test_t_inplace_view   # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80
-            - TestViewOps::test_t_view    # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80
+            # Removed from this list since its throwing a seg fault
+            # - TestViewOps::test_t_view    # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80
             - TestViewOps::test_transpose_inplace_view  # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80
             - TestViewOps::test_transpose_view  # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80
             - TestViewOps::test_unbind_view   # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80
@@ -86,6 +87,9 @@ test_suite_config:
             - TestOldViewOps::test_transposes   # RuntimeError: Comparing, Error in codegen for ComputedBuffer https://github.com/torch-spyre/torch-spyre/issues/1226 (float16),  NotImplementedError aten::random_.from https://github.com/torch-spyre/torch-spyre/issues/549 (int64)
             - TestOldViewOps::test_view_all_dtypes_and_devices   # RuntimeError: Spyre backend does not support dtype Double https://github.com/torch-spyre/torch-spyre/issues/1228
           mode: xfail
+        - names:
+            - TestViewOps::test_T_view   # Aborts pytest process (heap corruption in spyre_aware_repr) - cannot xfail
+          mode: skip
         - names: # Tests that are not supported OR crash pytest with seg faults
             - TestViewOps::test_conj_imag_view  # Complex not supported https://github.com/torch-spyre/torch-spyre/issues/697
             - TestViewOps::test_real_imag_view  # Complex not supported https://github.com/torch-spyre/torch-spyre/issues/694 
