@@ -40,7 +40,7 @@ test_suite_config:
             # - TestViewOps::test_T_view   # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80 
             # - TestViewOps::test_as_strided_inplace_view  # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80 
             # - TestViewOps::test_as_strided_view   # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80 
-            - TestViewOps::test_basic_indexing_ellipses_view  # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80 
+            # - TestViewOps::test_basic_indexing_ellipses_view  # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80 
             - TestViewOps::test_basic_indexing_newaxis_view   # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80 
             - TestViewOps::test_basic_indexing_slice_view  # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80 
             - TestViewOps::test_contiguous_nonview   # RuntimeError: Error: In-device copy not implemented https://github.com/torch-spyre/torch-spyre/issues/80 
@@ -92,6 +92,8 @@ test_suite_config:
             - TestViewOps::test_T_view   # Aborts pytest process (heap corruption in spyre_aware_repr) - cannot xfail
             - TestViewOps::test_as_strided_inplace_view  # Aborts pytest process (heap corruption in spyre_aware_repr) - cannot xfail
             - TestViewOps::test_as_strided_view
+            - TestViewOps::test_basic_indexing_ellipses_view
+
 
           mode: skip
         - names: # Tests that are not supported OR crash pytest with seg faults
