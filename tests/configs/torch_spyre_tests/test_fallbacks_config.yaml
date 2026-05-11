@@ -1,0 +1,17 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/test_fallbacks.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            # TestFallbacks - factory op tests (@parametrize with _factory_ops)
+            - TestFallbacks::test_factory_op_arange
+            - TestFallbacks::test_factory_op_out_arange
+            # TestFallbacks - unary op tests (@parametrize with _unary_ops)
+            - TestFallbacks::test_unary_op_sin
+            - TestFallbacks::test_unary_op_cos
+            - TestFallbacks::test_unary_op_out_sin
+            - TestFallbacks::test_unary_op_out_cos
+            - TestFallbacks::test_unary_op_out_alias_sin
+            - TestFallbacks::test_unary_op_out_alias_cos
+          mode: mandatory_success

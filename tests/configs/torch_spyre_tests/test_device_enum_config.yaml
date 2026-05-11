@@ -1,0 +1,18 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/test_device_enum.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            # TestDeviceEnumEnvVars
+            - TestDeviceEnumEnvVars::test_no_env_vars
+            - TestDeviceEnumEnvVars::test_aiu_world_size_smaller_equal_total
+            - TestDeviceEnumEnvVars::test_aiu_world_size_larger_total
+            - TestDeviceEnumEnvVars::test_spyre_visible_devices_single
+            - TestDeviceEnumEnvVars::test_spyre_visible_devices_multiple[basic multiple devices]
+            - TestDeviceEnumEnvVars::test_spyre_visible_devices_multiple[duplicates should be deduplicated]
+            - TestDeviceEnumEnvVars::test_spyre_visible_devices_multiple[out-of-order indices]
+            - TestDeviceEnumEnvVars::test_spyre_visible_devices_multiple[out-of-range index should be filtered out]
+            - TestDeviceEnumEnvVars::test_aiu_world_size_with_spyre_devices[AIU_WORLD_SIZE=2, SPYRE_DEVICES=0]
+            - TestDeviceEnumEnvVars::test_aiu_world_size_with_spyre_devices[AIU_WORLD_SIZE=2, SPYRE_DEVICES=0,1]
+          mode: mandatory_success

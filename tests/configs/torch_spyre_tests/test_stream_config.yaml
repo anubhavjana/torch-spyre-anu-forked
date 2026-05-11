@@ -1,0 +1,30 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/test_stream.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            # TestSpyreStream
+            - TestSpyreStream::test_legacy_stream_creation_with_device
+            - TestSpyreStream::test_legacy_stream_creation_with_priority
+            - TestSpyreStream::test_legacy_stream_creation_with_device_and_priority
+            - TestSpyreStream::test_legacy_current_stream
+            - TestSpyreStream::test_modern_stream_creation
+            - TestSpyreStream::test_modern_stream_creation_with_priority
+            - TestSpyreStream::test_modern_stream_context_manager
+            - TestSpyreStream::test_modern_current_stream
+            - TestSpyreStream::test_stream_synchronize
+            - TestSpyreStream::test_device_synchronize
+            - TestSpyreStream::test_global_synchronize
+            - TestSpyreStream::test_multiple_streams
+            - TestSpyreStream::test_stream_operations_isolation
+            - TestSpyreStream::test_nested_stream_contexts
+            - TestSpyreStream::test_stream_priority_levels
+            - TestSpyreStream::test_stream_with_tensor_operations
+            - TestSpyreStream::test_default_stream
+            - TestSpyreStream::test_stream_query_after_context
+            - TestSpyreStream::test_stream_reuse
+            # TestStreamCompatibility
+            - TestStreamCompatibility::test_legacy_and_modern_interop
+            - TestStreamCompatibility::test_current_stream_consistency
+          mode: mandatory_success

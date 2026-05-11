@@ -1,0 +1,46 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/test_spyre.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            - TestSpyre::test_initializes
+            - TestSpyre::test_autograd_init
+            - TestSpyre::test_empty_factory
+            - TestSpyre::test_ones_factory
+            - TestSpyre::test_str
+            - TestSpyre::test_repr
+            - TestSpyre::test_printing
+            - TestSpyre::test_cross_device_copy_scalar_fill_zeros
+            - TestSpyre::test_cross_device_copy_scalar_fill_ones
+            - TestSpyre::test_cross_device_copy_scalar_add_int8
+            - TestSpyre::test_cross_device_copy_scalar_add_bool
+            - TestSpyre::test_cross_device_copy_scalar_add_int64
+            - TestSpyre::test_cross_device_copy_scalar_add_uint8
+            - TestSpyre::test_cross_device_copy_scalar_add_int16
+            - TestSpyre::test_cross_device_copy_scalar_add_int32
+            - TestSpyre::test_cross_device_copy_scalar_add_float8_e4m3fn
+            - TestSpyre::test_cross_device_copy_scalar_add_float16
+            - TestSpyre::test_cross_device_copy_scalar_add_float32
+            - TestSpyre::test_cross_device_copy
+            - TestSpyre::test_cross_device_copy_dtypes
+            - TestSpyre::test_data_dependent_output
+            - TestSpyre::test_allocation_size
+            - TestSpyre::test_spyre_round_trip
+            - TestSpyre::test_default_on_import
+            - TestSpyre::test_set_get_roundtrip
+            - TestSpyre::test_warning_emitted_when_enabled
+            - TestSpyre::test_warning_suppressed_when_disabled
+            - TestSpyre::test_allocation_and_copy_dtypes
+            - TestSpyre::test_detach
+            - TestSpyre::test_hooks_on_import
+            - TestSpyre::test_memory_allocated
+            - TestSpyre::test_spyre_device_count_and_set_device
+            - TestSpyre::test_instantiate_device_type_tests_mro
+            - TestSpyre::test_device_to_device
+            - TestSpyre::test_device_to_device_with_view
+            - TestSpyre::test_d2h_copy_of_expanded_view
+            - TestSpyre::test_d2h_copy_of_strided_slice
+            - TestSpyre::test_d2h_copy_of_transposed_view
+            - TestSpyre::test_scalar_tensor
+          mode: mandatory_success
