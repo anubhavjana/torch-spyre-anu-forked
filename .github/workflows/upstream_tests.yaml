@@ -153,7 +153,7 @@ jobs:
           REPORT_PATH="${GITHUB_WORKSPACE}/${REPORT_NAME}"
 
           echo "Running ${{ matrix.suite.name }} upstream tests..."
-          bash run_test.sh configs/${CONFIG} -v --junit-xml="${REPORT_PATH}"
+          bash run_test.sh configs/upstream_tests/${CONFIG} -v --junit-xml="${REPORT_PATH}"
           echo "${{ matrix.suite.name }} upstream tests done"
 
           # Expose report path/name to subsequent steps via GITHUB_ENV
