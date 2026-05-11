@@ -66,13 +66,13 @@ jobs:
           - name: Inductor Decomp
             config: torch_spyre_tests/inductor/test_decomp_config.yaml
           - name: Inductor FX Passes
-            config: torch_spyre_tests/inductor/test_fx_passes_config.yaml
+            config: torch_spyre_tests/inductor/test_inductor_fx_passes_config.yaml
           - name: Inductor Normalization Scalars
             config: torch_spyre_tests/inductor/test_normalization_scalars_config.yaml
           - name: Inductor Ops
             config: torch_spyre_tests/inductor/test_inductor_ops_config.yaml
           - name: Inductor Ops LX Planning
-            config: torch_spyre_tests/inductor/test_inductor_ops_lx_planning_config.yaml
+            config: torch_spyre_tests/inductor/test_ops_lx_planning_config.yaml
           - name: Inductor Scalar
             config: torch_spyre_tests/inductor/test_inductor_scalar_config.yaml
           - name: Inductor Logging
@@ -178,8 +178,6 @@ jobs:
           source .venv/bin/activate
 
           CONFIG="${{ matrix.suite.config }}"
-          REPORT_NAME="$(basename ${CONFIG%.yaml}).xml"
-          REPORT_PATH="${CLONED_TORCH_SPYRE_DIR}/tests/${REPORT_NAME}"
 
           echo "Running ${{ matrix.suite.name }} tests..."
           bash tests/run_test.sh "tests/configs/${CONFIG}" -v
