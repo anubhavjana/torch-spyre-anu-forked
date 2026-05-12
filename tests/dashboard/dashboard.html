@@ -300,6 +300,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .multiselect-option:hover{background-color:var(--bg3)}
 .multiselect-option input[type="checkbox"]{cursor:pointer}
 .action-submenu-item:last-child{border-radius:0 0 var(--radius) var(--radius)}
+.spacing-bottom{ margin-bottom: 18px;}
 </style>
 </head>
 <body>
@@ -338,10 +339,9 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
         </button>
         <div class="nav-submenu" id="explorer-submenu" style="display:none">
           <button class="nav-subitem" id="nav-explorer-model" onclick="switchExplorerGroupBy('model')">Model Tag</button>
-          <button class="nav-subitem" id="nav-explorer-test" onclick="switchExplorerGroupBy('test')">Test Method</button>
+          <button class="nav-subitem" id="nav-explorer-module" onclick="switchExplorerGroupBy('module')">Module</button>
           <button class="nav-subitem" id="nav-explorer-op" onclick="switchExplorerGroupBy('op')">Op Name</button>
           <button class="nav-subitem" id="nav-explorer-dtype" onclick="switchExplorerGroupBy('dtype')">Dtype</button>
-          <button class="nav-subitem" id="nav-explorer-class" onclick="switchExplorerGroupBy('class')">Test Class</button>
         </div>
         <button class="nav-item" id="nav-history" onclick="switchTab('trend')" data-tooltip="Run History">
           <span class="nav-icon">📈</span>
@@ -426,7 +426,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
       <!-- REPORTS TABLE -->
       <div class="panel" id="panel-reports">
-        <div class="hero-row">
+        <div class="hero-row spacing-bottom">
           <div>
             <div class="hero-kicker">all uploaded reports</div>
             <div class="hero-title">Reports Summary</div>
@@ -826,7 +826,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
           </div>
         </div><!-- end explorer-detail-view -->
         
-      </div><!-- end panel-explorer -->
+      
 
       <!-- TREND -->
       <div class="panel" id="panel-trend">
@@ -835,7 +835,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
           Upload multiple XML files to see pass-rate trends over time.
         </div>
         <div id="trend-content" class="panel-content" style="display:none">
-          <div class="hero-row">
+          <div class="hero-row spacing-bottom">
             <div>
               <div class="hero-kicker">historical quality</div>
               <div class="hero-title">suite pass rate over time</div>
@@ -845,7 +845,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
               <button class="btn btn-sm" onclick="exportTrendCSV()">↓ export trend CSV</button>
             </div>
           </div>
-          <div class="chart-card">
+          <div class="chart-card spacing-bottom">
             <div class="chart-container" style="height:280px">
               <canvas id="trend-chart" role="img" aria-label="Line chart showing pass/xpass/fail rate trend across runs"></canvas>
             </div>
@@ -1129,6 +1129,10 @@ function parseXML(text) {
   const dtypeNames = ['float16','float32','float64','bfloat16','int8','int16','int32','int64','uint8','bool','complex64','complex128','complex32'];
   const testMethods = ['test_contig_vs_transposed','test_scalar_support','test_add','test_forward','test_compare_cpu'];
 
+  // Track if report has op__ or module__ tags
+  let hasOpTags = false;
+  let hasModuleTags = false;
+
   rawTests.forEach(({ name, cls, timeVal, file, status, failMsg, properties }) => {
     // Extract [model_tag] brackets
     const tags = [];
@@ -1166,6 +1170,11 @@ function parseXML(text) {
       const opTag = properties.find(prop => prop.startsWith('op__'));
       if (opTag) {
         opName = opTag.substring(4); // Remove 'op__' prefix for display
+        hasOpTags = true;
+      }
+      // Check for module tags
+      if (!hasModuleTags && properties.some(prop => prop.startsWith('module__'))) {
+        hasModuleTags = true;
       }
     }
 
@@ -1174,6 +1183,11 @@ function parseXML(text) {
 
     tests.push({ name, cls, clsShort, timeVal, file, status, failMsg: failMsg.trim(), tags, testMethod, opName, dtype, properties: properties || [] });
   });
+  
+  // Store metadata about available tags as non-enumerable properties
+  Object.defineProperty(tests, 'hasOpTags', { value: hasOpTags, enumerable: false });
+  Object.defineProperty(tests, 'hasModuleTags', { value: hasModuleTags, enumerable: false });
+  
   return tests;
 }
 
@@ -1192,14 +1206,21 @@ function buildGroupMap(tests, by) {
       if (!keys || keys.length === 0) {
         keys = ['(untagged)'];
       }
-    } else if (by === 'test') {
-      keys = [t.testMethod || '(unknown)'];
+    } else if (by === 'module') {
+      // Filter both properties and tags to only include those starting with "module__"
+      if (t.properties && t.properties.length) {
+        keys = t.properties.filter(prop => prop.startsWith('module__'));
+      } else if (t.tags && t.tags.length) {
+        keys = t.tags.filter(tag => /^module__.+/.test(tag));
+      }
+      // If no module tags found, mark as untagged
+      if (!keys || keys.length === 0) {
+        keys = ['(untagged)'];
+      }
     } else if (by === 'op') {
       keys = [t.opName || '(no op)'];
     } else if (by === 'dtype') {
       keys = [t.dtype || '(no dtype)'];
-    } else if (by === 'class') {
-      keys = [t.clsShort || '(unknown)'];
     }
     keys.forEach(k => {
       if (!map[k]) map[k] = [];
@@ -1227,17 +1248,14 @@ function ingestFiles(files) {
         };
         runs.push(run);
         runs.sort((a, b) => a.timestamp - b.timestamp);
-        selectedRunIndex = runs.length - 1;
-        updateRunList();
         toast('✓ Loaded: ' + f.name + ' (' + tests.length + ' tests)');
       } catch (err) {
         toast('✗ Error parsing ' + f.name + ': ' + err.message, true);
       } finally {
         loaded++;
         if (loaded === arr.length && runs.length) {
-          selectedRunIndex = runs.length - 1;
-          updateRunList();
-          renderReports();
+          // Select first file (index 0) by default
+          selectRun(0);
           toast(`✓ Successfully loaded ${arr.length} file(s). Total runs: ${runs.length}.`);
           // Automatically switch to reports tab after loading files
           switchTab('reports');
@@ -1289,6 +1307,16 @@ function selectRun(i) {
   selectedRunIndex = i;
   selectedGroup = null;
   updateRunList();
+  
+  // Update submenu visibility based on available tags
+  const run = currentRun();
+  if (run && run.tests) {
+    const opItem = document.getElementById('nav-explorer-op');
+    const moduleItem = document.getElementById('nav-explorer-module');
+    
+    if (opItem) opItem.style.display = run.tests.hasOpTags ? 'block' : 'none';
+    if (moduleItem) moduleItem.style.display = run.tests.hasModuleTags ? 'block' : 'none';
+  }
   
   // Refresh all pages with the new run data
   renderOverview();
@@ -1499,10 +1527,9 @@ function toggleExplorerSubmenu() {
 function updateSearchPlaceholders() {
   const placeholders = {
     'model': 'Search models or tests…',
-    'test': 'Search test methods or tests…',
+    'module': 'Search modules or tests…',
     'op': 'Search operations or tests…',
-    'dtype': 'Search dtypes or tests…',
-    'class': 'Search test classes or tests…'
+    'dtype': 'Search dtypes or tests…'
   };
   
   const explorerSearch = document.getElementById('explorer-search');
@@ -1541,10 +1568,9 @@ function switchExplorerGroupBy(groupByValue) {
 function updateExplorerGroupByLabel() {
   const labels = {
     'model': 'Model Tag',
-    'test': 'Test Method',
+    'module': 'Module',
     'op': 'Op Name',
-    'dtype': 'Dtype',
-    'class': 'Test Class'
+    'dtype': 'Dtype'
   };
   const labelEl = document.getElementById('explorer-groupby-label');
   if (labelEl) {
@@ -1608,9 +1634,11 @@ function renderCoverageExplorer() {
   filterExplorerTests();
 }
 
-// ─── helper function to display model name without prefix ────────────────────
-function displayModelName(model) {
-  return model.startsWith('model__') ? model.substring(7) : model;
+// ─── helper function to display group name without prefix ────────────────────
+function displayGroupName(name) {
+  if (name.startsWith('model__')) return name.substring(7);
+  if (name.startsWith('module__')) return name.substring(8);
+  return name;
 }
 
 // ─── explorer model filter ────────────────────────────────────────────────────
@@ -1652,7 +1680,7 @@ function populateExplorerModelSelector() {
     selector.disabled = true;
   } else {
     selector.innerHTML = '<option value="">All Models</option>' +
-      models.map(model => `<option value="${escAttr(model)}">${esc(displayModelName(model))}</option>`).join('');
+      models.map(model => `<option value="${escAttr(model)}">${esc(displayGroupName(model))}</option>`).join('');
     selector.disabled = false;
   }
 }
@@ -1813,7 +1841,7 @@ function renderSummary() {
     const pct = tests.length ? Math.round((c.passed + c.xpass) / tests.length * 100) : 0;
     return `<div style="margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:4px">
-        <span style="color:var(--text);font-family:var(--mono)">${esc(displayModelName(key))}</span>
+        <span style="color:var(--text);font-family:var(--mono)">${esc(displayGroupName(key))}</span>
         <span style="color:var(--text2)">${pct}%</span>
       </div>
       <div class="bar-track" style="height:6px">
@@ -1926,7 +1954,7 @@ function populateModelSelector() {
   } else {
     // Populate dropdown with models
     selector.innerHTML = availableModels.map(model =>
-      `<option value="${escAttr(model)}">${esc(displayModelName(model))}</option>`
+      `<option value="${escAttr(model)}">${esc(displayGroupName(model))}</option>`
     ).join('');
     selector.disabled = false;
     
@@ -2019,7 +2047,7 @@ function updateModelPieChart() {
           },
           title: {
             display: true,
-            text: displayModelName(selectedModelName),
+            text: displayGroupName(selectedModelName),
             font: { family: 'IBM Plex Mono', size: 14, weight: '500' },
             padding: { bottom: 16 },
             color: colors.text
@@ -2494,7 +2522,7 @@ function filterGroupsTable() {
     const rowId = 'group-row-' + idx;
     const menuId = 'group-action-menu-' + idx;
     
-    const displayKey = groupBy === 'model' ? displayModelName(g.key) : g.key;
+    const displayKey = (groupBy === 'model' || groupBy === 'module') ? displayGroupName(g.key) : g.key;
     return `<tr id="${rowId}">
       <td style="font-family:var(--mono);font-size:12px">${esc(displayKey)}</td>
       <td style="text-align:left">${g.total}</td>
