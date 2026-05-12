@@ -46,13 +46,18 @@ SPYRE_FP32_OPS = [
     "layernormnorm",
     "identity",
     "overwrite",
+    "topkvalue",
+    "topkindex",
+    "floor",
 ]
+
+TOPK_OPS = {"topkvalue", "topkindex"}
 
 LAYOUT_LABELS = ["OUTPUT", "KERNEL", "INPUT", "KERNEL_IDX"]
 MATMUL_LAYOUT_LABELS = ["INPUT", "KERNEL", "OUTPUT", "KERNEL_IDX"]
 
 
 # Populate more valid labels from deeptools here if needed
-INPUT_DIM_LABELS = ["mb", "x", "y", "i", "j"]
+INPUT_DIM_LABELS = ["mb", "x", "y", "i", "j", "ki", "kj"]
 OUTPUT_DIM_LABELS = ["out"]
-MATMUL_DIM_LABELS = ["y", "x", "mb", "out", "in"]
+MATMUL_DIM_LABELS = ["ki", "kj", "y", "x", "mb", "out", "in"]
