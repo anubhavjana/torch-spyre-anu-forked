@@ -86,6 +86,8 @@ strategy:
         config: <path/to/your_config.yaml>
 ```
 
+- `fail-fast: false` — by default GitHub Actions cancels all in-progress matrix jobs the moment any one job fails. Setting this to `false` disables that behaviour so **all suites always run to completion**, even if one fails. This is intentional since we want the full picture of what passed and what failed across every suite, not just the first failure.
+
 - `name` — the label shown in the GitHub Actions UI for this job
 - `config` — path to your config file, **relative to** `tests/configs/`
 
