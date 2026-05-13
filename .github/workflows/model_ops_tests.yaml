@@ -24,7 +24,12 @@ permissions:
 jobs:
   model-ops-tests:
     name: ${{ matrix.suite.name }}
-    runs-on: official-aiu-x86-64-arc-runner-set-v3
+    # runs-on: official-aiu-x86-64-arc-runner-set-v3
+    runs-on:
+      - x86_64
+      - spyre_pf
+      - linux
+      - image_torch_spyre
     timeout-minutes: 720
 
     # ---------------------------------------------------------------------------
