@@ -31,6 +31,14 @@ jobs:
       - linux
       - image_torch_spyre
     timeout-minutes: 720
+    env:
+      # The CI env var is very important.
+      # GitHub actions automatically sets CI=true
+      # which causes the pytest inductor tests to fail with AssertionError
+      # due to a mix of fallbacks and decompositions.
+      # Here we set it to an empty string (or we could also unset it).
+      CI: ''
+      CLONED_TORCH_SPYRE_DIR: /home/senuser/torch-spyre
 
     # ---------------------------------------------------------------------------
     # To add a new model ops test suite, append an entry here:
