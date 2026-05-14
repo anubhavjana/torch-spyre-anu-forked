@@ -21,10 +21,15 @@
 #    distinguish our files from upstream ones.
 #
 # 4. Checks all workflow YAMLs under .github/workflows/ so configs registered
-#    in different workflows (e.g. module-tests.yml) are also accepted.
+#    in different workflows (e.g. module_tests.yml) are also accepted.
+#    Workflow matrices may use either the full relative config path OR just the
+#    bare filename — both forms are matched.
 #
-# 5. Supports an ignore list (IGNORED_TEST_FILES) for test files that are
-#    intentionally not wired into CI (e.g. test harness helpers).
+# 5. Supports an ignore list (IGNORED_TEST_FILES) for test files and
+#    (IGNORED_CONFIGS) for config files that should be excluded from scanning.
+#
+# 6. Writes workflow contents to a temp file and greps that directly to avoid
+#    the echo|grep -q broken-pipe / pipefail false-negative bug.
 #
 # Exit code: 0 = all tests covered, 1 = gaps found
 #
@@ -44,12 +49,18 @@ WORKFLOWS_DIR="${REPO_ROOT}/.github/workflows"
 CONFIGS_ROOT="${REPO_ROOT}/tests/configs"
 TESTS_DIR="${REPO_ROOT}/tests"
 
-# ── Ignore list ───────────────────────────────────────────────────────────────
-# Paths relative to TESTS_DIR. These files are intentionally excluded from CI
+# ── Ignore list: test files ───────────────────────────────────────────────────
+# Paths relative to TESTS_DIR. Intentionally excluded from CI gating
 # (e.g. shared test harness helpers, not standalone test suites).
-# Add new entries here when a test_*.py file should never be gated on.
 IGNORED_TEST_FILES=(
   "models/test_model_ops.py"   # base class / helper — not a standalone test suite
+)
+
+# ── Ignore list: config files ─────────────────────────────────────────────────
+# Paths relative to CONFIGS_ROOT. These configs are excluded from scanning
+# (e.g. example/template configs that are not real test suites).
+IGNORED_CONFIGS=(
+  "example_test_config.yaml"   # example template — not a real test suite
 )
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
@@ -73,11 +84,16 @@ error()  { echo -e "  ${RED}✘${RST}  $*"; }
 info()   { echo -e "  ${CYN}·${RST}  $*"; }
 warn()   { echo -e "  ${YEL}!${RST}  $*"; }
 
-# Build a fast lookup set from the ignore list
-declare -A IGNORED
-for f in "${IGNORED_TEST_FILES[@]}"; do
-  IGNORED["$f"]=1
-done
+# Build fast lookup sets from ignore lists
+declare -A IGNORED_TEST
+for f in "${IGNORED_TEST_FILES[@]}"; do IGNORED_TEST["$f"]=1; done
+
+declare -A IGNORED_CFG
+for f in "${IGNORED_CONFIGS[@]}"; do IGNORED_CFG["$f"]=1; done
+
+# ── Temp file for workflow contents (avoids echo|grep broken-pipe/pipefail bug) ──
+WORKFLOW_TMPFILE="$(mktemp)"
+trap 'rm -f "$WORKFLOW_TMPFILE"' EXIT
 
 # ── Sanity checks ─────────────────────────────────────────────────────────────
 fail=0
@@ -95,7 +111,7 @@ fail=0
 #   ${TORCH_ROOT}/test/test_modules.py              <- upstream PyTorch, /test/ (singular)
 #
 # We anchor on: (1) filename is test_*.py, (2) file exists on disk under
-# TESTS_DIR. If it doesn't exist, it's an upstream file — skipped silently.
+# TESTS_DIR. If it doesn't exist on disk it's an upstream file — skipped.
 
 header "Reading all config YAMLs under tests/configs/"
 
@@ -104,8 +120,15 @@ declare -A TEST_TO_CONFIG   # test_rel_path -> config_rel_path (rel to tests/con
 while IFS= read -r -d '' config_abs; do
   config_rel="${config_abs#${CONFIGS_ROOT}/}"
 
+  # Skip ignored config files (matched by basename or full relative path)
+  config_basename="${config_abs##*/}"
+  if [[ -v IGNORED_CFG["$config_basename"] || -v IGNORED_CFG["$config_rel"] ]]; then
+    warn "Skipping ignored config: $config_rel"
+    continue
+  fi
+
   # Collect every line containing "path:", excluding comment lines.
-  # This also matches "module_path:" lines in model configs, but those are
+  # Also catches "module_path:" lines in model configs, but those are
   # filtered out below by the test_*.py filename check.
   mapfile -t path_lines < <(grep 'path:' "$config_abs" 2>/dev/null | grep -v '^\s*#' || true)
 
@@ -155,16 +178,24 @@ done < <(find "$CONFIGS_ROOT" -name "*.yaml" -print0 | sort -z)
 echo ""
 info "Mapped ${#TEST_TO_CONFIG[@]} test file(s) from configs."
 
-# ── Step 2: Collect contents of all workflow YAMLs ────────────────────────────
+# ── Step 2: Collect all workflow YAMLs into a temp file ───────────────────────
+#
+# Concatenate all workflow files into a single temp file and grep that,
+# instead of piping through echo|grep. The echo|grep -q pattern causes a
+# broken pipe (SIGPIPE) under set -o pipefail because grep -q exits as soon
+# as it finds a match, closing the pipe while echo is still writing — this
+# makes pipefail report a non-zero exit even on a successful match, producing
+# false "NOT in any workflow" negatives.
+
 header "Reading all workflow YAMLs under .github/workflows/"
 
-WORKFLOW_CONTENTS=""
 while IFS= read -r -d '' wf; do
   wf_rel="${wf#${REPO_ROOT}/}"
   count=$(grep -c 'config:' "$wf" 2>/dev/null || true)
   if [[ $count -gt 0 ]]; then
     info "$wf_rel ($count config: entries)"
-    WORKFLOW_CONTENTS+=$'\n'"$(cat "$wf")"
+    cat "$wf" >> "$WORKFLOW_TMPFILE"
+    echo "" >> "$WORKFLOW_TMPFILE"
   fi
 done < <(find "$WORKFLOWS_DIR" \( -name "*.yml" -o -name "*.yaml" \) -print0 2>/dev/null | sort -z)
 
@@ -174,8 +205,14 @@ echo ""
 header "Checking every test_*.py"
 
 if [[ ${#IGNORED_TEST_FILES[@]} -gt 0 ]]; then
-  echo -e "  ${YEL}Ignored files (intentionally excluded from CI):${RST}"
+  echo -e "  ${YEL}Ignored test files (intentionally excluded from CI):${RST}"
   for f in "${IGNORED_TEST_FILES[@]}"; do echo "    – tests/$f"; done
+  echo ""
+fi
+
+if [[ ${#IGNORED_CONFIGS[@]} -gt 0 ]]; then
+  echo -e "  ${YEL}Ignored config files (excluded from scanning):${RST}"
+  for f in "${IGNORED_CONFIGS[@]}"; do echo "    – tests/configs/$f"; done
   echo ""
 fi
 
@@ -189,15 +226,23 @@ missing_workflow=()
 for test_abs in "${ALL_TEST_FILES[@]}"; do
   test_rel="${test_abs#${TESTS_DIR}/}"
 
-  # Skip explicitly ignored files
-  if [[ -v IGNORED["$test_rel"] ]]; then
+  # Skip explicitly ignored test files
+  if [[ -v IGNORED_TEST["$test_rel"] ]]; then
     skip "tests/${test_rel}"
     continue
   fi
 
   if [[ -v TEST_TO_CONFIG["$test_rel"] ]]; then
     config_rel="${TEST_TO_CONFIG[$test_rel]}"
-    if echo "$WORKFLOW_CONTENTS" | grep -qF "$config_rel" 2>/dev/null; then
+    config_basename="${config_rel##*/}"
+
+    # Match against the workflow temp file using BOTH the full relative path
+    # and the bare filename — different workflows use different conventions:
+    #   torch_spyre_tests:  config: torch_spyre_tests/inductor/test_foo_config.yaml
+    #   module_tests:       config: granite_3_3_8b_instruct_spyre.yaml   (bare name)
+    #   model_ops_tests:    config: gpt_oss_20b_spyre.yaml               (bare name)
+    if grep -qF "$config_rel" "$WORKFLOW_TMPFILE" 2>/dev/null || \
+       grep -qF "$config_basename" "$WORKFLOW_TMPFILE" 2>/dev/null; then
       ok "tests/${test_rel}"
     else
       error "tests/${test_rel}"
@@ -215,15 +260,14 @@ done
 # ── Step 4: Summary and actionable output ─────────────────────────────────────
 header "Summary"
 
-n_ignored=${#IGNORED_TEST_FILES[@]}
 n_no_config=${#missing_config[@]}
 n_no_workflow=${#missing_workflow[@]}
 n_bad=$(( n_no_config + n_no_workflow ))
 n_covered=$(( ${#TEST_TO_CONFIG[@]} - n_no_workflow ))
 
 echo "  Config YAMLs scanned      : all files under tests/configs/"
+echo -e "  ${YEL}Intentionally ignored${RST}     : ${#IGNORED_TEST_FILES[@]} test file(s), ${#IGNORED_CONFIGS[@]} config(s)"
 echo "  Test files mapped         : ${#TEST_TO_CONFIG[@]}"
-echo -e "  ${YEL}Intentionally ignored${RST}     : $n_ignored"
 echo -e "  ${GRN}Fully covered${RST}             : $n_covered"
 echo -e "  ${RED}No config at all${RST}          : $n_no_config"
 echo -e "  ${RED}Config not in any workflow${RST} : $n_no_workflow"
@@ -240,6 +284,7 @@ echo -e "${RED}${BLD}ACTION REQUIRED — $n_bad test file(s) not fully wired int
 echo ""
 echo "If a file should never be in CI, add it to IGNORED_TEST_FILES"
 echo "at the top of tests/scripts/check_test_coverage.sh."
+echo "If a config should be excluded from scanning, add it to IGNORED_CONFIGS."
 
 if [[ ${#missing_config[@]} -gt 0 ]]; then
   echo ""
@@ -264,7 +309,7 @@ if [[ ${#missing_workflow[@]} -gt 0 ]]; then
   echo ""
   echo "  Add the config to the appropriate workflow matrix, e.g.:"
   echo "    - name: <Human Readable Name>"
-  echo "      config: <config path relative to tests/configs/>"
+  echo "      config: <config filename>"
 fi
 
 echo ""

@@ -47,7 +47,7 @@ jobs:
         run: |
           bash tests/scripts/check_test_coverage.sh \
             --workflows-dir .github/workflows \
-            --configs-root  tests/configs/torch_spyre_tests \
+            --configs-root  tests/configs \
             --tests    tests
 
       # --- On failure: provide a helpful summary in the PR/GHA UI ----
