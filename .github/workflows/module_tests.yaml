@@ -53,7 +53,7 @@ jobs:
         suite:
           - name: Granite 3.3 8B Instruct
             config: granite_3_3_8b_instruct_spyre.yaml
-          
+
     steps:
       - name: Checkout torch-spyre repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
