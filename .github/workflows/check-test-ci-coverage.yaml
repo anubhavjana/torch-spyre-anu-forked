@@ -45,9 +45,9 @@ jobs:
       - name: Check every test file has a config and is in the workflow matrix
         shell: bash
         run: |
-          bash scripts/check_test_coverage.sh \
-            --workflow .github/workflows/torch-spyre-tests.yaml \
-            --configs  tests/configs/torch_spyre_tests \
+          bash tests/scripts/check_test_coverage.sh \
+            --workflows-dir .github/workflows \
+            --configs-root  tests/configs/torch_spyre_tests \
             --tests    tests
 
       # --- On failure: provide a helpful summary in the PR/GHA UI ----
