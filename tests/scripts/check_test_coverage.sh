@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # tests/scripts/check_test_coverage.sh
-#
+# Author: Anubhav Jana (Anubhav.Jana97@ibm.com)
 # Enforces that every test_*.py under tests/ is referenced by at least one
 # config YAML anywhere under tests/configs/, AND that config is referenced
 # in at least one GitHub Actions workflow under .github/workflows/.
 #
-# Design notes
-# ────────────
+# Design flow
+# -------------
 # 1. Scans ALL of tests/configs/ (not just torch_spyre_tests/) because some
 #    test files appear as secondary entries inside model configs under
 #    tests/configs/module_tests/ or tests/configs/model_ops_tests/.
 #
-# 2. Extracts EVERY `path:` line from each YAML (not just the first) because
+# 2. Extracts EVERY `path:` line from each YAML because
 #    a single model config can reference multiple test files.
 #
 # 3. Handles both path prefixes used in configs:
 #      ${TORCH_DEVICE_ROOT}/tests/...  (this repo's tests)
-#      ${TORCH_ROOT}/test/...          (upstream PyTorch tests — singular "test")
+#      ${TORCH_ROOT}/test/...          (upstream PyTorch tests -- singular "test")
 #    Anchors on the filename (test_*.py) and verifies existence on disk to
 #    distinguish our files from upstream ones.
 #
@@ -31,7 +31,7 @@
 # 6. Writes workflow contents to a temp file and greps that directly to avoid
 #    the echo|grep -q broken-pipe / pipefail false-negative bug.
 #
-# Exit code: 0 = all tests covered, 1 = gaps found
+# Exit code: 0 -- all tests covered, 1 = gaps found
 #
 # Usage (run from repo root):
 #   bash tests/scripts/check_test_coverage.sh
@@ -43,7 +43,7 @@
 
 set -euo pipefail
 
-# ── Defaults ──────────────────────────────────────────────────────────────────
+# ------------- Defaults -------------
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 WORKFLOWS_DIR="${REPO_ROOT}/.github/workflows"
 CONFIGS_ROOT="${REPO_ROOT}/tests/configs"
@@ -102,7 +102,7 @@ fail=0
 [[ -d "$TESTS_DIR"     ]] || { echo -e "${RED}ERROR${RST}: tests dir not found: $TESTS_DIR";         fail=1; }
 [[ $fail -eq 0 ]] || { echo "Aborting."; exit 1; }
 
-# ── Step 1: Build map  test_rel_path -> config_rel_path ───────────────────────
+# --------------- Build map  test_rel_path --> config_rel_path ---------------
 #
 # For each config YAML, grep every line containing "path:" and extract the
 # file path value. Two path prefix conventions exist in the configs:
@@ -160,16 +160,16 @@ while IFS= read -r -d '' config_abs; do
 
     # If the file doesn't exist under our TESTS_DIR, it's upstream — skip
     if [[ ! -f "${TESTS_DIR}/${declared_path}" ]]; then
-      info "(upstream, skipping) $declared_path  ←  $config_rel"
+      info "(upstream, skipping) $declared_path  <--  $config_rel"
       continue
     fi
 
     # Record mapping (first config to claim a file wins; duplicates are fine)
     if [[ ! -v TEST_TO_CONFIG["$declared_path"] ]]; then
       TEST_TO_CONFIG["$declared_path"]="$config_rel"
-      info "$declared_path  ←  $config_rel"
+      info "$declared_path  <--  $config_rel"
     else
-      info "$declared_path  ←  $config_rel  (also covered by ${TEST_TO_CONFIG[$declared_path]})"
+      info "$declared_path  <--  $config_rel  (also covered by ${TEST_TO_CONFIG[$declared_path]})"
     fi
   done
 
@@ -178,12 +178,12 @@ done < <(find "$CONFIGS_ROOT" -name "*.yaml" -print0 | sort -z)
 echo ""
 info "Mapped ${#TEST_TO_CONFIG[@]} test file(s) from configs."
 
-# ── Step 2: Collect all workflow YAMLs into a temp file ───────────────────────
+# --------------- Collect all workflow YAMLs into a temp file ---------------
 #
 # Concatenate all workflow files into a single temp file and grep that,
 # instead of piping through echo|grep. The echo|grep -q pattern causes a
 # broken pipe (SIGPIPE) under set -o pipefail because grep -q exits as soon
-# as it finds a match, closing the pipe while echo is still writing — this
+# as it finds a match, closing the pipe while echo is still writing -- this
 # makes pipefail report a non-zero exit even on a successful match, producing
 # false "NOT in any workflow" negatives.
 
@@ -201,11 +201,11 @@ done < <(find "$WORKFLOWS_DIR" \( -name "*.yml" -o -name "*.yaml" \) -print0 2>/
 
 echo ""
 
-# ── Step 3: Walk every test_*.py and check coverage ───────────────────────────
+# --------------- Walk every test_*.py and check coverage ---------------
 header "Checking every test_*.py"
 
 if [[ ${#IGNORED_TEST_FILES[@]} -gt 0 ]]; then
-  echo -e "  ${YEL}Ignored test files (intentionally excluded from CI):${RST}"
+  echo -e "  ${YEL}Ignored test files (intentionally excluded from CI (NOTE: using test_model_ops_v2.py currently)):${RST}"
   for f in "${IGNORED_TEST_FILES[@]}"; do echo "    – tests/$f"; done
   echo ""
 fi
@@ -257,8 +257,7 @@ for test_abs in "${ALL_TEST_FILES[@]}"; do
   fi
 done
 
-# ── Step 4: Summary and actionable output ─────────────────────────────────────
-header "Summary"
+# --------------- Summary and actionable output ---------------
 
 n_no_config=${#missing_config[@]}
 n_no_workflow=${#missing_workflow[@]}
@@ -278,7 +277,7 @@ if [[ $n_bad -eq 0 ]]; then
   exit 0
 fi
 
-# ── Fix instructions ──────────────────────────────────────────────────────────
+# --------------- Fix instructions ---------------
 echo ""
 echo -e "${RED}${BLD}ACTION REQUIRED — $n_bad test file(s) not fully wired into CI.${RST}"
 echo ""
