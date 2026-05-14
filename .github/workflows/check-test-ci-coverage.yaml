@@ -61,9 +61,9 @@ jobs:
           echo ""
           echo "  1. A torch-spyre config YAML somewhere under tests/configs/torch_spyre_tests that lists it"
           echo "     under 'files:' with a 'path:' entry, e.g.:"
-          echo "       test_suite_config:
-          echo "         files:
-          echo "           - path: ${TORCH_DEVICE_ROOT}/tests/<path/to/test_file.py>
+          echo "       test_suite_config:"
+          echo "         files:"
+          echo "           - path: ${TORCH_DEVICE_ROOT}/tests/<path/to/test_file.py>"
           echo "             unlisted_test_mode: mandatory_success"
           echo ""
           echo "     For standalone tests:  tests/configs/torch_spyre_tests[/subdir]/"
