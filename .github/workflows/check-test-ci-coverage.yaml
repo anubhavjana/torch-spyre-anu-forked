@@ -13,25 +13,24 @@ name: Enforce Test CI Coverage
 on:
   push:
     paths:
-      - "tests/**/*.py"
-      - "tests/configs/**"
-      - ".github/workflows/torch-spyre-tests.yaml"
-      - ".github/workflows/check-test-ci-coverage.yml"
+      - tests/**/*.py
+      - tests/configs/**
+      - .github/workflows/torch-spyre-tests.yaml
+      - .github/workflows/check-test-ci-coverage.yaml
     branches: [main]
 
   pull_request:
     branches: [main]
     paths:
-      - "tests/**/*.py"
-      - "tests/configs/**"
-      - ".github/workflows/torch-spyre-tests.yaml"
-      - ".github/workflows/check-test-ci-coverage.yml"
-    
+      - tests/**/*.py
+      - tests/configs/**
+      - .github/workflows/torch-spyre-tests.yaml
+      - .github/workflows/check-test-ci-coverage.yml
   merge_group:
     types: [checks_requested]
 
   # Allow maintainers to trigger this manually at any time
-  workflow_dispatch:
+  workflow_dispatch: null
 
 jobs:
   coverage-check:
@@ -55,7 +54,7 @@ jobs:
       - name: Show fix instructions on failure
         if: failure()
         shell: bash
-        run: |
+        run: |-
           echo "::error title=Uncovered test files::One or more test_*.py files are not fully wired into CI."
           echo ""
           echo "Each uncovered file needs both of the following:"
