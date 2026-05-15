@@ -56,7 +56,7 @@ jobs:
               # pure documentation under tests/docs/.
               - '**'
               - '!tests/docs/**'
-              - '!**.md'        # optionally exclude all markdown files
+              # - '!**.md'        # optionally exclude all markdown files
   # ---------------------------------------------------------------------------
   # Job 2: test matrix
   #
