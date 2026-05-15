@@ -59,9 +59,9 @@ IGNORED_TEST_FILES=(
 # ── Ignore list: config files ─────────────────────────────────────────────────
 # Paths relative to CONFIGS_ROOT. These configs are excluded from scanning
 # (e.g. example/template configs that are not real test suites).
-IGNORED_CONFIGS=(
-  "example_test_config.yaml"   # example template — not a real test suite
-)
+# IGNORED_CONFIGS=(
+#   "example_test_config.yaml"   # example template — not a real test suite
+# )
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 while [[ $# -gt 0 ]]; do
