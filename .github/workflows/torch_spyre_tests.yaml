@@ -32,10 +32,11 @@ jobs:
   # and does not use spyre cards.
   #
   # Filter rules:
-  #   src -- matches any file that should cause tests to run:
-  #     -- any file in the repo ('**')
-  #     -- except tests/docs/**  (pure documentation)
-  #     -- except **.md          (markdown files anywhere in the repo)
+  #   docs_only -- matches changes that should NOT trigger tests:
+  #     -- tests/docs/**  (test suite documentation)
+  #     -- docs/**        (repo-level documentation)
+  # Tests are skipped only when docs_only == 'true'.
+  # For every other change in the repo, tests run.
   # ---------------------------------------------------------------------------
   changes:
     name: Detect changed files
@@ -57,8 +58,9 @@ jobs:
   # ---------------------------------------------------------------------------
   # Job 2: test matrix
   #
-  # Only runs when `changes.should-run == 'true'`, i.e. when a relevant file
-  # was modified. For docs-only PRs this job is skipped entirely -- no hardware
+  # Only runs when `changes.docs_only == 'false'`, i.e. when something
+  # other than documentation was modified.
+  # For docs-only PRs this job is skipped entirely -- no hardware
   # runners are consumed.
   #
   # To add a new test suite, append an entry to the matrix below:
