@@ -41,7 +41,7 @@ jobs:
     name: Detect changed files
     runs-on: ubuntu-latest
     outputs:
-      should-run: ${{ steps.filter.outputs.src }}
+      docs_only: ${{ steps.filter.outputs.docs_only }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -51,12 +51,9 @@ jobs:
         id: filter
         with:
           filters: |
-            src:
-              # Trigger tests for any file change in the repo except
-              # pure documentation under tests/docs/.
-              - '**'
-              - '!tests/docs/**'
-              # - '!**.md'        # optionally exclude all markdown files
+            docs_only:
+              - 'tests/docs/**'
+              - 'docs/**'
   # ---------------------------------------------------------------------------
   # Job 2: test matrix
   #
@@ -74,7 +71,7 @@ jobs:
     # Skip this job entirely if no test-relevant files were modified.
     # The fan-in job below handles the skipped case and still reports green
     # to satisfy the branch protection required check.
-    if: needs.changes.outputs.should-run == 'true'
+    if: needs.changes.outputs.docs_only == 'false'
     runs-on:
       - x86_64
       - spyre_pf_x1
