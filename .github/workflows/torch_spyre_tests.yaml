@@ -4,12 +4,8 @@ on:
   push:
     branches: [main]
     tags: ['*']
-    paths-ignore:
-      - tests/docs/**
   pull_request:
     branches: [main]
-    paths-ignore:
-      - tests/docs/**
   merge_group:
     types: [checks_requested]
 
@@ -26,6 +22,50 @@ permissions:
   checks: write
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: changes
+  #
+  # Runs on every PR/push. Uses dorny/paths-filter to inspect which files
+  # were modified and sets the `should-run` output to 'true' or 'false'.
+  #
+  # This is the only job that always runs — it is cheap compute 
+  # and does not use spyre cards.
+  #
+  # Filter rules:
+  #   src -- matches any file that should cause tests to run:
+  #     -- tests/**/test_*.py       
+  #     -- tests/configs/**          
+  #     -- .github/workflows/...
+  # ---------------------------------------------------------------------------
+  changes:
+    name: Detect changed files
+    runs-on: ubuntu-latest
+    outputs:
+      should-run: ${{ steps.filter.outputs.src }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check which paths changed
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            src:
+              - 'tests/**/test_*.py'
+              - 'tests/configs/**'
+              - '.github/workflows/torch_spyre_tests.yaml'
+  # ---------------------------------------------------------------------------
+  # Job 2: test (matrix)
+  #
+  # Only runs when `changes.should-run == 'true'`, i.e. when a relevant file
+  # was modified. For docs-only PRs this job is skipped entirely -- no hardware
+  # runners are consumed.
+  #
+  # To add a new test suite, append an entry to the matrix below:
+  #   - name: <human-readable label shown in the GHA UI>
+  #     config: <path inside tests/configs/>
+  # ---------------------------------------------------------------------------
   test:
     name: ${{ matrix.suite.name }}
     runs-on:
