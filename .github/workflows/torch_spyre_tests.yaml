@@ -33,9 +33,9 @@ jobs:
   #
   # Filter rules:
   #   src -- matches any file that should cause tests to run:
-  #     -- tests/**/test_*.py       
-  #     -- tests/configs/**          
-  #     -- .github/workflows/...
+  #     -- any file in the repo ('**')
+  #     -- except tests/docs/**  (pure documentation)
+  #     -- except **.md          (markdown files anywhere in the repo)
   # ---------------------------------------------------------------------------
   changes:
     name: Detect changed files
@@ -51,14 +51,14 @@ jobs:
         id: filter
         with:
           filters: |
-            # Run tests for any change under tests/ except pure tests/docs updates
-            # This covers test files, configs, helpers, scripts, and fixtures.
             src:
-              - 'tests/**'
+              # Trigger tests for any file change in the repo except
+              # pure documentation under tests/docs/.
+              - '**'
               - '!tests/docs/**'
-              - '.github/workflows/torch_spyre_tests.yaml'
+              - '!**.md'        # optionally exclude all markdown files
   # ---------------------------------------------------------------------------
-  # Job 2: test (matrix)
+  # Job 2: test matrix
   #
   # Only runs when `changes.should-run == 'true'`, i.e. when a relevant file
   # was modified. For docs-only PRs this job is skipped entirely -- no hardware
