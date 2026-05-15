@@ -1,7 +1,5 @@
 # Enabling and Adding New Tests to torch-spyre CI/CD pipeline
 
--- check doc update
-
 **Authors:** Anubhav Jana (IBM Research, India), Ashok Pon Kumar Sree Prakash (IBM Research, India)
 
 ---
