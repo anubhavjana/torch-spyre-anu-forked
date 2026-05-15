@@ -51,9 +51,11 @@ jobs:
         id: filter
         with:
           filters: |
+            # Run tests for any change under tests/ except pure tests/docs updates
+            # This covers test files, configs, helpers, scripts, and fixtures.
             src:
-              - 'tests/**/test_*.py'
-              - 'tests/configs/**'
+              - 'tests/**'
+              - '!tests/docs/**'
               - '.github/workflows/torch_spyre_tests.yaml'
   # ---------------------------------------------------------------------------
   # Job 2: test (matrix)
