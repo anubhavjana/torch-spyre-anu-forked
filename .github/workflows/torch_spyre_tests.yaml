@@ -29,14 +29,14 @@ jobs:
   # Runs on every PR. Uses gh CLI to fetch the full list of changed files
   # and checks if any file outside tests/docs/ or docs/ was modified.
   #
-  # has_other=true  --> non-doc files changed  --> run tests
-  # has_other=false --> only doc files changed --> skip tests
+  # code_changed=true  --> non-doc files changed  --> run tests
+  # code_changed=false --> only doc files changed --> skip tests
   # ---------------------------------------------------------------------------
   changes:
     name: Detect changed files
     runs-on: ubuntu-latest
     outputs:
-      has_other: ${{ steps.filter.outputs.has_other }}
+      code_changed: ${{ steps.filter.outputs.code_changed }}
     steps:
       - name: Check which paths changed
         id: filter
@@ -64,16 +64,16 @@ jobs:
 
           if [[ -z "$NON_DOC" ]]; then
             echo "Only doc files changed — skipping tests."
-            echo "has_other=false" >> "$GITHUB_OUTPUT"
+            echo "code_changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "Non-doc files changed — running tests."
-            echo "has_other=true" >> "$GITHUB_OUTPUT"
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
           fi
 
   # ---------------------------------------------------------------------------
   # Job 2: test matrix
   #
-  # Only runs when `changes.has_other == 'true'`, i.e. when something
+  # Only runs when `changes.code_changed == 'true'`, i.e. when something
   # other than documentation was modified. For docs-only PRs this job is
   # skipped entirely -- no hardware runners are consumed.
   #
@@ -87,7 +87,7 @@ jobs:
     # Skip this job entirely if no test-relevant files were modified.
     # The fan-in job below handles the skipped case and still reports green
     # to satisfy the branch protection required check.
-    if: needs.changes.outputs.has_other == 'true'
+    if: needs.changes.outputs.code_changed == 'true'
     runs-on:
       - x86_64
       - spyre_pf_x1
