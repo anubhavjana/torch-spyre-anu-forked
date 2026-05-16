@@ -32,26 +32,11 @@ from torch._inductor.ir import (
 )
 from torch._inductor.virtualized import V
 from torch_spyre._C import SpyreTensorLayout
-from .pass_utils import compute_restickify_needed
+from .pass_utils import compute_restickify_needed, device_coordinates, host_coordinates
 
 INF = math.inf
 
 logger = get_inductor_logger("optimize_restickify")
-
-
-@dataclass(frozen=True)
-class LayoutKey:
-    """Hashable Python surrogate for SpyreTensorLayout, used as a dict/set key.
-
-    Will be removed once PR to make SpyreTensorLayout hashable is merged.
-    """
-
-    device_size: tuple[int, ...]
-    stride_map: tuple[int, ...]
-
-    @staticmethod
-    def from_stl(stl: SpyreTensorLayout) -> "LayoutKey":
-        return LayoutKey(tuple(stl.device_size), tuple(stl.stride_map))
 
 
 class EdgeCostMap:
@@ -79,32 +64,20 @@ class EdgeCostMap:
         # _cost and _layout are parallel maps.
         # _cost stores the cost for a given in/target layout pair
         # _layout stores the target STL for the restickify, or None if no restickify is needed
-        self._cost: defaultdict[LayoutKey, dict[LayoutKey, float]] = defaultdict(dict)
-        self._layout: defaultdict[LayoutKey, dict[LayoutKey, Any]] = defaultdict(dict)
+        self._cost: defaultdict[SpyreTensorLayout, dict[SpyreTensorLayout, float]] = (
+            defaultdict(dict)
+        )
+        self._layout: defaultdict[SpyreTensorLayout, dict[SpyreTensorLayout, Any]] = (
+            defaultdict(dict)
+        )
 
     def _compute_and_cache_cost(
-        self, in_key: "LayoutKey", target_key: "LayoutKey"
+        self, in_stl: "SpyreTensorLayout", target_stl: "SpyreTensorLayout"
     ) -> None:
-        """Populate _cost and _layout for (in_key, target_key).
+        """Populate _cost and _layout for (in_stl, target_stl).
 
         Cost is 0 if stick-compatible, the input element count if restickifiable, or INF if infeasible.
         """
-        in_stl = next(
-            (stl for stl in self._in_layouts if LayoutKey.from_stl(stl) == in_key),
-            None,
-        )
-        target_stl = next(
-            (
-                stl
-                for stl in self._target_layouts
-                if LayoutKey.from_stl(stl) == target_key
-            ),
-            None,
-        )
-        assert in_stl is not None, f"in_key {in_key} not found in in_layouts"
-        assert target_stl is not None, (
-            f"target_key {target_key} not found in target_layouts"
-        )
         needed, tgt = compute_restickify_needed(
             in_stl, self._dep_layout, self.dep, target_stl, self._target_dep
         )
@@ -114,31 +87,24 @@ class EdgeCostMap:
             cost = INF  # infeasible restickify
         else:
             cost = float(math.prod(in_stl.device_size))
-        self._cost[in_key][target_key] = cost
-        self._layout[in_key][target_key] = tgt
+        self._cost[in_stl][target_stl] = cost
+        self._layout[in_stl][target_stl] = tgt
 
     def cost(
         self, in_stl: "SpyreTensorLayout", target_stl: "SpyreTensorLayout"
     ) -> float:
         """Return the restick cost for (in_stl, target_stl), computing it on first access."""
-
-        # Remove conversions once STL is hashable
-        in_key = LayoutKey.from_stl(in_stl)
-        target_key = LayoutKey.from_stl(target_stl)
-
-        if target_key not in self._cost[in_key]:
-            self._compute_and_cache_cost(in_key, target_key)
-        return self._cost[in_key][target_key]
+        if target_stl not in self._cost[in_stl]:
+            self._compute_and_cache_cost(in_stl, target_stl)
+        return self._cost[in_stl][target_stl]
 
     def layout(
         self, in_stl: "SpyreTensorLayout", target_stl: "SpyreTensorLayout"
     ) -> "SpyreTensorLayout | None":
         """Return target STL for restickifying in_stl to be compatible with target_stl, or None if no restickify needed."""
-        in_key = LayoutKey.from_stl(in_stl)
-        target_key = LayoutKey.from_stl(target_stl)
-        if target_key not in self._cost[in_key]:
-            self._compute_and_cache_cost(in_key, target_key)
-        return self._layout[in_key][target_key]
+        if target_stl not in self._cost[in_stl]:
+            self._compute_and_cache_cost(in_stl, target_stl)
+        return self._layout[in_stl][target_stl]
 
 
 class RestickNodeCost(abc.ABC):
@@ -212,7 +178,7 @@ class FixedInOutNode(RestickNodeCost):
     def cost(
         self, in_layouts: "list[SpyreTensorLayout]", out_stl: "SpyreTensorLayout"
     ) -> float:
-        if LayoutKey.from_stl(out_stl) != LayoutKey.from_stl(self.required_out_stl):
+        if out_stl != self.required_out_stl:
             return INF
         return sum(
             ec.cost(lk, rk)
@@ -243,6 +209,41 @@ class AnyInNode(RestickNodeCost):
         return []
 
 
+def _no_feasible_layout_error(op, deps: list, in_layouts: list) -> NotImplementedError:
+    """Build and return a NotImplementedError describing why no output layout was feasible."""
+    node_type = type(getattr(op, "data", op)).__name__
+    out_layout = op.get_layout()
+    out_dep = next(iter(op.get_read_writes().writes))
+    out_h_coords = host_coordinates(out_layout, out_dep)
+    lines = [
+        f"Stick incompatibility for op {op.get_name()} ({node_type}) has no resolution mechanism",
+        "  Output:",
+        f"    host  size={list(out_layout.size)}  stride={list(out_layout.stride)}",
+        f"    host_coordinates: {out_h_coords}",
+        f"  Inputs ({len(deps)}):",
+    ]
+    for dep, stl in zip(deps, in_layouts):
+        host_layout = V.graph.get_buffer(dep.name).get_layout()
+        h_coords = host_coordinates(host_layout, dep)
+        d_coords = device_coordinates(stl, dep)
+        lines += [
+            f"    {dep.name}:",
+            f"      host  size={list(host_layout.size)}  stride={list(host_layout.stride)}",
+            f"      host_coordinates: {h_coords}",
+            f"      device  device_size={list(stl.device_size)}  stride_map={list(stl.stride_map)}  dtype={stl.device_dtype}",
+            f"      device_coordinates: {d_coords}",
+        ]
+    lines.append(f"  Candidate output layouts ({len(op.layouts)}) — all infeasible:")
+    for i, candidate_stl in enumerate(op.layouts):
+        out_d_coords = device_coordinates(candidate_stl, out_dep)
+        lines += [
+            f"    [{i}]",
+            f"      device  device_size={list(candidate_stl.device_size)}  stride_map={list(candidate_stl.stride_map)}  dtype={candidate_stl.device_dtype}",
+            f"      device_coordinates: {out_d_coords}",
+        ]
+    return NotImplementedError("\n".join(lines))
+
+
 def greedy_local_min_cost(operations: list) -> None:
     """Greedy layout selection: process ops in topological order, picking the output layout with minimum local restick cost.
 
@@ -271,11 +272,9 @@ def greedy_local_min_cost(operations: list) -> None:
         if not hasattr(op, "layouts"):
             continue  # FallbackKernel and other unhandled op types
 
-        if not hasattr(op, "restick_cost_fn"):
-            if not isinstance(op.layout, MutationLayoutSHOULDREMOVE):
-                op.committed_stl = op.layouts[0]
-            continue
-
+        assert hasattr(op, "restick_cost_fn"), (
+            f"op {op.get_name()} has layouts but no restick_cost_fn"
+        )
         cost_fn = op.restick_cost_fn
 
         # Collect each input arg's committed layout (finalized by earlier topo iterations).
@@ -300,9 +299,11 @@ def greedy_local_min_cost(operations: list) -> None:
                 best_cost = out_layout_cost
                 out_stl = candidate_stl
 
-        assert out_stl is not None, (
-            f"({op.get_name()}): all stick possibilities had infinite cost. Cannot proceed"
-        )
+        if out_stl is None:
+            err_deps = [
+                d for d in op.get_read_writes().reads if isinstance(d, MemoryDep)
+            ]
+            raise _no_feasible_layout_error(op, err_deps, in_layouts)
 
         op.committed_stl = out_stl
 
@@ -380,7 +381,8 @@ def beam_global_min_cost(operations: list) -> None:
     accumulating cost. After each op the beam is pruned to K best states.
     At the end, the best state's assignments are committed to the ops.
     """
-    # Commit graph inputs — fixed STL, same across all states.
+    frontier = Frontier(BEAM_WIDTH)
+    # Commit graph inputs and seed into the frontier so input_stl() works uniformly for all deps.
     for name in V.graph.graph_input_names:
         tb = V.graph.graph_inputs[name]
         if (
@@ -391,9 +393,12 @@ def beam_global_min_cost(operations: list) -> None:
         ):
             stl = next(iter(tb.layouts))
             tb.data.data.committed_stl = stl
-            tb.committed_stl = stl
+            frontier.add_buf(name)
+            frontier.states = [
+                BeamState(assignments=state.assignments + (stl,), cost=state.cost)
+                for state in frontier.states
+            ]
 
-    frontier = Frontier(BEAM_WIDTH)
     max_states = 1
 
     for op in operations:
@@ -402,31 +407,15 @@ def beam_global_min_cost(operations: list) -> None:
 
         frontier.add_buf(op.get_name())
 
-        if not hasattr(op, "restick_cost_fn"):
-            assert len(op.layouts) == 1, (
-                f"passthrough op {op.get_name()} has {len(op.layouts)} layouts, expected 1"
-            )
-            frontier.states = [
-                BeamState(
-                    assignments=state.assignments + (op.layouts[0],),
-                    cost=state.cost,
-                )
-                for state in frontier.states
-            ]
-            continue
-
+        assert hasattr(op, "restick_cost_fn"), (
+            f"op {op.get_name()} has layouts but no restick_cost_fn"
+        )
         cost_fn = op.restick_cost_fn
         deps = [dep for dep in op.get_read_writes().reads if isinstance(dep, MemoryDep)]
 
         next_states = []
         for state in frontier.states:
-            in_layouts = []
-            for dep in deps:
-                if dep.name in V.graph.graph_input_names:
-                    # When we allow multiple STLs for inputs this special case will go away
-                    in_layouts.append(V.graph.get_buffer(dep.name).committed_stl)
-                else:
-                    in_layouts.append(frontier.input_stl(state, dep.name))
+            in_layouts = [frontier.input_stl(state, dep.name) for dep in deps]
 
             for candidate_stl in op.layouts:
                 extra_cost = cost_fn.cost(in_layouts, candidate_stl)
@@ -438,12 +427,14 @@ def beam_global_min_cost(operations: list) -> None:
                         )
                     )
 
+        # Capture one state's in_layouts before clearing, for error diagnostics.
+        last_in_layouts = [
+            frontier.input_stl(frontier.states[-1], dep.name) for dep in deps
+        ]
         frontier.states = next_states
         frontier.trim()
         if not frontier.states:
-            raise RuntimeError(
-                f"beam search: no feasible layout combination found after op {op.get_name()}"
-            )
+            raise _no_feasible_layout_error(op, deps, last_in_layouts)
         max_states = max(max_states, len(frontier.states))
         if logger.isEnabledFor(logging.DEBUG):
             lines = [f"beam after {op.get_name()} [{len(frontier.states)} states]:"]
