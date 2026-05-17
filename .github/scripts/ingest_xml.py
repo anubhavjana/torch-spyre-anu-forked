@@ -348,6 +348,23 @@ def main():
         if run is None:
             continue
 
+        # Deduplication check — skip if this exact GHA run + filename
+        # has already been ingested
+        existing = client.execute(
+            """
+            SELECT count() FROM test_runs
+            WHERE gha_run_id = %(gha_run_id)s
+            AND   filename   = %(filename)s
+            """,
+            {
+                "gha_run_id": int(args.run_id or 0),
+                "filename":   run["filename"],
+            }
+        )
+        if existing[0][0] > 0:
+            print(f"  Already ingested — skipping {run['filename']}")
+            continue
+
         run_id = str(uuid.uuid4())
         print(
             f"  run_id={run_id}  tests={run['total_tests']}  "
@@ -356,7 +373,7 @@ def main():
         )
 
         insert_run(client, run_id, run, args)
-        insert_cases(client, run_id, cases, workflow=args.workflow)
+        insert_cases(client, run_id, cases)
         insert_properties(client, run_id, cases)
         total_cases += len(cases)
         print(
