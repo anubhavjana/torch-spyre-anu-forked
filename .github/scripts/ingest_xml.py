@@ -358,8 +358,8 @@ def main():
             """,
             {
                 "gha_run_id": int(args.run_id or 0),
-                "filename":   run["filename"],
-            }
+                "filename": run["filename"],
+            },
         )
         if existing[0][0] > 0:
             print(f"  Already ingested — skipping {run['filename']}")
@@ -373,7 +373,7 @@ def main():
         )
 
         insert_run(client, run_id, run, args)
-        insert_cases(client, run_id, cases)
+        insert_cases(client, run_id, cases, workflow=args.workflow)
         insert_properties(client, run_id, cases)
         total_cases += len(cases)
         print(
