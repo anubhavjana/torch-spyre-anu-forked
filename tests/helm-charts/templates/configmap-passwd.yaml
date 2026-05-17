@@ -32,3 +32,76 @@ data:
     senuser:x:1234:1234::/home/senuser:/bin/bash
     anubhavjana:x:1000840000:0:1000840000 user:/home/anubhavjana:/bin/bash
     dashboard:x:1000:1000:dashboard user:/tmp:/sbin/nologin
+  
+---
+# ──────────────────────────────────────────────────────────────────────────────
+#  ConfigMap: clickhouse-config
+#  Two data keys consumed by the patch-dashboard initContainer and nginx:
+#
+#  patch-dashboard.sh — injects ClickHouse <meta> config tags and the
+#                       spyre-clickhouse.js <script> tag into dashboard.html.
+#                       Runs after git-clone so the file already exists.
+#                       (skips if already patched).
+#
+#  nginx-ch.conf      — nginx location block that proxies /clickhouse/ to the
+#                       ClickHouse HTTP interface, avoiding browser CORS.
+#                       Included inside the server{} block at runtime.
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "spyre-dashboard.fullname" . }}-clickhouse-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spyre-dashboard.labels" . | nindent 4 }}
+immutable: false
+data:
+  patch-dashboard.sh: |
+    #!/bin/sh
+    set -e
+ 
+    DASH=/html/repo/{{ .Values.git.dashboardPath }}/dashboard.html
+ 
+    if [ ! -f "$DASH" ]; then
+      echo "[patch-dashboard] ERROR: $DASH not found — git-clone may have failed."
+      exit 1
+    fi
+ 
+    # Idempotency guard — skip if already patched
+    if grep -q 'spyre-ch-url' "$DASH"; then
+      echo "[patch-dashboard] Already patched — skipping."
+      exit 0
+    fi
+ 
+    # Build the meta-tag block from env vars injected by the pod spec
+    META=""
+    META="${META}<meta name=\"spyre-ch-url\"      content=\"${SPYRE_CH_URL}\">"
+    META="${META}<meta name=\"spyre-ch-db\"        content=\"${SPYRE_CH_DB}\">"
+    META="${META}<meta name=\"spyre-ch-user\"      content=\"${SPYRE_CH_USER}\">"
+    META="${META}<meta name=\"spyre-ch-token\"     content=\"${SPYRE_CH_TOKEN}\">"
+    META="${META}<meta name=\"spyre-ch-workflow\"  content=\"${SPYRE_CH_WORKFLOW}\">"
+    META="${META}<meta name=\"spyre-ch-limit\"     content=\"${SPYRE_CH_LIMIT}\">"
+ 
+    # Inject meta tags before </head>
+    sed -i "s|</head>|${META}</head>|" "$DASH"
+ 
+    # Inject autoload flag + JS module before </body>
+    BODY_INJECT=""
+    if [ "${SPYRE_CH_AUTOLOAD}" = "true" ]; then
+      BODY_INJECT="${BODY_INJECT}<script>window.SPYRE_CH_AUTOLOAD=true;</script>"
+    fi
+    BODY_INJECT="${BODY_INJECT}<script src=\"/spyre-clickhouse.js\"></script>"
+ 
+    sed -i "s|</body>|${BODY_INJECT}</body>|" "$DASH"
+ 
+    echo "[patch-dashboard] Patched successfully."
+ 
+  nginx-ch.conf: |
+    location /clickhouse/ {
+      proxy_pass         https://{{ .Values.clickhouse.internalServiceHost }}:{{ .Values.clickhouse.internalServicePort }}/;
+      proxy_set_header   Host            {{ .Values.clickhouse.internalServiceHost }};
+      proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_read_timeout 120s;
+      rewrite ^/clickhouse/(.*) /$1 break;
+    }
+ 
