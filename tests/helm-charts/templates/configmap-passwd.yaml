@@ -59,20 +59,20 @@ data:
   patch-dashboard.sh: |
     #!/bin/sh
     set -e
- 
+
     DASH=/html/repo/{{ .Values.git.dashboardPath }}/dashboard.html
- 
+
     if [ ! -f "$DASH" ]; then
       echo "[patch-dashboard] ERROR: $DASH not found — git-clone may have failed."
       exit 1
     fi
- 
+
     # Idempotency guard — skip if already patched
     if grep -q 'spyre-ch-url' "$DASH"; then
       echo "[patch-dashboard] Already patched — skipping."
       exit 0
     fi
- 
+
     # Build the meta-tag block from env vars injected by the pod spec
     META=""
     META="${META}<meta name=\"spyre-ch-url\"      content=\"${SPYRE_CH_URL}\">"
@@ -81,21 +81,34 @@ data:
     META="${META}<meta name=\"spyre-ch-token\"     content=\"${SPYRE_CH_TOKEN}\">"
     META="${META}<meta name=\"spyre-ch-workflow\"  content=\"${SPYRE_CH_WORKFLOW}\">"
     META="${META}<meta name=\"spyre-ch-limit\"     content=\"${SPYRE_CH_LIMIT}\">"
- 
-    # Inject meta tags before </head>
-    sed -i "s|</head>|${META}</head>|" "$DASH"
- 
-    # Inject autoload flag + JS module before </body>
+
+    # Inject meta tags before the FIRST </head> only
+    awk -v meta="${META}" '
+      !done && /<\/head>/ {
+        sub(/<\/head>/, meta "</head>")
+        done=1
+      }
+      1
+    ' "$DASH" > /tmp/dash.tmp && mv /tmp/dash.tmp "$DASH"
+
+    # Build the body inject block
     BODY_INJECT=""
     if [ "${SPYRE_CH_AUTOLOAD}" = "true" ]; then
-      BODY_INJECT="${BODY_INJECT}<script>window.SPYRE_CH_AUTOLOAD=true;</script>"
+      BODY_INJECT="${BODY_INJECT}<script>window.SPYRE_CH_AUTOLOAD=true;<\/script>"
     fi
-    BODY_INJECT="${BODY_INJECT}<script src=\"/spyre-clickhouse.js\"></script>"
- 
-    sed -i "s|</body>|${BODY_INJECT}</body>|" "$DASH"
- 
+    BODY_INJECT="${BODY_INJECT}<script src=\"\/spyre-clickhouse.js\"><\/script>"
+
+    # Inject autoload flag + JS module before the FIRST </body> only
+    awk -v inject="${BODY_INJECT}" '
+      !done && /<\/body>/ {
+        sub(/<\/body>/, inject "</body>")
+        done=1
+      }
+      1
+    ' "$DASH" > /tmp/dash.tmp && mv /tmp/dash.tmp "$DASH"
+
     echo "[patch-dashboard] Patched successfully."
- 
+    
   nginx-ch.conf: |
     location /clickhouse/ {
       proxy_pass         https://{{ .Values.clickhouse.internalServiceHost }}:{{ .Values.clickhouse.internalServicePort }}/;
