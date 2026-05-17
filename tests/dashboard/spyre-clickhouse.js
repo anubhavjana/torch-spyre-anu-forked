@@ -58,12 +58,10 @@
     });
 
     const headers = { "Content-Type": "text/plain" };
-    if (cfg.token) {
-      headers["Authorization"] = `Bearer ${cfg.token}`;
-    } else if (cfg.user) {
-      headers["X-ClickHouse-User"] = cfg.user;
-      headers["X-ClickHouse-Key"]  = cfg.pass;
-    }
+    // ClickHouse Cloud uses X-ClickHouse-User/Key headers, not Bearer tokens.
+    // cfg.token holds the password (stored in K8s secret as "token" key).
+    headers["X-ClickHouse-User"] = cfg.user;
+    headers["X-ClickHouse-Key"]  = cfg.token || cfg.pass;
 
     const res = await fetch(`${cfg.url}?${params}`, {
       method: "POST",
