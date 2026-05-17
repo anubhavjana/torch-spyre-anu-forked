@@ -51,3 +51,46 @@ route:
     insecureEdgeTerminationPolicy: Redirect
 
 deployer: anubhavjana
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  ClickHouse integration
+#  The patch-dashboard initContainer injects these as <meta> tags into
+#  dashboard.html so spyre-clickhouse.js can connect without hardcoding.
+#
+#  Before deploying, create the reader secret:
+#    kubectl create secret generic spyre-clickhouse-token \
+#      --from-literal=token=<your-clickhouse-password> \
+#      -n <namespace>
+# ──────────────────────────────────────────────────────────────────────────────
+clickhouse:
+  # ClickHouse Cloud HTTPS URL — direct connection from the browser.
+  # This is the public HTTPS endpoint, no nginx proxy needed for ClickHouse Cloud.
+  url: https://sm73y6g9e8.ap-south-1.aws.clickhouse.cloud:8443
+
+  # ClickHouse database name
+  db: spyre
+
+  # ClickHouse user for SELECT queries from the dashboard
+  user: default
+
+  # Name of the K8s Secret and key holding the password.
+  tokenSecret: spyre-clickhouse-token
+  tokenSecretKey: token
+
+  # Password-based auth fallback (used when tokenSecret is "")
+  passwordSecret: ''
+  passwordSecretKey: password
+
+  # Optional: pre-filter run list to a single workflow. Empty = all workflows.
+  defaultWorkflow: ''
+
+  # Number of recent runs shown in the "Fetch from ClickHouse" panel.
+  defaultLimit: 30
+
+  # When true, the newest run loads automatically when the dashboard opens.
+  autoload: true
+
+  # Internal service fields — not used for ClickHouse Cloud direct access
+  # but kept for future in-cluster ClickHouse deployments.
+  internalServiceHost: sm73y6g9e8.ap-south-1.aws.clickhouse.cloud
+  internalServicePort: 8443

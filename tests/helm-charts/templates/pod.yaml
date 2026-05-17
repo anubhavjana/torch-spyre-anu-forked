@@ -2,6 +2,12 @@
 #  Pod: spyre-dashboard
 #  Strategy  : initContainer clones branch -> emptyDir -> nginx:alpine serves it
 #  Port      : 8080
+#
+#  ClickHouse additions:
+#    - clickhouse-config volume (from new ConfigMap)
+#    - patch-dashboard initContainer (runs after git-clone, patches dashboard.html)
+#    - nginx server block includes nginx-ch.conf for /clickhouse/ proxy
+#    - ClickHouse credentials injected from K8s Secret via env vars
 # ──────────────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: Pod
@@ -29,8 +35,13 @@ spec:
     - name: passwd-volume
       configMap:
         name: {{ include "spyre-dashboard.fullname" . }}-passwd
+    # Holds patch-dashboard.sh and nginx-ch.conf
+    - name: clickhouse-config
+      configMap:
+        name: {{ include "spyre-dashboard.fullname" . }}-clickhouse-config
+        defaultMode: 0755   # patch-dashboard.sh must be executable
 
-  # ── initContainer: shallow-clone the dashboard branch ──────────────────────
+  # ── initContainer 1: shallow-clone the dashboard branch ────────────────────
   initContainers:
     - name: git-clone
       image: {{ .Values.image.git }}
@@ -94,7 +105,62 @@ spec:
           mountPath: /etc/passwd
           subPath: passwd
 
-  # ── Main container: nginx serves the cloned files ──────────────────────────
+  # ── initContainer 2: patch dashboard.html with ClickHouse config ───────────
+  # Runs after git-clone. Injects <meta> tags and spyre-clickhouse.js <script>
+  # tag into dashboard.html. Credentials come from K8s Secrets via env vars.
+    - name: patch-dashboard
+      image: {{ .Values.image.git }}
+      imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.security.runAsUser }}
+        runAsGroup: {{ .Values.security.runAsGroup }}
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+
+      command: ["/bin/sh", "/clickhouse-config/patch-dashboard.sh"]
+
+      env:
+        # Non-secret config sourced directly from values
+        - name: SPYRE_CH_URL
+          value: {{ .Values.clickhouse.url | quote }}
+        - name: SPYRE_CH_DB
+          value: {{ .Values.clickhouse.db | quote }}
+        - name: SPYRE_CH_USER
+          value: {{ .Values.clickhouse.user | quote }}
+        - name: SPYRE_CH_WORKFLOW
+          value: {{ .Values.clickhouse.defaultWorkflow | quote }}
+        - name: SPYRE_CH_LIMIT
+          value: {{ .Values.clickhouse.defaultLimit | quote }}
+        - name: SPYRE_CH_AUTOLOAD
+          value: {{ .Values.clickhouse.autoload | quote }}
+
+        # Token/password from K8s Secret
+        {{- if .Values.clickhouse.tokenSecret }}
+        - name: SPYRE_CH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.clickhouse.tokenSecret }}
+              key: {{ .Values.clickhouse.tokenSecretKey }}
+              optional: true
+        {{- else }}
+        - name: SPYRE_CH_TOKEN
+          value: ""
+        {{- end }}
+
+      volumeMounts:
+        - name: html-dir
+          mountPath: /html
+        - name: clickhouse-config
+          mountPath: /clickhouse-config
+          readOnly: true
+        - name: passwd-volume
+          mountPath: /etc/passwd
+          subPath: passwd
+
+  # ── Main container: nginx serves the cloned + patched files ────────────────
   containers:
     - name: dashboard
       image: {{ .Values.image.nginx }}
@@ -115,6 +181,9 @@ spec:
       command: ["/bin/sh", "-c"]
       args:
         - |
+          # Copy the ClickHouse proxy location snippet from the ConfigMap
+          cp /clickhouse-config/nginx-ch.conf /tmp/nginx-ch.conf
+
           cat > /tmp/nginx.conf << 'NGINXEOF'
           worker_processes auto;
           pid /tmp/nginx.pid;
@@ -146,6 +215,9 @@ spec:
                 try_files $uri $uri/ /dashboard.html;
               }
 
+              # ClickHouse reverse proxy — loaded from clickhouse-config ConfigMap
+              include /tmp/nginx-ch.conf;
+
               add_header X-Content-Type-Options  nosniff;
               add_header X-Frame-Options         SAMEORIGIN;
               add_header Cache-Control           "no-store, no-cache, must-revalidate";
@@ -166,6 +238,10 @@ spec:
       volumeMounts:
         - name: html-dir
           mountPath: /html
+          readOnly: true
+        # Needed at runtime so nginx can read nginx-ch.conf on startup
+        - name: clickhouse-config
+          mountPath: /clickhouse-config
           readOnly: true
 
       livenessProbe:
