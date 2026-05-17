@@ -11,10 +11,6 @@ Usage (called by the GHA workflow):
         --sha      "abcdef1234..." \
         --run-id   "12345678" \
         --triggered-at "2026-04-25T14:20:45Z"
-
-Environment variables (set by the workflow):
-    CLICKHOUSE_HOST, CLICKHOUSE_PORT, CLICKHOUSE_USER,
-    CLICKHOUSE_PASS, CLICKHOUSE_DB
 """
 
 import argparse
@@ -27,7 +23,7 @@ from lxml import etree
 import clickhouse_driver
 
 # ---------------------------------------------------------------------------
-# Status classification — mirrors the logic in dashboard.html parseXML()
+# Status classification — uses the logic in dashboard.html parseXML()
 # ---------------------------------------------------------------------------
 
 
@@ -132,7 +128,7 @@ def extract_op_dtype(name: str, properties: list[tuple[str, str]]):
 
 
 # ---------------------------------------------------------------------------
-# Suite-level xpass promotion (mirrors dashboard.html second pass)
+# Suite-level xpass promotion (uses dashboard.html second pass)
 # ---------------------------------------------------------------------------
 
 
@@ -161,9 +157,9 @@ def promote_xpass(raw_cases, suite_attrs):
             promoted += 1
 
 
-# ---------------------------------------------------------------------------
+# -----------------------------
 # Parse a single XML file
-# ---------------------------------------------------------------------------
+# -----------------------------
 
 
 def parse_xml(xml_path: Path):
@@ -236,11 +232,12 @@ def parse_xml(xml_path: Path):
 
 def get_client():
     return clickhouse_driver.Client(
-        host="sm73y6g9e8.ap-south-1.aws.clickhouse.cloud",
-        port=9440,  # native TLS port for the Python driver
-        user="default",
-        password="j~YsFhFYj9qlN",
-        database="spyre",
+        host=os.environ["CLICKHOUSE_HOST"],
+        # port=int(os.environ.get("CLICKHOUSE_PORT", 9440)),
+        port=9440,  # native TCP+TLS port, always 9440 on ClickHouse Cloud
+        user=os.environ.get("CLICKHOUSE_USER", "default"),
+        password=os.environ["CLICKHOUSE_PASS"],
+        database=os.environ.get("CLICKHOUSE_DB", "spyre"),
         secure=True,
     )
 
@@ -276,7 +273,7 @@ def insert_run(client, run_id: str, run: dict, args):
     )
 
 
-def insert_cases(client, run_id: str, cases: list[dict]):
+def insert_cases(client, run_id: str, cases: list[dict], workflow: str = ""):
     if not cases:
         return
     rows = [
@@ -291,6 +288,7 @@ def insert_cases(client, run_id: str, cases: list[dict]):
             "duration_s": c["duration_s"],
             "fail_message": c["fail_message"][:8192],  # cap very long traces
             "triggered_at": c["triggered_at"].replace(tzinfo=None),
+            "workflow": workflow,
         }
         for c in cases
     ]
@@ -358,7 +356,7 @@ def main():
         )
 
         insert_run(client, run_id, run, args)
-        insert_cases(client, run_id, cases)
+        insert_cases(client, run_id, cases, workflow=args.workflow)
         insert_properties(client, run_id, cases)
         total_cases += len(cases)
         print(
