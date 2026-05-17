@@ -98,17 +98,20 @@ data:
     fi
     BODY_INJECT="${BODY_INJECT}<script src=\"\/spyre-clickhouse.js\"><\/script>"
 
-    # Inject autoload flag + JS module before the FIRST </body> only
+    # Inject autoload flag + JS module before the LAST </body>
     awk -v inject="${BODY_INJECT}" '
-      !done && /<\/body>/ {
-        sub(/<\/body>/, inject "</body>")
-        done=1
+      /<\/body>/ { last_line=NR; last_content=$0 }
+      { lines[NR]=$0 }
+      END {
+        for (i=1; i<=NR; i++) {
+          if (i==last_line) {
+            sub(/<\/body>/, inject "</body>", lines[i])
+          }
+          print lines[i]
+        }
       }
-      1
     ' "$DASH" > /tmp/dash.tmp && mv /tmp/dash.tmp "$DASH"
 
-    echo "[patch-dashboard] Patched successfully."
-    
   nginx-ch.conf: |
     location /clickhouse/ {
       proxy_pass         https://{{ .Values.clickhouse.internalServiceHost }}:{{ .Values.clickhouse.internalServicePort }}/;
