@@ -51,6 +51,19 @@
 # controller (which stays alive) and execution runs in workers (which can crash
 # safely).  Requires pytest-xdist: pip install pytest-xdist.
 
+# Parallel card support (--parallel-cards N)
+# ------------------------------------------
+# When --parallel-cards N is passed, pytest is invoked with -nN so that
+# pytest-xdist spawns N workers.  Each worker is assigned a distinct Spyre
+# card (0..N-1) via the SPYRE_PARALLEL_CARDS env var and the
+# pytest_configure_node / pytest_sessionstart hooks in conftest.py, which
+# source ibm-aiu-setup.sh with AIU_DEVICE_INDEX=<worker_index> before any
+# torch import.  This lets multiple tests run simultaneously, one per card.
+#
+# --parallel-cards is consumed by run_test.sh and never forwarded to pytest;
+# -nN is injected instead.  The flag is silently ignored for distributed
+# test directories (which use torchrun, not xdist).
+
 set -euo pipefail
 
 
@@ -112,6 +125,43 @@ if [[ ${#YAML_CONFIGS[@]} -eq 0 ]]; then
     echo "ERROR: No YAML config file(s) found in the arguments." >&2
     echo "Usage: $0 <path/to/test_suite_config.yaml> [extra pytest args...]" >&2
     exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# --parallel-cards N
+#
+# Consumed here and removed from EXTRA_PYTEST_ARGS so pytest never sees it.
+# Sets PARALLEL_CARDS_N (integer) and exports SPYRE_PARALLEL_CARDS=1 so
+# conftest.py knows to bind each xdist worker to a distinct card.
+# ---------------------------------------------------------------------------
+PARALLEL_CARDS_N=0
+_EXTRA_FILTERED=()
+_skip_pc=0
+for _arg in "${EXTRA_PYTEST_ARGS[@]+"${EXTRA_PYTEST_ARGS[@]}"}"; do
+    if [[ $_skip_pc -eq 1 ]]; then
+        PARALLEL_CARDS_N="$_arg"
+        _skip_pc=0
+        continue
+    fi
+    case "$_arg" in
+        --parallel-cards=*)
+            PARALLEL_CARDS_N="${_arg#--parallel-cards=}"
+            ;;
+        --parallel-cards)
+            _skip_pc=1
+            ;;
+        *)
+            _EXTRA_FILTERED+=("$_arg")
+            ;;
+    esac
+done
+EXTRA_PYTEST_ARGS=("${_EXTRA_FILTERED[@]+"${_EXTRA_FILTERED[@]}"}")
+
+if [[ "$PARALLEL_CARDS_N" -gt 0 ]] 2>/dev/null; then
+    export SPYRE_PARALLEL_CARDS=1
+    echo "[torch_oot_device_tests_run] Parallel card mode: -n${PARALLEL_CARDS_N} (SPYRE_PARALLEL_CARDS_FLAG=1)"
+else
+    PARALLEL_CARDS_N=0
 fi
 
 # MERGED_CONFIG_IS_TEMP=1 means we created the file and must delete it on EXIT.
@@ -1359,9 +1409,25 @@ _run_pytest_isolated() {
             # Clean up log directory
             rm -rf "${_LOGDIR}"
         else
-            echo "[torch_oot_device_tests_run] Running serial test"
-            # Regular pytest for non-distributed tests
-            python3 -m pytest "$_base" "${_args[@]}"
+            # ---------------------------------------------------------------------------
+            # Serial or parallel-card pytest run.
+            #
+            # When PARALLEL_CARDS_N > 0 (set by --parallel-cards N), inject -nN so
+            # pytest-xdist spawns N workers.  Each worker receives its card index via
+            # workerinput["spyre_card_index"] (stamped by pytest_configure_node in
+            # conftest.py) and sources ibm-aiu-setup.sh with AIU_DEVICE_INDEX=<index>
+            # before importing torch, binding it to a distinct Spyre card.
+            #
+            # The distributed path above uses torchrun instead, so --parallel-cards is
+            # silently ignored for /distributed test directories.
+            # ---------------------------------------------------------------------------
+            if [[ "${PARALLEL_CARDS_N:-0}" -gt 0 ]]; then
+                echo "[torch_oot_device_tests_run] Running parallel test (-n${PARALLEL_CARDS_N}, ${PARALLEL_CARDS_N} Spyre cards)"
+                python3 -m pytest "$_base" -n"${PARALLEL_CARDS_N}" "${_args[@]}"
+            else
+                echo "[torch_oot_device_tests_run] Running serial test"
+                python3 -m pytest "$_base" "${_args[@]}"
+            fi
             echo $? > "$_exit_tmp"
         fi
     ) || true
@@ -1541,6 +1607,7 @@ for i in "${!RUN_FILES[@]}"; do
     # invocations of run_test.sh.
     # -----------------------------------------------------------------------
     export SPYRE_TEST_FILE="$run_file"
+    export OOT_TEST_FILE="$run_file" 
 
     _EXIT_TMP="/tmp/_spyre_pytest_exit_${$}_${i}.tmp"
     _exit=0

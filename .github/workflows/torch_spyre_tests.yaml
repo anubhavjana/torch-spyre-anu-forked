@@ -136,8 +136,8 @@ jobs:
             config: torch_spyre_tests/inductor/test_inductor_fx_passes_config.yaml
           - name: Inductor Normalization Scalars
             config: torch_spyre_tests/inductor/test_normalization_scalars_config.yaml
-          - name: Inductor Ops
-            config: torch_spyre_tests/inductor/test_inductor_ops_config.yaml
+          # - name: Inductor Ops
+          #   config: torch_spyre_tests/inductor/test_inductor_ops_config.yaml
           - name: Inductor Ops LX Planning
             config: torch_spyre_tests/inductor/test_ops_lx_planning_config.yaml
           - name: Inductor Scalar
@@ -281,7 +281,69 @@ jobs:
           echo "${{ matrix.suite.name }} tests done"
 
   # ---------------------------------------------------------------------------
-  # Job 4: run-spyre-unit-tests (required check gate)
+  # Job 4: Inductor Ops (parallel, N Spyre cards)
+  #
+  # Runs test_inductor_ops_config.yaml with pytest-xdist -n4 so the two
+  # tests in the suite execute simultaneously, one per card.
+  #
+  # Here it the spyre_pf_x4 runner (4 cards). Card assignment is handled by
+  # conftest.py: pytest_configure_node stamps each xdist worker with its
+  # card index (gw0 -> card 0, gw1 -> card 1), and pytest_sessionstart on the
+  # worker side sources ibm-aiu-setup.sh with AIU_DEVICE_INDEX=<index> before
+  # importing torch.
+  #
+  # The --parallel-cards 4 flag is consumed by run_test.sh (never forwarded
+  # to pytest) and causes -n4 to be injected into the pytest invocation.
+  # SPYRE_PARALLEL_CARDS=1 is exported by run_test.sh to gate the card-binding
+  # logic in conftest.py so it is a no-op in all non-parallel runs.
+  # ---------------------------------------------------------------------------
+  test_inductor_ops_parallel:
+    name: Parallel Inductor Ops
+    needs: changes
+    if: needs.changes.outputs.code_changed == 'true'
+    runs-on:
+      - x86_64
+      - spyre_pf_x4
+      - linux
+      - image_torch_spyre
+    timeout-minutes: 60
+    env:
+      CI: ''
+      CLONED_TORCH_SPYRE_DIR: /home/senuser/torch-spyre
+
+    steps:
+      - name: Checkout composite actions
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          sparse-checkout: .github/actions
+          sparse-checkout-cone-mode: false
+
+      - uses: ./.github/actions/checkout-prebuilt-torch-spyre
+
+      - uses: ./.github/actions/gather-runner-info
+        with:
+          verbose: 'true'
+
+      - uses: ./.github/actions/build-torch-spyre
+
+      - name: Run Inductor Ops Tests Parallel (N Spyre cards)
+        run: |
+          source "$HOME/.bashrc"
+          source /etc/profile.d/ibm-aiu-setup.sh
+          cd "$CLONED_TORCH_SPYRE_DIR"
+          source .venv/bin/activate
+
+          NCARDS=$(echo "${PCIDEVICE_IBM_COM_AIU_PF}" | tr ',' '\n' | grep -c .)
+          echo "Detected ${NCARDS} Spyre card(s) from AIU_WORLD_SIZE"
+
+          echo "Running Inductor Ops tests in parallel across ${NCARDS} Spyre card(s)..."
+          bash tests/run_test.sh \
+            "tests/configs/torch_spyre_tests/inductor/test_inductor_ops_config.yaml" \
+            --parallel-cards "${NCARDS}" \
+            -v
+          echo "Inductor Ops parallel tests done"
+  # ---------------------------------------------------------------------------
+  # Job 5: run-spyre-unit-tests (required check gate)
   #
   # This job name MUST match the branch protection required check exactly:
   #   "tests / Run Spyre unit tests"
@@ -300,7 +362,7 @@ jobs:
   run-spyre-unit-tests:
     name: Run Spyre unit tests
     runs-on: ubuntu-latest
-    needs: [changes, test, test_multi_spyre]
+    needs: [changes, test, test_multi_spyre, test_inductor_ops_parallel]
     if: always()
     steps:
       - name: Evaluate test results
@@ -309,15 +371,17 @@ jobs:
           TEST_MULTI_SPYRE_RESULT="${{ needs.test_multi_spyre.result }}"
           echo "Test job result: ${TEST_RESULT}"
           echo "Test Multi-Spyre job result: ${TEST_MULTI_SPYRE_RESULT}"
+          TEST_INDUCTOR_OPS_PARALLEL_RESULT="${{ needs.test_inductor_ops_parallel.result }}"
+          echo "Test Inductor Ops Parallel job result: ${TEST_INDUCTOR_OPS_PARALLEL_RESULT}"
 
           # Check if both jobs succeeded
-          if [[ "${TEST_RESULT}" == "success" && "${TEST_MULTI_SPYRE_RESULT}" == "success" ]]; then
+          if [[ "${TEST_RESULT}" == "success" && "${TEST_MULTI_SPYRE_RESULT}" == "success" && "${TEST_INDUCTOR_OPS_PARALLEL_RESULT}" == "success" ]]; then
             echo "All test suites passed."
             exit 0
           fi
 
           # Check if both jobs were skipped (docs-only change)
-          if [[ "${TEST_RESULT}" == "skipped" && "${TEST_MULTI_SPYRE_RESULT}" == "skipped" ]]; then
+          if [[ "${TEST_RESULT}" == "skipped" && "${TEST_MULTI_SPYRE_RESULT}" == "skipped" && "${TEST_INDUCTOR_OPS_PARALLEL_RESULT}" == "skipped" ]]; then
             echo "Tests skipped — docs-only change, no test-relevant files modified."
             exit 0
           fi

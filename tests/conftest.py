@@ -73,11 +73,118 @@ def _get_case_marks(case: dict) -> set[str]:
     return marks
 
 
+# ---------------------------------------------------------------------------
+# Parallel card support (pytest-xdist)
+#
+# When pytest is invoked with -nN (N xdist workers) each worker needs to
+# claim a distinct Spyre card.  Card assignment is baked in at process startup
+# via ibm-aiu-setup.sh, so we must re-source it with the correct
+# AIU_DEVICE_INDEX before any torch import happens.
+#
+# How it works:
+#   Controller side  (pytest_configure_node):
+#     Stamps each worker's input channel with its integer card index
+#     (0 for gw0, 1 for gw1, ...) before the worker process starts.
+#
+#   Worker side  (pytest_sessionstart):
+#     Detects the workerinput dict injected by xdist, reads spyre_card_index,
+#     sources ibm-aiu-setup.sh with AIU_DEVICE_INDEX=N via a subprocess, and
+#     applies the resulting environment variables to os.environ so that the
+#     subsequent torch import binds to the correct card.
+#
+# The SPYRE_PARALLEL_CARDS env var (set by run_test.sh --parallel-cards) gates
+# this logic so it is a no-op in all non-parallel runs.
+# ---------------------------------------------------------------------------
+
+
+def _apply_aiu_setup_for_card(card_index: int) -> None:
+    """
+    Source ibm-aiu-setup.sh with AIU_DEVICE_INDEX=<card_index> in a subprocess,
+    then apply every env var it exports into the current process's os.environ.
+
+    This must be called before any torch import in the worker process.
+    """
+    import subprocess
+
+    aiu_setup = "/etc/profile.d/ibm-aiu-setup.sh"
+    if not os.path.isfile(aiu_setup):
+        # Not on an AIU runner — skip silently (e.g. local dev without hardware).
+        return
+
+    # Source the setup script with the desired card index and print the
+    # resulting environment.  We capture env-only lines (KEY=VALUE) by
+    # diffing against a baseline env dump so we pick up only what the script
+    # adds or changes.
+    script = f"AIU_DEVICE_INDEX={card_index} source {aiu_setup} 2>/dev/null; env"
+    try:
+        result = subprocess.run(
+            ["bash", "-c", script],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except Exception as exc:
+        print(
+            f"[spyre_parallel] WARNING: could not source {aiu_setup} "
+            f"for card {card_index}: {exc}",
+            flush=True,
+        )
+        return
+
+    if result.returncode != 0:
+        print(
+            f"[spyre_parallel] WARNING: ibm-aiu-setup.sh exited "
+            f"{result.returncode} for card {card_index}",
+            flush=True,
+        )
+
+    # Parse KEY=VALUE lines from the subprocess env dump and apply them.
+    # Skip vars that are internal to bash or already set identically so we
+    # don't mess up things like PATH that were correctly set by the runner.
+    for line in result.stdout.splitlines():
+        if "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        # Only propagate AIU-related vars to avoid unintended side effects.
+        if key.startswith("AIU") or key.startswith("SPYRE") or key.startswith("DT"):
+            os.environ[key] = val
+
+    print(
+        f"[spyre_parallel] Worker bound to Spyre card {card_index} "
+        f"(AIU_DEVICE_INDEX={card_index})",
+        flush=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Controller-side hook: runs in the main pytest process before each xdist
+# worker process is spawned.  Injects the card index into the worker's input
+# channel so the worker can read it from config.workerinput at startup.
+# ---------------------------------------------------------------------------
+def pytest_configure_node(node) -> None:
+    """Inject spyre_card_index into each xdist worker before it starts."""
+    if not os.environ.get("SPYRE_PARALLEL_CARDS"):
+        return
+    # node.workerid is "gw0", "gw1", etc. -- extract the integer suffix.
+    worker_id = getattr(node, "workerid", "gw0")
+    try:
+        card_index = int(worker_id.lstrip("gw"))
+    except ValueError:
+        card_index = 0
+    node.workerinput["spyre_card_index"] = card_index
+
+
 def pytest_sessionstart(session):
     """
     Called after the Session object has been created and
     before performing collection and entering the run test loop.
     """
+
+    if os.environ.get("SPYRE_PARALLEL_CARDS"):
+        worker_input = getattr(session.config, "workerinput", None)
+        if worker_input is not None:
+            card_index = worker_input.get("spyre_card_index", 0)
+            _apply_aiu_setup_for_card(card_index)
 
     # avoid circular imports when using xdist
     import torch  # noqa: F401
