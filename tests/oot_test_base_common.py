@@ -275,7 +275,6 @@ class TorchTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
     # Use None as sentinel to indicate not yet initialized, avoiding shared mutable default
     _FILE_LEVEL_INCLUDED_MODULES: Optional[Set[str]] = None
     _FILE_LEVEL_EXCLUDED_MODULES: Optional[Set[str]] = None
-    _OOT_XFAIL_METHODS: Dict[str, bool] = {}
 
     @classmethod
     def setUpClass(cls):

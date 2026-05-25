@@ -31,6 +31,8 @@ def pytest_runtest_makereport(item, call):
     outcome = yield
     rep = outcome.get_result()
     if call.when == "call":
+        fn = getattr(item, "function", None) or getattr(item, "obj", None)
+
         # Use full variant name (e.g. test_model_ops_db_torch_..._float16) for
         # _RUNTIME_TAGS lookup. item.originalname is the base method name which
         # misses per-variant runtime tags populated by print_test_tags_oot.
@@ -42,7 +44,6 @@ def pytest_runtest_makereport(item, call):
             if orig:
                 tags = _RUNTIME_TAGS.get(orig, [])
         if not tags:
-            fn = getattr(item, "function", None) or getattr(item, "obj", None)
             tags = getattr(fn, "_spyre_method_tags", [])
             if not tags:
                 tags = getattr(fn, "_oot_method_tags", [])
@@ -54,7 +55,6 @@ def pytest_runtest_makereport(item, call):
         # when the outcome is SKIPPED (e.g. pytest.skip() called inside the body or
         # by PyTorch's test_wrapper). We detect the xfail mark directly from
         # fn.pytestmark and rewrite the report here.
-        fn = getattr(item, "function", None) or getattr(item, "obj", None)
         xfail_mark = next(
             (m for m in getattr(fn, "pytestmark", []) if m.name == "xfail"),
             None,
@@ -66,9 +66,14 @@ def pytest_runtest_makereport(item, call):
                 rep.wasxfail = "expected failure (OOT xfail)"
             elif rep.passed:
                 if strict:
+                    # Strict XPASS: test passed but was required to fail.
+                    # Set as hard failure. wasxfail is intentionally NOT set here
+                    # so pytest_report_teststatus falls through to FAILED.
                     rep.outcome = "failed"
                     rep.longrepr = "XPASS strict: test passed but xfail strict=True"
                 else:
+                    # Non-strict XPASS: test passed but was expected to fail.
+                    # wasxfail set so pytest_report_teststatus displays "XPASS".
                     rep.wasxfail = "expected failure (OOT xfail)"
 
 
@@ -429,16 +434,22 @@ def pytest_report_teststatus(report, config):
     tags = getattr(report, "_spyre_tags", [])
     tags_msg = f" [TAGS = {' '.join(map(str, tags))}]" if tags else ""
 
-    # wasxfail is set by our hook for OOT xfail rewrites
+    # wasxfail is set by our pytest_runtest_makereport hook for OOT xfail rewrites.
+    # Three cases:
+    #   - rep.passed + wasxfail set   -> non-strict XPASS (unexpected pass, not a failure)
+    #   - rep.skipped + wasxfail set  -> XFAIL (expected failure, converted from skip or real failure)
+    #   - strict XPASS                -> hook sets rep.outcome="failed" but does NOT set wasxfail,
+    #                                   so wasxfail is None here and it falls through to FAILED below.
+    #                                   This is intentional: strict XPASS is a hard failure.
     wasxfail = getattr(report, "wasxfail", None)
-
     if wasxfail is not None:
         if report.passed:
-            # XPASS (unexpected pass, non-strict)
+            # Non-strict XPASS: test passed but was expected to fail. Not a hard failure.
             return "xpassed", "X", f"XPASS{tags_msg}"
         else:
-            # XFAIL (expected failure or converted skip)
+            # XFAIL: test failed or skipped as expected.
             return "xfailed", "x", f"XFAIL{tags_msg}"
+    # strict XPASS falls through to FAILED below (rep.outcome="failed", wasxfail not set)
 
     if report.failed:
         return "failed", "F", f"FAILED{tags_msg}"
