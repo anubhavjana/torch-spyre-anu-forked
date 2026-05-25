@@ -197,8 +197,28 @@ def _apply_aiu_setup_for_card(card_index: int) -> None:
 # worker process is spawned.  Injects the card index into the worker's input
 # channel so the worker can read it from config.workerinput at startup.
 # ---------------------------------------------------------------------------
+# def pytest_configure_node(node) -> None:
+#     """Inject spyre_card_index into each xdist worker before it starts."""
+#     if not os.environ.get("SPYRE_PARALLEL_CARDS"):
+#         return
+#     worker_id = getattr(node, "workerid", "gw0")
+#     try:
+#         card_index = int(worker_id.lstrip("gw"))
+#     except ValueError:
+#         card_index = 0
+#     node.workerinput["spyre_card_index"] = card_index
+
+#     # Also pass the specific PCI address for this worker through workerinput
+#     # so the worker can apply it before torch_spyre._C is ever imported.
+#     pci_all = os.environ.get("PCIDEVICE_IBM_COM_AIU_PF", "")
+#     pci_list = [p.strip() for p in pci_all.split(",") if p.strip()]
+#     if pci_list and card_index < len(pci_list):
+#         node.workerinput["spyre_pci_device"] = pci_list[card_index]
+#     elif pci_list:
+#         node.workerinput["spyre_pci_device"] = pci_list[0]
+
+
 def pytest_configure_node(node) -> None:
-    """Inject spyre_card_index into each xdist worker before it starts."""
     if not os.environ.get("SPYRE_PARALLEL_CARDS"):
         return
     worker_id = getattr(node, "workerid", "gw0")
@@ -208,14 +228,24 @@ def pytest_configure_node(node) -> None:
         card_index = 0
     node.workerinput["spyre_card_index"] = card_index
 
-    # Also pass the specific PCI address for this worker through workerinput
-    # so the worker can apply it before torch_spyre._C is ever imported.
     pci_all = os.environ.get("PCIDEVICE_IBM_COM_AIU_PF", "")
     pci_list = [p.strip() for p in pci_all.split(",") if p.strip()]
     if pci_list and card_index < len(pci_list):
-        node.workerinput["spyre_pci_device"] = pci_list[card_index]
+        pci_for_worker = pci_list[card_index]
     elif pci_list:
-        node.workerinput["spyre_pci_device"] = pci_list[0]
+        pci_for_worker = pci_list[0]
+    else:
+        pci_for_worker = ""
+
+    node.workerinput["spyre_pci_device"] = pci_for_worker
+
+    # Inject the PCI address directly into the worker process environment
+    # via the execnet gateway, before any test collection or imports run.
+    if pci_for_worker:
+        channel = node.gateway.remote_exec(
+            f"import os; os.environ['PCIDEVICE_IBM_COM_AIU_PF'] = {pci_for_worker!r}"
+        )
+        channel.waitclose()
 
 
 def pytest_sessionstart(session):
@@ -229,11 +259,18 @@ def pytest_sessionstart(session):
         if worker_input is not None:
             card_index = worker_input.get("spyre_card_index", 0)
             pci_device = worker_input.get("spyre_pci_device", "")
+            print(
+                f"[spyre_parallel] Worker {card_index}: "
+                f"workerinput pci_device={pci_device!r}, "
+                f"os.environ PCIDEVICE={os.environ.get('PCIDEVICE_IBM_COM_AIU_PF', 'NOT SET')!r}",
+                flush=True,
+            )
             if pci_device:
                 os.environ["PCIDEVICE_IBM_COM_AIU_PF"] = pci_device
 
             if card_index > 0:
                 import time
+
                 time.sleep(card_index * 5)
 
             _apply_aiu_setup_for_card(card_index)
@@ -243,6 +280,7 @@ def pytest_sessionstart(session):
             # during the first test when all workers are competing.
             try:
                 import torch
+
                 _ = torch.empty(1, device="spyre")
                 print(
                     f"[spyre_parallel] Worker {card_index} runtime initialized eagerly",
