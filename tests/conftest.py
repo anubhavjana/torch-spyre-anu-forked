@@ -108,14 +108,45 @@ def _apply_aiu_setup_for_card(card_index: int) -> None:
 
     aiu_setup = "/etc/profile.d/ibm-aiu-setup.sh"
     if not os.path.isfile(aiu_setup):
-        # Not on an AIU runner — skip silently (e.g. local dev without hardware).
+        # Not on an AIU runner -- skip silently
         return
+
+    # Slice the Nth PCI address out of the full comma-separated list so
+    # ibm-aiu-setup.sh sees only one device and binds to it exclusively.
+    pci_all = os.environ.get("PCIDEVICE_IBM_COM_AIU_PF", "")
+    pci_list = [p.strip() for p in pci_all.split(",") if p.strip()]
+    if pci_list:
+        if card_index >= len(pci_list):
+            print(
+                f"[spyre_parallel] WARNING: card_index {card_index} out of range "
+                f"({len(pci_list)} cards available), using card 0",
+                flush=True,
+            )
+            card_index = 0
+        pci_for_worker = pci_list[card_index]
+    else:
+        pci_for_worker = ""
+
+    # Set PCIDEVICE_IBM_COM_AIU_PF to only this worker's card BEFORE sourcing
+    # the setup script, so the C++ runtime never sees the other cards' addresses.
+    if pci_for_worker:
+        os.environ["PCIDEVICE_IBM_COM_AIU_PF"] = pci_for_worker
+        print(
+            f"[spyre_parallel] Worker {card_index} assigned PCI device: {pci_for_worker}",
+            flush=True,
+        )
+
+    script = (
+        f"AIU_DEVICE_INDEX={card_index} "
+        + (f"PCIDEVICE_IBM_COM_AIU_PF={pci_for_worker} " if pci_for_worker else "")
+        + f"source {aiu_setup} 2>/dev/null; env"
+    )
 
     # Source the setup script with the desired card index and print the
     # resulting environment.  We capture env-only lines (KEY=VALUE) by
     # diffing against a baseline env dump so we pick up only what the script
     # adds or changes.
-    script = f"AIU_DEVICE_INDEX={card_index} source {aiu_setup} 2>/dev/null; env"
+    # script = f"AIU_DEVICE_INDEX={card_index} source {aiu_setup} 2>/dev/null; env"
     try:
         result = subprocess.run(
             ["bash", "-c", script],
@@ -146,7 +177,12 @@ def _apply_aiu_setup_for_card(card_index: int) -> None:
             continue
         key, _, val = line.partition("=")
         # Only propagate AIU-related vars to avoid unintended side effects.
-        if key.startswith("AIU") or key.startswith("SPYRE") or key.startswith("DT"):
+        if (
+            key.startswith("AIU")
+            or key.startswith("SPYRE")
+            or key.startswith("DT")
+            or key.startswith("PCIDEVICE")
+        ):
             os.environ[key] = val
 
     print(
