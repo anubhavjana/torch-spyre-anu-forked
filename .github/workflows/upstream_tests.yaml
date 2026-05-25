@@ -7,13 +7,13 @@ on:
     paths-ignore:
       - tests/docs/**
       - docs/**
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - tests/docs/**
-      - docs/**
-  merge_group:
-    types: [checks_requested]
+  # pull_request:
+  #   branches: [main]
+  #   paths-ignore:
+  #     - tests/docs/**
+  #     - docs/**
+  # merge_group:
+  #   types: [checks_requested]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}

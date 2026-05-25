@@ -228,12 +228,31 @@ def pytest_sessionstart(session):
         worker_input = getattr(session.config, "workerinput", None)
         if worker_input is not None:
             card_index = worker_input.get("spyre_card_index", 0)
-            # Apply PCI device restriction immediately — before any import
-            # that might trigger torch_spyre._C.start_runtime().
             pci_device = worker_input.get("spyre_pci_device", "")
             if pci_device:
                 os.environ["PCIDEVICE_IBM_COM_AIU_PF"] = pci_device
+
+            if card_index > 0:
+                import time
+                time.sleep(card_index * 5)
+
             _apply_aiu_setup_for_card(card_index)
+
+            # Force eager runtime initialization now, while the stagger
+            # delay has serialized workers, so _lazy_init doesn't fire
+            # during the first test when all workers are competing.
+            try:
+                import torch
+                _ = torch.empty(1, device="spyre")
+                print(
+                    f"[spyre_parallel] Worker {card_index} runtime initialized eagerly",
+                    flush=True,
+                )
+            except Exception as e:
+                print(
+                    f"[spyre_parallel] WARNING: eager init failed for card {card_index}: {e}",
+                    flush=True,
+                )
 
     # avoid circular imports when using xdist
     import torch  # noqa: F401
@@ -467,6 +486,18 @@ def compile_backend(pytestconfig):
 
 
 def pytest_configure(config):
+    # Worker-side early card binding — must happen before pytest_sessionstart
+    # and before any torch import in the worker process.
+    if os.environ.get("SPYRE_PARALLEL_CARDS"):
+        worker_input = getattr(config, "workerinput", None)
+        if worker_input is not None:
+            pci_device = worker_input.get("spyre_pci_device", "")
+            if pci_device:
+                os.environ["PCIDEVICE_IBM_COM_AIU_PF"] = pci_device
+                print(
+                    f"[spyre_parallel] Early bind: PCIDEVICE_IBM_COM_AIU_PF={pci_device}",
+                    flush=True,
+                )
     shared_config._PYTEST_CONFIG = config
 
     config.addinivalue_line(
