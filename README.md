@@ -25,6 +25,14 @@ Internal build instructions are available to IBM employees through internal docu
 Non-interactive, simple script:
 
 ```bash
+python3 examples/tensor_allocate.py
+
+python3 examples/softmax.py
+```
+
+Run torch-spyre tests
+
+```bash
 make # (or make help)
 make tests
 ```
