@@ -291,39 +291,6 @@ def insert_run(client, run_id: str, run: dict, args):
     )
 
 
-# def insert_run(client, run_id: str, run: dict, args):
-#     client.insert(
-#         """
-#         INSERT INTO test_runs
-#             (run_id, workflow, suite_name, filename, branch, commit_sha,
-#              pr_number, gha_run_id, triggered_at, total_tests, passed, failed,
-#              skipped, xfail, errors, xpass, duration_s)
-#         VALUES
-#         """,
-#         [
-#             {
-#                 "run_id": run_id,
-#                 "workflow": args.workflow,
-#                 "suite_name": run["suite_name"],
-#                 "filename": run["filename"],
-#                 "branch": args.branch,
-#                 "commit_sha": (args.sha or "").ljust(40)[:40],
-#                 "pr_number": int(args.pr_number) if args.pr_number.strip() else 0,
-#                 "gha_run_id": int(args.run_id or 0),
-#                 "triggered_at": run["triggered_at"].replace(tzinfo=None),
-#                 "total_tests": run["total_tests"],
-#                 "passed": run["passed"],
-#                 "failed": run["failed"],
-#                 "skipped": run["skipped"],
-#                 "xfail": run["xfail"],
-#                 "errors": run["errors"],
-#                 "xpass": run["xpass"],
-#                 "duration_s": run["duration_s"],
-#             }
-#         ],
-#     )
-
-
 def insert_cases(client, run_id: str, cases: list[dict], workflow: str = ""):
     if not cases:
         return
