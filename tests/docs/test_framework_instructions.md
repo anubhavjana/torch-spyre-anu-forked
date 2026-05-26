@@ -18,7 +18,7 @@ cd /path/to/torch-spyre
 
 ### Approach 1: make (recommended)
 
-The Makefile at the repo root is the primary entry point. By default it runs all torch spyre tests and module tests:
+The Makefile at the repo root is the primary entry point. By default it runs all torch spyre tests (except distributed)
 
 ```bash
 make tests
@@ -48,35 +48,33 @@ Run `make help` to see all available targets.
 The orchestrator script lives at `tests/run_test.sh`. Pass it a config YAML as the only required argument — everything else (env vars, root paths, PYTHONPATH) is derived automatically. The configs reside in the `tests/configs/` directory.
 
 ```bash
-bash tests/run_test.sh tests/configs/test_suite_config.yaml
+bash tests/run_test.sh tests/run_test.sh tests/configs/upstream_tests/test_view_ops_config.yaml
 ```
 
 You can pass extra pytest flags after the config path:
 
 ```bash
-bash tests/run_test.sh tests/configs/test_suite_config.yaml -v
-bash tests/run_test.sh tests/configs/test_suite_config.yaml -k test_add
+bash tests/run_test.sh tests/configs/upstream_tests/test_view_ops_config.yaml -v
 
 # Run only mandatory_success tests (excludes xfail)
-bash tests/run_test.sh tests/configs/test_suite_config.yaml -v -m 'not xfail'
+bash tests/run_test.sh tests/configs/upstream_tests/test_view_ops_config.yaml -v -m 'not xfail'
 ```
 
 Multiple config files or directories can be passed and are merged at runtime:
 
 ```bash
 bash tests/run_test.sh tests/configs/module_tests tests/configs/torch_spyre_tests
-bash tests/run_test.sh tests/configs/config_a.yaml tests/configs/config_b.yaml
 ```
 
 If you are running from a different working directory, use absolute paths:
 
 ```bash
-bash /path/to/torch-spyre/tests/run_test.sh /path/to/torch-spyre/tests/configs/test_suite_config.yaml
+bash /path/to/torch-spyre/tests/run_test.sh /path/to/torch-spyre/tests/configs/torch_spyre_tests/inductor/test_inductor_ops_config.yaml
 ```
 
-## Configuring which tests to run
+## Configuring which tests to run (Example)
 
-Open `tests/configs/test_suite_config.yaml` and edit the `files` section. Comment out, add, or remove file entries to control which test files the runner picks up (please note that the existing configs can be used as a reference for users to create a new config specific to their use cases):
+Open `tests/configs/torch_spyre_tests/inductor/test_inductor_ops_config.yaml` and edit the `files` section. Comment out, add, or remove file entries to control which test files the runner picks up (please note that the existing configs can be used as a reference for users to create a new config specific to their use cases):
 
 ```yaml
 files:

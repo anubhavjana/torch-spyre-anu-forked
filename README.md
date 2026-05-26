@@ -24,46 +24,13 @@ Internal build instructions are available to IBM employees through internal docu
 
 Non-interactive, simple script:
 
-```
+```bash
+make # (or make help)
 make tests
-
-python3 -m pytest tests/
-
-python3 examples/tensor_allocate.py
-
-python3 examples/softmax.py
 ```
 
 You can override which configs to run and pass extra pytest flags via `TEST_CONFIGS` and `PYTEST_ARGS`:
-
-```bash
-# Run a specific config directory or file
-make tests TEST_CONFIGS="tests/configs/torch_spyre_tests/inductor"
-make tests TEST_CONFIGS="tests/configs/upstream_tests/test_view_ops_config.yaml"
- 
-# Pass extra pytest flags
-make tests PYTEST_ARGS="-v -k test_add"
- 
-# Run only mandatory_success tests (excludes xfail)
-make tests PYTEST_ARGS="-v -m 'not xfail'"
- 
-# Combine overrides
-make tests TEST_CONFIGS="tests/configs/upstream_tests/test_view_ops_config.yaml" PYTEST_ARGS="-v -m 'not xfail'"
-```
-
-Run `make help` to see all available targets. Alternatively, you can invoke the runner script directly:
-
-```bash
-bash tests/run_test.sh tests/configs/upstream_tests/test_view_ops_config.yaml -v
-
-# Run only mandatory_success tests (excludes xfail)
-bash tests/run_test.sh tests/configs/upstream_tests/test_view_ops_config.yaml -v -m 'not xfail'
- 
-# Multiple config files or directories merged at runtime
-bash tests/run_test.sh tests/configs/module_tests tests/configs/torch_spyre_tests
-```
-
-For full details see the [Test Framework Runner guide](tests/docs/test_framework_instructions.md).
+For full details and options to run tests see the [Test Framework Runner guide](tests/docs/test_framework_instructions.md).
 
 Interactive:
 
