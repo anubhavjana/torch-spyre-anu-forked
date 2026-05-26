@@ -48,7 +48,7 @@ Run `make help` to see all available targets.
 The orchestrator script lives at `tests/run_test.sh`. Pass it a config YAML as the only required argument — everything else (env vars, root paths, PYTHONPATH) is derived automatically. The configs reside in the `tests/configs/` directory.
 
 ```bash
-bash tests/run_test.sh tests/run_test.sh tests/configs/upstream_tests/test_view_ops_config.yaml
+bash tests/run_test.sh tests/configs/upstream_tests/test_view_ops_config.yaml
 ```
 
 You can pass extra pytest flags after the config path:
