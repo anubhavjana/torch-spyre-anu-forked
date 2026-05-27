@@ -61,7 +61,7 @@ jobs:
       # CLICKHOUSE_PASS: ${{ secrets.CLICKHOUSE_PASS_DEV }}
       # CLICKHOUSE_DB: ${{ secrets.CLICKHOUSE_DB_DEV }}
 
-      # TRIAL INSTANCE PUBLIC
+      # PROD INSTANCE
       CLICKHOUSE_HOST: ${{ secrets.CLICKHOUSE_HOST }}
       CLICKHOUSE_PORT: ${{ secrets.CLICKHOUSE_PORT }}
       CLICKHOUSE_USER: ${{ secrets.CLICKHOUSE_USER }}
@@ -174,7 +174,7 @@ jobs:
             --triggered-at "${TRIGGERING_AT}" \
             --pr-number    "${{ steps.resolve-pr.outputs.pr_number }}"
         env:
-          # TRIAL INSTANCE PUBLIC
+          # PROD INSTANCE
           CLICKHOUSE_HOST: ${{ secrets.CLICKHOUSE_HOST }}
           CLICKHOUSE_PORT: ${{ secrets.CLICKHOUSE_PORT }}
           CLICKHOUSE_USER: ${{ secrets.CLICKHOUSE_USER }}
