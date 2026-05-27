@@ -84,7 +84,7 @@ jobs:
       - name: Install Python dependencies
         run: |
           source /home/senuser/torch-spyre/.venv/bin/activate
-          pip install requests clickhouse-driver clickhouse-connect lxml
+          uv pip install requests clickhouse-driver clickhouse-connect lxml
 
       - name: Resolve PR number
         id: resolve-pr
