@@ -13,36 +13,16 @@ test_suite_config:
             #         or test_nanmedian or test_mode_ or test_sum_eager
             #         or test_mean_eager or test_max_eager or test_min_eager
             #
+            # Any name containing "keepdim" (covers all *_keepdim* variants)
             - TestOps::.*keepdim.*
+            # All test_reduce_* variants
             - TestOps::test_reduce.*
-            - TestOps::test_max_default.*
-            - TestOps::test_topk.*
-            - TestOps::test_argmin.*
-            - TestOps::test_count_nonzero.*
-            - TestOps::test_logsumexp.*
-            - TestOps::test_nanmean.*
-            - TestOps::test_nansum.*
-            - TestOps::test_all_dim.*
-            - TestOps::test_any_dim.*
-            - TestOps::test_prod_dim.*
-            - TestOps::test_std_.*
-            - TestOps::test_var_.*
-            - TestOps::test_cumprod.*
-            - TestOps::test_logcumsumexp.*
-            - TestOps::test_cummax.*
-            - TestOps::test_cummin.*
-            - TestOps::test_quantile.*
-            - TestOps::test_nanquantile.*
-            - TestOps::test_median.*
-            - TestOps::test_nanmedian.*
-            - TestOps::test_mode_.*
+            # All remaining reduction base names
             # "test_sum_eager" as substring --> test_sum_keepdim0, test_sum_keepdim1
             # k_expr "test_sum_eager" matches the eager test class names
             # but the base method names are test_sum_keepdim0/1 from test file
-            - TestOps::test_sum_keepdim.*
-            - TestOps::test_mean_keepdim.*
-            - TestOps::test_max_keepdim.*
-            - TestOps::test_min_keepdim.*
+            - TestOps::test_(all_dim|any_dim|argmin|count_nonzero|cummax|cummin|cumprod|logcumsumexp|logsumexp|max_default|median|mode_|nanmean|nanmedian|nanquantile|nansum|prod_dim|quantile|std_|topk|var_).*
+
           mode: mandatory_success
           tags:
             - ops__inductor-reduction
