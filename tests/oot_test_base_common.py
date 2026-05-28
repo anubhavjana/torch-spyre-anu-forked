@@ -4,7 +4,6 @@ Shared class and methods for all OOT PyTorch test overrides.
 
 """
 
-import fnmatch
 import os
 import json
 from typing import Dict, List, Optional, Set, Tuple
@@ -110,34 +109,28 @@ remove_builtin_privateuse1_test_base()
 
 
 # ---------------------------------------------------------------------------
-# Glob pattern helpers
+# Regex pattern helpers
 # ---------------------------------------------------------------------------
 
 
-def _is_glob_pattern(name: str) -> bool:
-    """Return True if *name* contains any glob metacharacter (* ? [ ])."""
-    return any(c in name for c in ("*", "?", "[", "]"))
+def _is_regex_pattern(name: str) -> bool:
+    return any(c in name for c in r"\.^$*+?{}[]|()")
 
 
-def _glob_entries_for_name(
-    name: str,
-    glob_entries: List[Tuple[str, "TestEntry"]],
-) -> List["TestEntry"]:
-    """Return all TestEntry objects whose stored glob pattern matches *name*.
+def _regex_entries_for_name(name, regex_entries):
+    """Return all TestEntry objects whose stored regex pattern matches *name*.
 
     *name* is the base method name as seen by ``instantiate_test`` (e.g.
-    ``"test_rope_fms_prefill_bs1"``).  Matching is case-sensitive and uses
-    ``fnmatch.fnmatchcase`` so ``*`` and ``?`` behave like shell globs.
+    ``"test_rope_fms_prefill_bs1"``).  Matching uses ``re.fullmatch`` so
+    the pattern must match the entire method name, not just a substring.
 
     Examples of patterns that will match ``test_rope_fms_prefill_bs1``:
-      - ``test_rope_fms_*``
-      - ``test_rope_fms_prefill_*``
-      - ``test_rope_*``
-      - ``test_*``
+      - ``test_rope_fms_.*``
+      - ``test_rope_fms_prefill_.*``
+      - ``test_rope_.*``
+      - ``test_(rope|qkv)_.*``
     """
-    return [
-        entry for pattern, entry in glob_entries if fnmatch.fnmatchcase(name, pattern)
-    ]
+    return [entry for pattern, entry in regex_entries if re.fullmatch(pattern, name)]
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +161,7 @@ def _build_test_entry_map(
         Keyed by exact base method names (no glob metacharacters).  Same
         structure as the original return value so callers that only need
         exact matching are unaffected.
-    glob_entries : List[Tuple[str, TestEntry]]
+    regex_entries : List[Tuple[str, TestEntry]]
         Ordered list of ``(glob_pattern, entry)`` pairs for names that
         contain glob metacharacters (``*``, ``?``, ``[``, ``]``).
         Patterns are bare method names — the ``ClassName::`` prefix has
@@ -178,19 +171,19 @@ def _build_test_entry_map(
     -----
     ::
 
-        cls.TEST_ENTRIES, cls.GLOB_ENTRIES = _build_test_entry_map(file_entry)
+        cls.TEST_ENTRIES, cls.REGEX_ENTRIES = _build_test_entry_map(file_entry)
     """
     exact_map: Dict[str, List["TestEntry"]] = {}
-    glob_entries: List[Tuple[str, "TestEntry"]] = []
+    regex_entries: List[Tuple[str, "TestEntry"]] = []
 
     for entry in file_entry.tests:
         for method_name in entry.method_names():
-            if _is_glob_pattern(method_name):
-                glob_entries.append((method_name, entry))
+            if _is_regex_pattern(method_name):
+                regex_entries.append((method_name, entry))
             else:
                 exact_map.setdefault(method_name, []).append(entry)
 
-    return exact_map, glob_entries
+    return exact_map, regex_entries
 
 
 def _entry_dtype_set(
@@ -327,10 +320,10 @@ class TorchTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
     # with different tags/dtypes (e.g. same op tested for two different models).
     TEST_ENTRIES: Dict[str, List["TestEntry"]] = {}
 
-    # Glob-pattern store: [(glob_pattern, TestEntry), ...]
+    # Regex-pattern store: [(regex_pattern, TestEntry), ...]
     # Populated alongside TEST_ENTRIES from YAML names that contain * ? [ ].
     # Matched against concrete method names in instantiate_test().
-    GLOB_ENTRIES: List[Tuple[str, "TestEntry"]] = []
+    REGEX_ENTRIES: List[Tuple[str, "TestEntry"]] = []
 
     UNLISTED_TEST_MODE: str = UNLISTED_MODE_XFAIL  # file-level default
     SUPPORTED_OPS_CONFIG: Dict[str, "SupportedOpConfig"] = {}  # {op_name -> config}
@@ -367,7 +360,7 @@ class TorchTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
             return
 
         # Reset glob store so a fresh load always starts clean.
-        cls.GLOB_ENTRIES = []
+        cls.REGEX_ENTRIES = []
 
         config: OOTTestConfig = load_yaml_config(path)
 
@@ -396,10 +389,10 @@ class TorchTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         # Build multi-entry map: same method_name can have multiple TestEntry
         # objects when configs differ in tags/dtypes for the same test.
 
-        # Build the exact-name lookup map and the glob-pattern list.
-        # Glob patterns (names containing * ? [ ]) go into GLOB_ENTRIES;
+        # Build the exact-name lookup map and the regex-pattern list.
+        # Regex patterns (names containing * ? [ ]) go into REGEX_ENTRIES;
         # everything else goes into TEST_ENTRIES keyed by exact method name.
-        cls.TEST_ENTRIES, cls.GLOB_ENTRIES = _build_test_entry_map(file_entry)
+        cls.TEST_ENTRIES, cls.REGEX_ENTRIES = _build_test_entry_map(file_entry)
         cls.UNLISTED_TEST_MODE = file_entry.unlisted_test_mode
 
         # Initialize file-level module tracking for this config load
@@ -552,8 +545,8 @@ class TorchTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
             if not entries:
                 # Also check glob patterns before giving up.
                 entries = (
-                    _glob_entries_for_name(
-                        base_test_name, getattr(cls, "GLOB_ENTRIES", [])
+                    _regex_entries_for_name(
+                        base_test_name, getattr(cls, "REGEX_ENTRIES", [])
                     )
                     or None
                 )
@@ -648,13 +641,13 @@ class TorchTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa:
         # ------------------------------------------------------------------
         all_entries_for_name: List[TestEntry] = list(cls.TEST_ENTRIES.get(name, []))
 
-        # Glob-pattern lookup: extend with any entries whose pattern matches
+        # Regex-pattern lookup: extend with any entries whose pattern matches
         # the current base test name.  Skip entries already in the exact list
         # to avoid double-processing the same TestEntry object.
-        glob_matches = _glob_entries_for_name(name, getattr(cls, "GLOB_ENTRIES", []))
-        for _ge in glob_matches:
-            if _ge not in all_entries_for_name:
-                all_entries_for_name.append(_ge)
+        regex_matches = _regex_entries_for_name(name, getattr(cls, "REGEX_ENTRIES", []))
+        for _re in regex_matches:
+            if _re not in all_entries_for_name:
+                all_entries_for_name.append(_re)
 
         # ------------------------------------------------------------------
         # Collect the union of all tags across all entries for collection-time
