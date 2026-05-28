@@ -1,0 +1,48 @@
+test_suite_config:
+  files:
+    - path: ${TORCH_DEVICE_ROOT}/tests/inductor/test_inductor_ops.py
+      unlisted_test_mode: skip
+      tests:
+        - names:
+            # k_expr: keepdim or test_reduce or test_max_default or test_topk
+            #         or test_argmin or test_count_nonzero or test_logsumexp
+            #         or test_nanmean or test_nansum or test_all_dim or test_any_dim
+            #         or test_prod_dim or test_std_ or test_var_ or test_cumprod
+            #         or test_logcumsumexp or test_cummax or test_cummin
+            #         or test_quantile or test_nanquantile or test_median
+            #         or test_nanmedian or test_mode_ or test_sum_eager
+            #         or test_mean_eager or test_max_eager or test_min_eager
+            #
+            - TestOps::.*keepdim.*
+            - TestOps::test_reduce.*
+            - TestOps::test_max_default.*
+            - TestOps::test_topk.*
+            - TestOps::test_argmin.*
+            - TestOps::test_count_nonzero.*
+            - TestOps::test_logsumexp.*
+            - TestOps::test_nanmean.*
+            - TestOps::test_nansum.*
+            - TestOps::test_all_dim.*
+            - TestOps::test_any_dim.*
+            - TestOps::test_prod_dim.*
+            - TestOps::test_std_.*
+            - TestOps::test_var_.*
+            - TestOps::test_cumprod.*
+            - TestOps::test_logcumsumexp.*
+            - TestOps::test_cummax.*
+            - TestOps::test_cummin.*
+            - TestOps::test_quantile.*
+            - TestOps::test_nanquantile.*
+            - TestOps::test_median.*
+            - TestOps::test_nanmedian.*
+            - TestOps::test_mode_.*
+            # "test_sum_eager" as substring --> test_sum_keepdim0, test_sum_keepdim1
+            # k_expr "test_sum_eager" matches the eager test class names
+            # but the base method names are test_sum_keepdim0/1 from test file
+            - TestOps::test_sum_keepdim.*
+            - TestOps::test_mean_keepdim.*
+            - TestOps::test_max_keepdim.*
+            - TestOps::test_min_keepdim.*
+          mode: mandatory_success
+          tags:
+            - ops__inductor-reduction
