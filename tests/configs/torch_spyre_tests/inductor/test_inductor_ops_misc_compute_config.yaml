@@ -55,7 +55,12 @@ test_suite_config:
             - TestOps::test_item.*
             # exact matches — no .* to avoid leaking into other shards
             - TestOps::test_log
-            - TestOps::test_mean
+            # test_mean has 3 params: 3d_dim0, 3d_dim1, 3d_dim0_keepdim.
+            # The 3d_dim0_keepdim variant is in the keepdim shard (matched by
+            # the old .*keepdim.* pattern on instantiated names). The other two
+            # are listed explicitly here to avoid double-collecting 3d_dim0_keepdim.
+            - TestOps::test_mean_3d_dim0
+            - TestOps::test_mean_3d_dim1
             - TestOps::test_mean_default.*
             - TestOps::test_normal_randn_cpu.*
             - TestOps::test_overwrite.*
@@ -70,5 +75,3 @@ test_suite_config:
             - TestOps::test_single_dim_reduction_invalid_dims_api.*
             - TestOps::test_single_dim_reduction_invalid_dims_spyre.*
           mode: mandatory_success
-          tags:
-            - ops__inductor_misc_compute
