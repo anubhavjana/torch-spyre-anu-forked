@@ -65,7 +65,7 @@ deployer: anubhavjana
 clickhouse:
   # ClickHouse Cloud HTTPS URL — direct connection from the browser.
   # This is the public HTTPS endpoint, no nginx proxy needed for ClickHouse Cloud.
-  url: https://sm73y6g9e8.ap-south-1.aws.clickhouse.cloud:8443
+  url: https://spyre-dashboard-clickhouse-clickhouse.apps.torch-cicd.spyre.res.ibm.com
 
   # ClickHouse database name
   db: spyre
@@ -92,5 +92,5 @@ clickhouse:
 
   # Internal service fields — not used for ClickHouse Cloud direct access
   # but kept for future in-cluster ClickHouse deployments.
-  internalServiceHost: sm73y6g9e8.ap-south-1.aws.clickhouse.cloud
-  internalServicePort: 8443
+  internalServiceHost: spyre-dashboard-clickhouse-clickhouse.apps.torch-cicd.spyre.res.ibm.com
+  internalServicePort: 443
