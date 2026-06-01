@@ -88,7 +88,7 @@ clickhouse:
   defaultLimit: 30
 
   # When true, the newest run loads automatically when the dashboard opens.
-  autoload: true
+  autoload: false
 
   # Internal service fields — not used for ClickHouse Cloud direct access
   # but kept for future in-cluster ClickHouse deployments.
