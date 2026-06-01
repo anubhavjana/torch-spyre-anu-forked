@@ -79,8 +79,7 @@ Follow these steps whenever you add new test methods to an existing or new `test
                              │
                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│  2. Add / update a YAML config that covers the new tests and.       │
-│    then add to the GHA workflow file `torch_spyre_tests.yaml        │
+│  2. Create / update a config YAML + add a GHA matrix entry          │
 │                                                                     │
 │  tests/configs/torch_spyre_tests/<subdir>/test_foo_config.yaml      │
 │                                                                     │
@@ -92,14 +91,21 @@ Follow these steps whenever you add new test methods to an existing or new `test
 │          - names:                                                   │
 │              - MyTestClass::test_new_feature.*                      │
 │            mode: mandatory_success                                  │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
+└──────────────────────┬──────────────────────┬───────────────────────┘
+                       │                      │
+                       │         ┌────────────▼────────────────────────┐
+                       │         │  2b. Large test file?               │
+                       │         │  Distribute work — splitting a      │
+                       │         │  test file into focused shards      │
+                       │         │  (see section below)                │
+                       │         └─────────────────────────────────────┘
+                       │
+                       ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │  3. Run the duplicate / missing checker locally                     │
 │                                                                     │
-│  # Fast: scope to your test file only                               │
-│  make check-all-configs TEST_FILE=tests/<path>/test_foo.py          │
+│                                                                     │
+│  make check-all-configs         │
 │                                                                     │
 │  Expected output:                                                   │
 │    CHECK 1: No duplicates.                                          │
@@ -115,7 +121,7 @@ Follow these steps whenever you add new test methods to an existing or new `test
 │  (a) oot-config-checker-tool   ->  reruns CHECK 1/2/3 in CI         │
 │     Look at this run to verify no duplicates / missing tests        │
 │                                                                     │
-│  (b) Enforce Test CI Coverage  ->  verifies the config is also      │
+│  (b) Enforce Test CI Coverage  -> verifies the config is also       │
 │     registered in a workflow matrix entry                           │
 └────────────────────────────┬────────────────────────────────────────┘
                              │
@@ -127,7 +133,7 @@ Follow these steps whenever you add new test methods to an existing or new `test
 │    torch_spyre_tests.yaml  /  upstream_tests.yaml  / etc.           │
 │                                                                     │
 │  Check that your new test variant appears and passes                │
-│  (mode: mandatory_success → must be green).                         │
+│  (mode: mandatory_success > must be green).                         │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -218,16 +224,16 @@ test_suite_config:
 
 ```
 Scanning 44 config file(s) under tests/configs/torch_spyre_tests
-
+ 
 Reference: /home/.../tests/inductor/test_inductor_ops.py
   163 collectable name(s)
    77 helper-only method(s) (excluded from MISSING check)
-
+ 
 Test file: test_inductor_ops.py  (92 pattern(s) across 10 config(s))
   CHECK 1: No duplicates.
   CHECK 2: All 163 collectable names covered.
   CHECK 3: All patterns match at least one collectable name.
-
+ 
 RESULT: 0 duplicates/missing  |  0 dead patterns
 ```
 
