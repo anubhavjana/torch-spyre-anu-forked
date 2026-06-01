@@ -298,10 +298,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 
 /* Multi-select dropdown styles */
 .multiselect-dropdown{position:relative;display:inline-block;min-width:200px;z-index:100}
+.multiselect-dropdown.disabled{opacity:0.5;pointer-events:none;}
 .multiselect-button{padding:6px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);color:var(--text);cursor:pointer;font-size:12px;display:flex;align-items:center;justify-content:space-between;gap:8px;transition:border-color .2s}
 .multiselect-button:hover{border-color:var(--text3)}
 .multiselect-button-text{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .multiselect-arrow{font-size:10px;color:var(--text3)}
+.multiselect-clear-btn{background:transparent;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:0 4px;display:flex;align-items:center;justify-content:center;transition:color .2s}
+.multiselect-clear-btn:hover{color:var(--fail)}
 .multiselect-menu{position:fixed;background:var(--bg2);border:1px solid var(--border2);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:200px;max-height:250px;overflow-y:auto;z-index:10001;display:none}
 .multiselect-menu.show{display:block}
 .multiselect-option{padding:8px 12px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px;transition:background-color .2s}
@@ -558,16 +561,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
               <div class="multiselect-dropdown" id="filter-dtype-container">
                 <div class="multiselect-button" onclick="toggleFilter('dtype', event)">
                   <span class="multiselect-button-text" id="filter-dtype-text">Dtype: All</span>
-                  <span class="multiselect-arrow">▼</span>
+                  <span class="multiselect-arrow" id="filter-dtype-arrow">▼</span>
+                  <button class="multiselect-clear-btn" id="filter-dtype-clear" onclick="clearFilter('dtype'); event.stopPropagation();" style="display:none;" title="Clear filter">✕</button>
                 </div>
                 <div class="multiselect-menu" id="filter-dtype-menu">
                   <div style="padding:8px;border-bottom:1px solid var(--border)">
                     <input type="text" id="filter-dtype-search" placeholder="Search dtypes..."
                       style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--bg);color:var(--text)"
                       oninput="filterOptions('dtype')" onclick="event.stopPropagation()">
-                  </div>
-                  <div style="padding:8px;border-bottom:1px solid var(--border)">
-                    <button class="btn btn-sm" style="width:100%" onclick="clearFilter('dtype')">Clear All</button>
                   </div>
                   <div id="filter-dtype-options">
                     <!-- Will be populated dynamically -->
@@ -579,16 +580,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
               <div class="multiselect-dropdown" id="filter-op-container">
                 <div class="multiselect-button" onclick="toggleFilter('op', event)">
                   <span class="multiselect-button-text" id="filter-op-text">Op: All</span>
-                  <span class="multiselect-arrow">▼</span>
+                  <span class="multiselect-arrow" id="filter-op-arrow">▼</span>
+                  <button class="multiselect-clear-btn" id="filter-op-clear" onclick="clearFilter('op'); event.stopPropagation();" style="display:none;" title="Clear filter">✕</button>
                 </div>
                 <div class="multiselect-menu" id="filter-op-menu">
                   <div style="padding:8px;border-bottom:1px solid var(--border)">
                     <input type="text" id="filter-op-search" placeholder="Search ops..."
                       style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--bg);color:var(--text)"
                       oninput="filterOptions('op')" onclick="event.stopPropagation()">
-                  </div>
-                  <div style="padding:8px;border-bottom:1px solid var(--border)">
-                    <button class="btn btn-sm" style="width:100%" onclick="clearFilter('op')">Clear All</button>
                   </div>
                   <div id="filter-op-options">
                     <!-- Will be populated dynamically -->
@@ -600,16 +599,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
               <div class="multiselect-dropdown" id="filter-model-container">
                 <div class="multiselect-button" onclick="toggleFilter('model', event)">
                   <span class="multiselect-button-text" id="filter-model-text">Model: All</span>
-                  <span class="multiselect-arrow">▼</span>
+                  <span class="multiselect-arrow" id="filter-model-arrow">▼</span>
+                  <button class="multiselect-clear-btn" id="filter-model-clear" onclick="clearFilter('model'); event.stopPropagation();" style="display:none;" title="Clear filter">✕</button>
                 </div>
                 <div class="multiselect-menu" id="filter-model-menu">
                   <div style="padding:8px;border-bottom:1px solid var(--border)">
                     <input type="text" id="filter-model-search" placeholder="Search models..."
                       style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--bg);color:var(--text)"
                       oninput="filterOptions('model')" onclick="event.stopPropagation()">
-                  </div>
-                  <div style="padding:8px;border-bottom:1px solid var(--border)">
-                    <button class="btn btn-sm" style="width:100%" onclick="clearFilter('model')">Clear All</button>
                   </div>
                   <div id="filter-model-options">
                     <!-- Will be populated dynamically -->
@@ -621,16 +618,14 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
               <div class="multiselect-dropdown" id="filter-module-container">
                 <div class="multiselect-button" onclick="toggleFilter('module', event)">
                   <span class="multiselect-button-text" id="filter-module-text">Module: All</span>
-                  <span class="multiselect-arrow">▼</span>
+                  <span class="multiselect-arrow" id="filter-module-arrow">▼</span>
+                  <button class="multiselect-clear-btn" id="filter-module-clear" onclick="clearFilter('module'); event.stopPropagation();" style="display:none;" title="Clear filter">✕</button>
                 </div>
                 <div class="multiselect-menu" id="filter-module-menu">
                   <div style="padding:8px;border-bottom:1px solid var(--border)">
                     <input type="text" id="filter-module-search" placeholder="Search modules..."
                       style="width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:4px;font-size:12px;background:var(--bg);color:var(--text)"
                       oninput="filterOptions('module')" onclick="event.stopPropagation()">
-                  </div>
-                  <div style="padding:8px;border-bottom:1px solid var(--border)">
-                    <button class="btn btn-sm" style="width:100%" onclick="clearFilter('module')">Clear All</button>
                   </div>
                   <div id="filter-module-options">
                     <!-- Will be populated dynamically -->
@@ -4025,6 +4020,7 @@ function extractPropertiesFromTests(tests, propertyType) {
   console.log("tests for current run",tests)
   const properties = new Set();
   const prefix = propertyType + '__';
+  const noFilterKey = 'No_' + propertyType;
   
   tests.forEach(test => {
     if (test.properties && Array.isArray(test.properties)) {
@@ -4035,23 +4031,38 @@ function extractPropertiesFromTests(tests, propertyType) {
       });
     }
   });
-  return Array.from(properties).sort();
+  
+  // Sort all properties alphabetically, then prepend No_filtertype at the top
+  const sortedProperties = Array.from(properties).sort();
+  return [noFilterKey, ...sortedProperties];
 }
 
 function populateFilter(filterType) {
   const run = currentRun();
+  const container = document.getElementById(`filter-${filterType}-container`);
+  
   if (!run || !run.tests || run.tests.length === 0) {
     propertyFilters[filterType].available = [];
+    if (container) container.classList.add('disabled');
     return;
   }
+  
   propertyFilters[filterType].available = extractPropertiesFromTests(run.tests, filterType);
   const optionsList = document.getElementById(`filter-${filterType}-options`);
   if (!optionsList) return;
   
-  if (propertyFilters[filterType].available.length === 0) {
+  // Check if there are any actual property values (excluding "No_filtertype")
+  const hasActualValues = propertyFilters[filterType].available.length > 1;
+  
+  if (!hasActualValues) {
+    // Disable the filter when only "No_filtertype" exists (no actual values)
     optionsList.innerHTML = `<div style="padding:8px 12px;font-size:11px;color:var(--text3)">No ${filterType} properties found</div>`;
+    if (container) container.classList.add('disabled');
     return;
   }
+  
+  // Enable the filter
+  if (container) container.classList.remove('disabled');
   
   renderFilterOptions(filterType, propertyFilters[filterType].available);
 }
@@ -4102,10 +4113,24 @@ function updateFilter(filterType) {
     .filter(cb => cb.checked)
     .map(cb => cb.value);
   
-  // Update button text
+  // Update button text and clear button visibility
   const buttonText = document.getElementById(`filter-${filterType}-text`);
+  const clearBtn = document.getElementById(`filter-${filterType}-clear`);
+  const arrow = document.getElementById(`filter-${filterType}-arrow`);
   const selected = propertyFilters[filterType].selected;
   const available = propertyFilters[filterType].available;
+  
+  // Show/hide clear button based on filter state
+  const hasActiveFilter = selected.length > 0 && selected.length < available.length;
+  if (clearBtn && arrow) {
+    if (hasActiveFilter) {
+      clearBtn.style.display = 'flex';
+      arrow.style.display = 'none';
+    } else {
+      clearBtn.style.display = 'none';
+      arrow.style.display = 'block';
+    }
+  }
   
   if (buttonText) {
     const label = filterType.charAt(0).toUpperCase() + filterType.slice(1);
@@ -4148,8 +4173,6 @@ function getFilteredTests() {
   
   // Filter tests by all active filters
   return run.tests.filter(test => {
-    if (!test.properties || !Array.isArray(test.properties)) return false;
-    
     // Test must match ALL active filters (AND logic)
     return Object.keys(propertyFilters).every(filterType => {
       const filter = propertyFilters[filterType];
@@ -4159,8 +4182,45 @@ function getFilteredTests() {
         return true;
       }
       
-      // Check if test has any of the selected properties for this filter type
       const prefix = filterType + '__';
+      const noFilterKey = 'No_' + filterType;
+      
+      // Check if user selected "No_filtertype" option
+      const hasNoFilterSelected = filter.selected.includes(noFilterKey);
+      
+      // Check if test has any properties of this filter type
+      const testHasFilterType = test.properties && Array.isArray(test.properties) &&
+        test.properties.some(prop => prop.startsWith(prefix));
+      
+      // If "No_filtertype" is selected
+      if (hasNoFilterSelected) {
+        // If ONLY "No_filtertype" is selected, show tests without this property
+        if (filter.selected.length === 1) {
+          return !testHasFilterType;
+        }
+        // If "No_filtertype" AND other values are selected, show tests that either:
+        // 1. Don't have this property type, OR
+        // 2. Have one of the selected values
+        else {
+          if (!testHasFilterType) {
+            return true; // Test has no property of this type
+          }
+          // Test has the property, check if it matches selected values
+          return test.properties.some(prop => {
+            if (prop.startsWith(prefix)) {
+              const value = prop.replace(prefix, '');
+              return filter.selected.includes(value);
+            }
+            return false;
+          });
+        }
+      }
+      
+      // Normal filtering: test must have the property type and match selected values
+      if (!test.properties || !Array.isArray(test.properties)) {
+        return false;
+      }
+      
       return test.properties.some(prop => {
         if (prop.startsWith(prefix)) {
           const value = prop.replace(prefix, '');
@@ -4422,20 +4482,8 @@ async function loadAllRunsForCommit(commitSha, branch, workflow, branchFilters) 
     toast(`Error loading runs: ${err.message}`, true);
   }
 }
-
-// ─── ClickHouse Configuration ─────────────────────────────────────────────────
-// Configure these settings for your local ClickHouse instance
-window.SPYRE_CH_URL      = "https://sm73y6g9e8.ap-south-1.aws.clickhouse.cloud:8443";  // Local ClickHouse HTTP interface
-window.SPYRE_CH_USER     = "default";                // ClickHouse username
-window.SPYRE_CH_PASS     = "j~YsFhFYj9qlN";                       // ClickHouse password (leave empty if no auth)
-window.SPYRE_CH_DB       = "spyre";                  // Database name
-window.SPYRE_CH_TOKEN    = "";                       // Optional: use token instead of password
-window.SPYRE_CH_WORKFLOW = "";                       // Optional: filter by workflow (e.g., "module-tests")
-window.SPYRE_CH_LIMIT    = 30;                       // Number of recent runs to load
-window.SPYRE_CH_AUTOLOAD = false;                   // Set to true to auto-load latest run on page open (disabled for commits-only mode)
+                // Set to true to auto-load latest run on page open (disabled for commits-only mode)
 
 </script>
-<!-- Load ClickHouse integration -->
-<script src="spyre-clickhouse.js"></script>
 </body>
 </html>
