@@ -85,6 +85,91 @@
       .map((line) => JSON.parse(line));
   }
 
+  // ─── Fetch commits list (grouped by commit SHA) ────────────
+  async function fetchCommits(offset = 0, limit = 30, branchFilters = ['push', 'merge-queue', 'commit']) {
+    const cfg = getConfig();
+    
+    // Build branch filter conditions
+    let branchConditions = [];
+    if (branchFilters.length === 0) {
+      // No filters selected, return empty
+      return [];
+    }
+    
+    if (branchFilters.includes('push')) {
+      branchConditions.push("branch = 'main'");
+    }
+    if (branchFilters.includes('merge-queue')) {
+      branchConditions.push("startsWith(branch, 'gh-readonly-queue')");
+    }
+    if (branchFilters.includes('commit')) {
+      branchConditions.push("(branch != 'main' AND NOT startsWith(branch, 'gh-readonly-queue'))");
+    }
+    
+    const branchFilter = branchConditions.join(' OR ');
+    const workflowFilter = cfg.workflow ? `AND workflow = '${cfg.workflow.replace(/'/g, "\\'")}'` : '';
+
+    // Use subquery to filter first, then aggregate
+    const sql = `
+      SELECT
+        commit_sha,
+        any(branch) AS branch,
+        any(pr_number) AS pr_number,
+        count(DISTINCT gha_run_id) AS total_workflows,
+        groupArray(DISTINCT workflow) AS workflows,
+        sum(passed) AS passed,
+        sum(failed) AS failed,
+        sum(xfail) AS xfail,
+        sum(xpass) AS xpass,
+        sum(skipped) AS skipped,
+        sum(total_tests) AS total,
+        max(triggered_at) AS triggered_at
+      FROM (
+        SELECT *
+        FROM ${cfg.db}.test_runs
+        WHERE (${branchFilter}) ${workflowFilter}
+      )
+      GROUP BY commit_sha
+      ORDER BY triggered_at DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `;
+    return chQuery(sql.trim());
+  }
+
+  // ─── Fetch all runs for a specific commit ─────────────────
+  // async function fetchRunsForCommit(commitSha, branch, workflow) {
+  //   const cfg = getConfig();
+  //   const branchFilter = branch ? `AND branch = '${branch.replace(/'/g, "\\'")}'` : "";
+  //   const workflowFilter = workflow ? `AND workflow = '${workflow.replace(/'/g, "\\'")}'` : "";
+
+  //   const sql = `
+  //     SELECT
+  //       run_id,
+  //       workflow,
+  //       suite_name,
+  //       filename,
+  //       branch,
+  //       commit_sha,
+  //       gha_run_id,
+  //       triggered_at,
+  //       total_tests,
+  //       passed,
+  //       failed,
+  //       skipped,
+  //       errors,
+  //       xpass,
+  //       xfail,
+  //       duration_s
+  //     FROM ${cfg.db}.test_runs
+  //     WHERE commit_sha = '${commitSha.replace(/'/g, "\\'")}'
+  //       ${branchFilter}
+  //       ${workflowFilter}
+  //     ORDER BY triggered_at DESC
+  //   `;
+  //   return chQuery(sql.trim());
+  // }
+
   // ─── Fetch run list ────────────────────────────────────────
   async function fetchRecentRuns() {
     const cfg = getConfig();
@@ -325,7 +410,7 @@
               <td style="text-align:center;font-weight:600;color:${color}">${pct}%</td>
               <td style="text-align:center">
                 <button class="btn btn-sm btn-primary"
-                  onclick="window.__chLoadRun('${r.run_id}','${safeName}',${r.triggered_at ? `new Date('${r.triggered_at}').getTime()` : Date.now()})">
+                  onclick="window.__chLoadRun('${r.run_id}','${safeName}',${r.triggered_at ? `new Date('${r.triggered_at}').getTime()` : Date.now()},{workflow:'${(r.workflow || "").replace(/'/g, "\\'")}',gha_run_id:'${(r.gha_run_id || "").replace(/'/g, "\\'")}',branch:'${(r.branch || "").replace(/'/g, "\\'")}',commit_sha:'${(r.commit_sha || "").replace(/'/g, "\\'")}'})">
                   Load
                 </button>
               </td>
@@ -344,7 +429,7 @@
   };
 
   // ─── Load a single run's test cases ───────────────────────
-  window.__chLoadRun = async function (runId, filename, timestamp) {
+  window.__chLoadRun = async function (runId, filename, timestamp, metadata) {
     const status = document.getElementById("ch-status");
     status.textContent = `Loading test cases for ${filename}…`;
 
@@ -366,6 +451,15 @@
         modelMap:  typeof buildGroupMap === "function"
           ? buildGroupMap(tests, groupBy)
           : {},
+        // Add metadata if provided
+        ...(metadata && {
+          aggregatedData: {
+            workflow: metadata.workflow,
+            gha_run_id: metadata.gha_run_id,
+            branch: metadata.branch,
+            commit_sha: metadata.commit_sha,
+          }
+        })
       };
 
       runs.push(run);
@@ -381,6 +475,237 @@
     } catch (err) {
       status.textContent = `Error loading run: ${err.message}`;
       console.error("[spyre-clickhouse] load error:", err);
+    }
+  };
+
+  // ─── Fetch commits (exposed globally) ──────────────────────
+  window.__chFetchCommits = async function (offset = 0, limit = 30, branchFilters = ['push', 'merge-queue', 'commit']) {
+    try {
+      return await fetchCommits(offset, limit, branchFilters);
+    } catch (err) {
+      console.error("[spyre-clickhouse] fetch commits error:", err);
+      throw err;
+    }
+  };
+
+  // ─── Fetch test cases with properties for a commit ────────
+  async function fetchTestCasesForCommit(commitSha, branchFilter) {
+    const cfg = getConfig();
+    
+    // First get all test cases for this commit with branch filter
+    const casesSql = `
+      SELECT
+        tc.case_id,
+        tc.run_id,
+        tc.classname,
+        tc.name,
+        tc.op_name,
+        tc.dtype,
+        tc.status,
+        tc.duration_s,
+        tc.fail_message
+      FROM ${cfg.db}.test_cases tc
+      WHERE tc.run_id IN (
+        SELECT run_id FROM ${cfg.db}.test_runs WHERE commit_sha = '${commitSha.replace(/'/g, "\\'")}'
+        ${branchFilter}
+      )
+    `;
+    
+    // Get all properties for this commit with branch filter
+    const propsSql = `
+      SELECT
+        rp.case_id,
+        rp.prop_name,
+        rp.prop_value
+      FROM ${cfg.db}.run_properties rp
+      WHERE rp.run_id IN (
+        SELECT run_id FROM ${cfg.db}.test_runs WHERE commit_sha = '${commitSha.replace(/'/g, "\\'")}'
+        ${branchFilter}
+      )
+    `;
+    
+    const [cases, props] = await Promise.all([
+      chQuery(casesSql.trim()),
+      chQuery(propsSql.trim())
+    ]);
+    
+    // Group properties by case_id
+    const propsByCase = {};
+    props.forEach(p => {
+      if (!propsByCase[p.case_id]) propsByCase[p.case_id] = [];
+      propsByCase[p.case_id].push({ name: p.prop_name, value: p.prop_value });
+    });
+    
+    // Combine cases with their properties
+    return cases.map(c => ({
+      ...c,
+      properties: propsByCase[c.case_id] || []
+    }));
+  }
+
+  // ─── Load aggregated commit data (all workflows combined) ──
+  window.__chLoadAllRunsForCommit = async function (commitSha, branch, workflow, branchFilters) {
+    try {
+      const cfg = getConfig();
+      
+      // Store the active branch filters (what user selected in the UI)
+      const activeBranchFilters = branchFilters || ['push', 'merge-queue', 'commit'];
+      
+      // Build branch filter conditions based on selected filters
+      let branchConditions = [];
+      if (activeBranchFilters.length === 0) {
+        // No filters selected, return empty
+        console.log('[spyre-clickhouse] No branch filters selected');
+        return 0;
+      }
+      
+      if (activeBranchFilters.includes('push')) {
+        branchConditions.push("branch = 'main'");
+      }
+      if (activeBranchFilters.includes('merge-queue')) {
+        branchConditions.push("startsWith(branch, 'gh-readonly-queue')");
+      }
+      if (activeBranchFilters.includes('commit')) {
+        branchConditions.push("(branch != 'main' AND NOT startsWith(branch, 'gh-readonly-queue'))");
+      }
+      
+      const branchFilter = branchConditions.length > 0 ? `AND (${branchConditions.join(' OR ')})` : '';
+      
+      // Fetch aggregated commit data including all branches that match the filter
+      const sql = `
+        SELECT
+          commit_sha,
+          groupArray(DISTINCT branch) AS branches,
+          any(pr_number) AS pr_number,
+          groupArray(DISTINCT workflow) AS workflows,
+          groupArray(DISTINCT gha_run_id) AS gha_run_ids,
+          sum(passed) AS passed,
+          sum(failed) AS failed,
+          sum(xfail) AS xfail,
+          sum(xpass) AS xpass,
+          sum(skipped) AS skipped,
+          sum(total_tests) AS total_tests,
+          max(triggered_at) AS triggered_at
+        FROM ${cfg.db}.test_runs
+        WHERE commit_sha = '${commitSha.replace(/'/g, "\\'")}'
+          ${branchFilter}
+        GROUP BY commit_sha
+      `;
+      
+      const commitData = await chQuery(sql.trim());
+      
+      if (!commitData || commitData.length === 0) {
+        throw new Error(`No data found for commit ${commitSha}`);
+      }
+
+      const commit = commitData[0];
+      const shortSha = commitSha.substring(0, 8);
+      
+      // Check for duplicate (same commit already loaded)
+      if (runs.some((r) => r._commitSha === commitSha)) {
+        console.log(`[spyre-clickhouse] Commit ${shortSha} already loaded`);
+        return 0;
+      }
+
+      // Fetch detailed test cases with properties for filtering
+      console.log(`[spyre-clickhouse] Fetching test cases for commit ${shortSha} with branch filter...`);
+      const testCaseRows = await fetchTestCasesForCommit(commitSha, branchFilter);
+      
+      // Convert to dashboard format
+      const tests = testCaseRows.map(row => {
+        const properties = [];
+        if (row.properties && Array.isArray(row.properties)) {
+          row.properties.forEach(prop => {
+            // Convert property to string format: "dtype__float32", "op__add", etc.
+            if (prop.name === 'tag') {
+              properties.push(prop.value);
+            } else if (prop.value === 'True' || prop.value === true) {
+              properties.push(prop.name);
+            } else {
+              properties.push(`${prop.name}__${prop.value}`);
+            }
+          });
+        }
+        
+        return {
+          name: row.name,
+          cls: row.classname,
+          clsShort: row.classname ? row.classname.split('.').pop() : '',
+          timeVal: parseFloat(row.duration_s) || 0,
+          file: row.classname ? row.classname.replace(/\./g, '/') + '.py' : '',
+          status: row.status,
+          failMsg: row.fail_message || '',
+          tags: [],
+          testMethod: '',
+          opName: row.op_name || '(no op)',
+          dtype: row.dtype || '',
+          module: row.module || '',
+          properties: properties
+        };
+      });
+
+      console.log(`[spyre-clickhouse] Loaded ${tests.length} test cases for commit ${shortSha}`);
+
+      // Categorize branches by type
+      const branches = commit.branches || [];
+      const branchTypes = {
+        push: [],
+        'merge-queue': [],
+        commit: []
+      };
+      
+      branches.forEach(b => {
+        if (b === 'main') {
+          branchTypes.push.push(b);
+        } else if (b && b.startsWith('gh-readonly-queue')) {
+          branchTypes['merge-queue'].push(b);
+        } else {
+          branchTypes.commit.push(b);
+        }
+      });
+
+      // Create aggregated run object
+      const run = {
+        _commitSha: commitSha,
+        _isAggregated: true,
+        filename: `Commit ${shortSha} (${commit.workflows.length} workflows)`,
+        timestamp: new Date(commit.triggered_at).getTime() || Date.now(),
+        tests: tests, // Now populated with actual test data for filtering
+        modelMap: typeof buildGroupMap === "function" ? buildGroupMap(tests, groupBy) : {},
+        aggregatedData: {
+          commit_sha: commitSha,
+          branches: branches,
+          branch_types: branchTypes,
+          branch_filters_applied: activeBranchFilters,
+          pr_number: commit.pr_number,
+          workflows: commit.workflows,
+          gha_run_ids: commit.gha_run_ids,
+          passed: commit.passed,
+          failed: commit.failed,
+          xfail: commit.xfail,
+          xpass: commit.xpass,
+          skipped: commit.skipped,
+          total_tests: commit.total_tests,
+        }
+      };
+      console.log("--aggregated results--\n",run);
+
+      runs.push(run);
+      runs.sort((a, b) => a.timestamp - b.timestamp);
+
+      // Update UI
+      if (typeof selectRun === "function" && runs.length > 0) {
+        selectRun(runs.length - 1);
+      }
+      if (typeof updateRunList === "function") {
+        updateRunList();
+      }
+
+      console.log(`[spyre-clickhouse] Loaded aggregated data for commit ${shortSha}`);
+      return 1;
+    } catch (err) {
+      console.error("[spyre-clickhouse] load commit error:", err);
+      throw err;
     }
   };
 
