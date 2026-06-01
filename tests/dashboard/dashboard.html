@@ -256,6 +256,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
 .loading-dots::after{content:'';animation:dots 1.5s steps(4,end) infinite}
 @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}100%{content:''}}
+
+/* Full-screen loader overlay */
+.loader-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:99999;flex-direction:column;gap:16px}
+.loader-overlay.show{display:flex}
+.loader-spinner{width:48px;height:48px;border:4px solid rgba(255,255,255,0.1);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loader-text{color:white;font-size:14px;font-weight:500}
 /* sub-tabs */
 .sub-tabs{display:flex;gap:4px;margin-bottom:18px;border-bottom:2px solid var(--border);padding-bottom:0}
 .sub-tab-btn{font-family:var(--sans);font-size:13px;padding:10px 16px;border:none;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;border-bottom:2px solid transparent;margin-bottom:-2px;position:relative}
@@ -315,6 +322,12 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 </style>
 </head>
 <body>
+
+<!-- Full-screen loader overlay -->
+<div class="loader-overlay" id="loader-overlay">
+  <div class="loader-spinner"></div>
+  <div class="loader-text" id="loader-text">Loading...</div>
+</div>
 
 <div class="main">
   <aside class="sidebar">
@@ -1570,6 +1583,9 @@ function renderReports() {
   const emptyDiv = document.getElementById('reports-empty');
   const contentDiv = document.getElementById('reports-content');
   const tbody = document.getElementById('reports-table-body');
+  
+  // If tbody doesn't exist, we're not on the reports tab - skip rendering
+  if (!tbody) return;
   
   if (!runs.length) {
     if (emptyDiv) emptyDiv.style.display = 'block';
@@ -4432,7 +4448,7 @@ async function loadCommitsPage() {
           <td style="text-align:center">
             <button class="action-menu-btn" onclick="toggleReportActionMenu(${idx}, event)" title="Actions">⋮</button>
             <div class="action-dropdown" id="action-menu-${idx}" style="display:none">
-              <button class="action-dropdown-item" onclick="loadAllRunsForCommit('${escAttr(sha)}', '${escAttr(branch)}', '', selectedCommitTypes);switchTab('overview');closeAllMenus()">View Details</button>
+              <button class="action-dropdown-item" onclick="loadAllRunsForCommit('${escAttr(sha)}', '${escAttr(branch)}', '', selectedCommitTypes);closeAllMenus()">View Details</button>
               <button class="action-dropdown-item" onclick="exportRunCSV(${idx});closeAllMenus()">Export CSV</button>
               <button class="action-dropdown-item danger" onclick="removeRun(${idx});renderReports();closeAllMenus()">Delete Report</button>
             </div>
@@ -4458,6 +4474,19 @@ async function loadCommitsPage() {
   }
 }
 
+// Helper functions for loader overlay
+function showLoader(message = 'Loading...') {
+  const overlay = document.getElementById('loader-overlay');
+  const text = document.getElementById('loader-text');
+  if (overlay) overlay.classList.add('show');
+  if (text) text.textContent = message;
+}
+
+function hideLoader() {
+  const overlay = document.getElementById('loader-overlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
 async function loadAllRunsForCommit(commitSha, branch, workflow, branchFilters) {
   if (typeof window.__chLoadAllRunsForCommit !== 'function') {
     toast('ClickHouse integration not available', true);
@@ -4465,10 +4494,11 @@ async function loadAllRunsForCommit(commitSha, branch, workflow, branchFilters) 
   }
   
   const shortSha = commitSha.substring(0, 8);
-  toast(`Loading all runs for commit ${shortSha}...`);
+  showLoader(`Loading commit ${shortSha}...`);
   
   try {
     const loadedCount = await window.__chLoadAllRunsForCommit(commitSha, branch, workflow, branchFilters);
+    hideLoader();
     toast(`✓ Loaded ${loadedCount} run${loadedCount !== 1 ? 's' : ''} for commit ${shortSha}`);
     
     // Automatically switch to overview tab to see the loaded data
@@ -4478,12 +4508,11 @@ async function loadAllRunsForCommit(commitSha, branch, workflow, branchFilters) 
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }, 300);
   } catch (err) {
+    hideLoader();
     console.error('[commits] Error loading runs for commit:', err);
     toast(`Error loading runs: ${err.message}`, true);
   }
 }
-                // Set to true to auto-load latest run on page open (disabled for commits-only mode)
-
 </script>
 </body>
 </html>

@@ -693,9 +693,12 @@
       runs.push(run);
       runs.sort((a, b) => a.timestamp - b.timestamp);
 
+      // Find the index of the newly added run after sorting
+      const newRunIndex = runs.findIndex(r => r._commitSha === commitSha);
+
       // Update UI
-      if (typeof selectRun === "function" && runs.length > 0) {
-        selectRun(runs.length - 1);
+      if (typeof selectRun === "function" && newRunIndex >= 0) {
+        selectRun(newRunIndex);
       }
       if (typeof updateRunList === "function") {
         updateRunList();
