@@ -40,6 +40,9 @@ spec:
       configMap:
         name: {{ include "spyre-dashboard.fullname" . }}-clickhouse-config
         defaultMode: 0755   # patch-dashboard.sh must be executable
+    - name: ch-token
+      secret:
+        secretName: {{ .Values.clickhouse.tokenSecret }}
 
   # ── initContainer 1: shallow-clone the dashboard branch ────────────────────
   initContainers:
@@ -137,19 +140,6 @@ spec:
         - name: SPYRE_CH_AUTOLOAD
           value: {{ .Values.clickhouse.autoload | quote }}
 
-        # Token/password from K8s Secret
-        {{- if .Values.clickhouse.tokenSecret }}
-        - name: SPYRE_CH_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: {{ .Values.clickhouse.tokenSecret }}
-              key: {{ .Values.clickhouse.tokenSecretKey }}
-              optional: true
-        {{- else }}
-        - name: SPYRE_CH_TOKEN
-          value: ""
-        {{- end }}
-
       volumeMounts:
         - name: html-dir
           mountPath: /html
@@ -181,8 +171,11 @@ spec:
       command: ["/bin/sh", "-c"]
       args:
         - |
-          # Copy the ClickHouse proxy location snippet from the ConfigMap
-          cp /clickhouse-config/nginx-ch.conf /tmp/nginx-ch.conf
+          # Read token from mounted secret, render nginx location block with creds
+          CH_TOKEN=$(cat /run/secrets/ch-token/{{ .Values.clickhouse.tokenSecretKey }}) \
+            envsubst '${CH_TOKEN}' \
+            < /clickhouse-config/nginx-ch.conf.tmpl \
+            > /tmp/nginx-ch.conf
 
           cat > /tmp/nginx.conf << 'NGINXEOF'
           worker_processes auto;
@@ -195,7 +188,6 @@ spec:
             include       /etc/nginx/mime.types;
             default_type  application/octet-stream;
             access_log    /dev/stdout;
-
             # All temp dirs under /tmp so any non-root UID can write them
             client_body_temp_path /tmp/client_temp;
             proxy_temp_path       /tmp/proxy_temp;
@@ -206,7 +198,6 @@ spec:
             server {
               listen {{ .Values.service.targetPort }};
               server_name _;
-
               # dashboard.html lives at {{ .Values.git.dashboardPath }}/ in the cloned repo
               root  /html/repo/{{ .Values.git.dashboardPath }};
               index dashboard.html index.html;
@@ -214,7 +205,6 @@ spec:
               location / {
                 try_files $uri $uri/ /dashboard.html;
               }
-
               # ClickHouse reverse proxy — loaded from clickhouse-config ConfigMap
               include /tmp/nginx-ch.conf;
 
@@ -242,6 +232,9 @@ spec:
         # Needed at runtime so nginx can read nginx-ch.conf on startup
         - name: clickhouse-config
           mountPath: /clickhouse-config
+          readOnly: true
+        - name: ch-token
+          mountPath: /run/secrets/ch-token
           readOnly: true
 
       livenessProbe:

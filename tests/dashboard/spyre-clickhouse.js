@@ -26,10 +26,10 @@
   // ─── Configuration ─────────────────────────────────────────
   function getConfig() {
     return {
-      url:      window.SPYRE_CH_URL      || configFromMeta("ch-url")      || "",
-      user:     window.SPYRE_CH_USER     || configFromMeta("ch-user")     || "default",
-      pass:     window.SPYRE_CH_PASS     || configFromMeta("ch-pass")     || "",
-      token:    window.SPYRE_CH_TOKEN    || configFromMeta("ch-token")    || "",
+      url:      "/clickhouse",   // always relative now
+      // user:     window.SPYRE_CH_USER     || configFromMeta("ch-user")     || "default",
+      // pass:     window.SPYRE_CH_PASS     || configFromMeta("ch-pass")     || "",
+      // token:    window.SPYRE_CH_TOKEN    || configFromMeta("ch-token")    || "",
       db:       window.SPYRE_CH_DB       || configFromMeta("ch-db")       || "spyre",
       workflow: window.SPYRE_CH_WORKFLOW || configFromMeta("ch-workflow") || "",
       limit:    parseInt(window.SPYRE_CH_LIMIT || configFromMeta("ch-limit") || "30", 10),
@@ -57,16 +57,13 @@
       result_overflow_mode:       "break",
     });
 
-    const headers = { "Content-Type": "text/plain" };
-    // ClickHouse Cloud uses X-ClickHouse-User/Key headers, not Bearer tokens.
-    // cfg.token holds the password (stored in K8s secret as "token" key).
-    headers["X-ClickHouse-User"] = cfg.user;
-    headers["X-ClickHouse-Key"]  = cfg.token || cfg.pass;
-
-    const res = await fetch(`${cfg.url}?${params}`, {
-      method: "POST",
-      headers,
-      body: sql,
+    // const headers = { "Content-Type": "text/plain" };
+    
+    const res = await fetch(`/clickhouse/?${params}`, {
+      method:  "POST",
+      headers: { "Content-Type": "text/plain" },
+      body:    sql,
+      // No X-ClickHouse-User or X-ClickHouse-Key -- nginx adds them
     });
 
     if (!res.ok) {

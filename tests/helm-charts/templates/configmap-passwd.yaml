@@ -43,9 +43,10 @@ data:
 #                       Runs after git-clone so the file already exists.
 #                       (skips if already patched).
 #
-#  nginx-ch.conf      — nginx location block that proxies /clickhouse/ to the
-#                       ClickHouse HTTP interface, avoiding browser CORS.
-#                       Included inside the server{} block at runtime.
+#  nginx-ch.conf.tmpl — nginx location block template. envsubst fills in
+#                       ${CH_TOKEN} from the K8s Secret at container startup.
+#                       nginx includes the rendered /tmp/nginx-ch.conf at runtime.
+#                       Credentials never appear in the browser
 # ──────────────────────────────────────────────────────────────────────────────
 apiVersion: v1
 kind: ConfigMap
@@ -68,28 +69,10 @@ data:
     fi
 
     # Idempotency guard — skip if already patched
-    if grep -q 'spyre-ch-url' "$DASH"; then
+    if grep -q 'src="/spyre-clickhouse.js"' "$DASH"; then
       echo "[patch-dashboard] Already patched — skipping."
       exit 0
     fi
-
-    # Build the meta-tag block from env vars injected by the pod spec
-    META=""
-    META="${META}<meta name=\"spyre-ch-url\"      content=\"${SPYRE_CH_URL}\">"
-    META="${META}<meta name=\"spyre-ch-db\"        content=\"${SPYRE_CH_DB}\">"
-    META="${META}<meta name=\"spyre-ch-user\"      content=\"${SPYRE_CH_USER}\">"
-    META="${META}<meta name=\"spyre-ch-token\"     content=\"${SPYRE_CH_TOKEN}\">"
-    META="${META}<meta name=\"spyre-ch-workflow\"  content=\"${SPYRE_CH_WORKFLOW}\">"
-    META="${META}<meta name=\"spyre-ch-limit\"     content=\"${SPYRE_CH_LIMIT}\">"
-
-    # Inject meta tags before the FIRST </head> only
-    awk -v meta="${META}" '
-      !done && /<\/head>/ {
-        sub(/<\/head>/, meta "</head>")
-        done=1
-      }
-      1
-    ' "$DASH" > /tmp/dash.tmp && mv /tmp/dash.tmp "$DASH"
 
     # Build the body inject block
     BODY_INJECT=""
@@ -112,11 +95,14 @@ data:
       }
     ' "$DASH" > /tmp/dash.tmp && mv /tmp/dash.tmp "$DASH"
 
-  nginx-ch.conf: |
+
+  nginx-ch.conf.tmpl: |
     location /clickhouse/ {
       proxy_pass         https://{{ .Values.clickhouse.internalServiceHost }}:{{ .Values.clickhouse.internalServicePort }}/;
-      proxy_set_header   Host            {{ .Values.clickhouse.internalServiceHost }};
-      proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header   Host              {{ .Values.clickhouse.internalServiceHost }};
+      proxy_set_header   X-ClickHouse-User "{{ .Values.clickhouse.user }}";
+      proxy_set_header   X-ClickHouse-Key  "${CH_TOKEN}";
+      proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
       proxy_read_timeout 120s;
       rewrite ^/clickhouse/(.*) /$1 break;
     }
