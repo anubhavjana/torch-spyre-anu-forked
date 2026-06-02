@@ -75,12 +75,6 @@ data:
 
     # Build the meta-tag block from env vars injected by the pod spec
     META=""
-    META="${META}<meta name=\"spyre-ch-url\"      content=\"${SPYRE_CH_URL}\">"
-    META="${META}<meta name=\"spyre-ch-db\"        content=\"${SPYRE_CH_DB}\">"
-    META="${META}<meta name=\"spyre-ch-user\"      content=\"${SPYRE_CH_USER}\">"
-    META="${META}<meta name=\"spyre-ch-token\"     content=\"${SPYRE_CH_TOKEN}\">"
-    META="${META}<meta name=\"spyre-ch-workflow\"  content=\"${SPYRE_CH_WORKFLOW}\">"
-    META="${META}<meta name=\"spyre-ch-limit\"     content=\"${SPYRE_CH_LIMIT}\">"
 
     # Inject meta tags before the FIRST </head> only
     awk -v meta="${META}" '
@@ -96,7 +90,7 @@ data:
     if [ "${SPYRE_CH_AUTOLOAD}" = "true" ]; then
       BODY_INJECT="${BODY_INJECT}<script>window.SPYRE_CH_AUTOLOAD=true;<\/script>"
     fi
-    BODY_INJECT="${BODY_INJECT}<script src=\"\/spyre-clickhouse.js\"><\/script>"
+    BODY_INJECT="${BODY_INJECT}<script src=\"\/spyre-api-client.js\"><\/script>"
 
     # Inject autoload flag + JS module before the LAST </body>
     awk -v inject="${BODY_INJECT}" '
@@ -113,11 +107,12 @@ data:
     ' "$DASH" > /tmp/dash.tmp && mv /tmp/dash.tmp "$DASH"
 
   nginx-ch.conf: |
-    location /clickhouse/ {
-      proxy_pass         https://{{ .Values.clickhouse.internalServiceHost }}:{{ .Values.clickhouse.internalServicePort }}/;
-      proxy_set_header   Host            {{ .Values.clickhouse.internalServiceHost }};
+    # Proxy to backend API service (handles ClickHouse authentication securely)
+    location /api/ {
+      proxy_pass         http://{{ include "spyre-dashboard.fullname" . }}-backend:{{ .Values.backend.port }}/api/;
+      proxy_set_header   Host            $host;
+      proxy_set_header   X-Real-IP       $remote_addr;
       proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
       proxy_read_timeout 120s;
-      rewrite ^/clickhouse/(.*) /$1 break;
     }
  

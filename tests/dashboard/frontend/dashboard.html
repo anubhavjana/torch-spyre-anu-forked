@@ -1762,7 +1762,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize commits table if reports panel is active on load
   const reportsPanel = document.getElementById('panel-reports');
   if (reportsPanel && reportsPanel.classList.contains('active')) {
-    // Use setTimeout to ensure spyre-clickhouse.js has loaded
+    // Use setTimeout to ensure spyre-api-client.js has loaded
     setTimeout(() => {
       if (!window.__commitsLoaded) {
         window.__commitsLoaded = true;
@@ -4373,7 +4373,7 @@ async function loadCommitsPage() {
   if (typeof window.__chFetchCommits !== 'function') {
     console.warn('[commits] ClickHouse integration not available - window.__chFetchCommits is not a function');
     if (status) status.innerHTML = '<span style="color:var(--fail)">⚠️ ClickHouse integration not available</span>';
-    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text3)">ClickHouse integration not configured. Please check spyre-clickhouse.js is loaded and configured.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text3)">Backend API not configured. Please check spyre-api-client.js is loaded and configured.</td></tr>';
     return;
   }
   
@@ -4514,5 +4514,7 @@ async function loadAllRunsForCommit(commitSha, branch, workflow, branchFilters) 
   }
 }
 </script>
+
+<script src="spyre-api-client.js"></script>
 </body>
 </html>

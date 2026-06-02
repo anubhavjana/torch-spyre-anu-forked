@@ -53,9 +53,31 @@ route:
 deployer: anubhavjana
 
 # ──────────────────────────────────────────────────────────────────────────────
+#  Backend API Service
+#  Secure proxy between frontend and ClickHouse - handles authentication
+# ──────────────────────────────────────────────────────────────────────────────
+backend:
+  port: 5000
+  image:
+    repository: your-registry/spyre-dashboard-backend
+    tag: latest
+    pullPolicy: Always
+    pullSecrets: []
+  
+  replicas: 2
+  
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+# ──────────────────────────────────────────────────────────────────────────────
 #  ClickHouse integration
-#  The patch-dashboard initContainer injects these as <meta> tags into
-#  dashboard.html so spyre-clickhouse.js can connect without hardcoding.
+#  SECURITY: Credentials are only accessible to the backend service, never
+#  exposed to the frontend. The frontend only communicates with /api endpoints.
 #
 #  Before deploying, create the reader secret:
 #    kubectl create secret generic spyre-clickhouse-token \
@@ -63,17 +85,17 @@ deployer: anubhavjana
 #      -n <namespace>
 # ──────────────────────────────────────────────────────────────────────────────
 clickhouse:
-  # ClickHouse Cloud HTTPS URL — direct connection from the browser.
-  # This is the public HTTPS endpoint, no nginx proxy needed for ClickHouse Cloud.
+  # ClickHouse HTTPS URL - accessed only by backend service
   url: https://spyre-dashboard-clickhouse-clickhouse.apps.torch-cicd.spyre.res.ibm.com
 
   # ClickHouse database name
   db: spyre
 
-  # ClickHouse user for SELECT queries from the dashboard
+  # ClickHouse user for SELECT queries
   user: default
 
-  # Name of the K8s Secret and key holding the password.
+  # Name of the K8s Secret and key holding the password
+  # SECURITY: Only mounted in backend pod, never exposed to frontend
   tokenSecret: spyre-clickhouse-token
   tokenSecretKey: token
 

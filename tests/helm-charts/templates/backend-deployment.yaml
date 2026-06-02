@@ -1,0 +1,122 @@
+# ──────────────────────────────────────────────────────────────────────────────
+#  Deployment: Backend API Service
+#  Secure proxy between frontend and ClickHouse - handles all authentication
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "spyre-dashboard.fullname" . }}-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spyre-dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicas | default 2 }}
+  selector:
+    matchLabels:
+      {{- include "spyre-dashboard.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      labels:
+        {{- include "spyre-dashboard.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      {{- if .Values.backend.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml .Values.backend.image.pullSecrets | nindent 8 }}
+      {{- end }}
+      
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      
+      containers:
+      - name: backend-api
+        image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.backend.image.pullPolicy | default "IfNotPresent" }}
+        
+        ports:
+        - name: http
+          containerPort: 5000
+          protocol: TCP
+        
+        env:
+        # ClickHouse connection details (secrets handled securely)
+        - name: SPYRE_CH_URL
+          value: {{ .Values.clickhouse.url | quote }}
+        - name: SPYRE_CH_DB
+          value: {{ .Values.clickhouse.db | quote }}
+        - name: SPYRE_CH_USER
+          value: {{ .Values.clickhouse.user | quote }}
+        
+        # SECURITY: Token from K8s Secret - never exposed to frontend
+        {{- if .Values.clickhouse.tokenSecret }}
+        - name: SPYRE_CH_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: {{ .Values.clickhouse.tokenSecret }}
+              key: {{ .Values.clickhouse.tokenSecretKey }}
+              optional: false
+        {{- else }}
+        - name: SPYRE_CH_TOKEN
+          value: ""
+        {{- end }}
+        
+        - name: PORT
+          value: "5000"
+        
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+        
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: http
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+        
+        resources:
+          {{- toYaml .Values.backend.resources | nindent 10 }}
+        
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 1000
+
+---
+# ──────────────────────────────────────────────────────────────────────────────
+#  Service: Backend API
+#  Internal service for nginx to proxy API requests
+# ──────────────────────────────────────────────────────────────────────────────
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "spyre-dashboard.fullname" . }}-backend
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spyre-dashboard.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5000
+    targetPort: http
+    protocol: TCP
+    name: http
+  selector:
+    {{- include "spyre-dashboard.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+
+# Made with Bob

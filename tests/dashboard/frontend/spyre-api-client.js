@@ -1,23 +1,30 @@
 /**
- * spyre-clickhouse.js
+ * spyre-api-client.js
  *
- * Drop-in replacement for the manual XML upload in dashboard.html.
- * Add this <script> tag to dashboard.html AFTER the main <script> block:
+ * Frontend API client for the Spyre Dashboard.
+ * Communicates with the secure backend API (Flask) which handles all database operations.
  *
- *   <script src="spyre-clickhouse.js"></script>
+ * SECURITY ARCHITECTURE:
+ * ----------------------
+ * Frontend (this file) → Backend API (Flask) → ClickHouse Database
+ *        ↓                      ↓                      ↓
+ *   No secrets          Handles auth & SQL      Credentials
+ *   Parameters only     Hardcoded queries       Secure storage
  *
- * Or paste the contents directly into dashboard.html.
+ * This file:
+ * - Makes HTTP requests to backend API endpoints
+ * - Sends only parameters (filters, limits, IDs)
+ * - Never sends SQL queries or credentials
+ * - Formats data for dashboard display
  *
- * Configuration — set these as global JS variables before this script loads,
- * or via a <meta> tag pattern (see configFromMeta() below):
+ * Backend API handles:
+ * - ClickHouse authentication
+ * - SQL query execution
+ * - Data validation and sanitization
  *
- *   window.SPYRE_CH_URL      = "https://clickhouse.internal.example.com:8443"
- *   window.SPYRE_CH_USER     = "spyre_reader"
- *   window.SPYRE_CH_PASS     = "..."   // only for dev; use token auth in prod
- *   window.SPYRE_CH_DB       = "spyre"
- *   window.SPYRE_CH_TOKEN    = "..."   // preferred: ClickHouse JWT / API token
- *   window.SPYRE_CH_WORKFLOW = ""      // optional filter: "module-tests"
- *   window.SPYRE_CH_LIMIT    = 30      // how many recent runs to auto-load
+ * Usage:
+ *   <script src="spyre-api-client.js"></script>
+ *
  */
 
 (function () {
@@ -25,14 +32,12 @@
 
   // ─── Configuration ─────────────────────────────────────────
   function getConfig() {
+    
     return {
-      url:      window.SPYRE_CH_URL      || configFromMeta("ch-url")      || "",
-      user:     window.SPYRE_CH_USER     || configFromMeta("ch-user")     || "default",
-      pass:     window.SPYRE_CH_PASS     || configFromMeta("ch-pass")     || "",
-      token:    window.SPYRE_CH_TOKEN    || configFromMeta("ch-token")    || "",
-      db:       window.SPYRE_CH_DB       || configFromMeta("ch-db")       || "spyre",
-      workflow: window.SPYRE_CH_WORKFLOW || configFromMeta("ch-workflow") || "",
-      limit:    parseInt(window.SPYRE_CH_LIMIT || configFromMeta("ch-limit") || "30", 10),
+      // apiUrl: apiUrl,
+      apiUrl : 'http://localhost:5000/api',
+      limit : 10
+      
     };
   }
 
@@ -41,100 +46,54 @@
     return el ? el.getAttribute("content") : null;
   }
 
-  // ─── ClickHouse HTTP query helper ──────────────────────────
+  // ─── Backend API query helper ──────────────────────────────
   /**
-   * Execute a ClickHouse SQL query via the HTTP interface.
-   * Returns parsed JSON rows (FORMAT JSONEachRow).
+   * Execute a query via the secure backend API.
+   * Backend handles all authentication AND SQL queries - no SQL exposed to client.
+   * Frontend only passes parameters (filters, limits, etc.)
    */
-  async function chQuery(sql) {
+  async function apiQuery(endpoint, options = {}) {
     const cfg = getConfig();
-    if (!cfg.url) throw new Error("SPYRE_CH_URL is not configured");
-
-    const params = new URLSearchParams({
-      database:                   cfg.db,
-      default_format:             "JSONEachRow",
-      max_result_rows:            "100000",
-      result_overflow_mode:       "break",
-    });
-
-    const headers = { "Content-Type": "text/plain" };
-    // ClickHouse Cloud uses X-ClickHouse-User/Key headers, not Bearer tokens.
-    // cfg.token holds the password (stored in K8s secret as "token" key).
-    headers["X-ClickHouse-User"] = cfg.user;
-    headers["X-ClickHouse-Key"]  = cfg.token || cfg.pass;
-
-    const res = await fetch(`${cfg.url}?${params}`, {
-      method: "POST",
-      headers,
-      body: sql,
+    const url = `${cfg.apiUrl}${endpoint}`;
+    
+    const res = await fetch(url, {
+      method: options.method || "GET",
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
     });
 
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`ClickHouse error ${res.status}: ${text.slice(0, 300)}`);
+      const error = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(error.error || `API error ${res.status}`);
     }
 
-    const text = await res.text();
-    if (!text.trim()) return [];
-
-    // JSONEachRow → one JSON object per line
-    return text
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line));
+    return res.json();
   }
 
   // ─── Fetch commits list (grouped by commit SHA) ────────────
   async function fetchCommits(offset = 0, limit = 30, branchFilters = ['push', 'merge-queue', 'commit']) {
     const cfg = getConfig();
     
-    // Build branch filter conditions
-    let branchConditions = [];
     if (branchFilters.length === 0) {
-      // No filters selected, return empty
       return [];
     }
     
-    if (branchFilters.includes('push')) {
-      branchConditions.push("branch = 'main'");
-    }
-    if (branchFilters.includes('merge-queue')) {
-      branchConditions.push("startsWith(branch, 'gh-readonly-queue')");
-    }
-    if (branchFilters.includes('commit')) {
-      branchConditions.push("(branch != 'main' AND NOT startsWith(branch, 'gh-readonly-queue'))");
-    }
+    // Build query parameters - NO SQL in frontend!
+    const params = new URLSearchParams({
+      offset: offset.toString(),
+      limit: limit.toString(),
+    });
     
-    const branchFilter = branchConditions.join(' OR ');
-    const workflowFilter = cfg.workflow ? `AND workflow = '${cfg.workflow.replace(/'/g, "\\'")}'` : '';
-
-    // Use subquery to filter first, then aggregate
-    const sql = `
-      SELECT
-        commit_sha,
-        any(branch) AS branch,
-        any(pr_number) AS pr_number,
-        count(DISTINCT gha_run_id) AS total_workflows,
-        groupArray(DISTINCT workflow) AS workflows,
-        sum(passed) AS passed,
-        sum(failed) AS failed,
-        sum(xfail) AS xfail,
-        sum(xpass) AS xpass,
-        sum(skipped) AS skipped,
-        sum(total_tests) AS total,
-        max(triggered_at) AS triggered_at
-      FROM (
-        SELECT *
-        FROM ${cfg.db}.test_runs
-        WHERE (${branchFilter}) ${workflowFilter}
-      )
-      GROUP BY commit_sha
-      ORDER BY triggered_at DESC
-      LIMIT ${limit}
-      OFFSET ${offset}
-    `;
-    return chQuery(sql.trim());
+    // Add branch filters as multiple parameters
+    branchFilters.forEach(filter => {
+      params.append('branch_filter', filter);
+    });
+    
+    const result = await apiQuery(`/commits?${params}`);
+    return result.data || [];
   }
 
   // ─── Fetch all runs for a specific commit ─────────────────
@@ -173,78 +132,31 @@
   // ─── Fetch run list ────────────────────────────────────────
   async function fetchRecentRuns() {
     const cfg = getConfig();
-    const workflowFilter = cfg.workflow
-      ? `AND workflow = '${cfg.workflow.replace(/'/g, "\\'")}'`
-      : "";
-
-    const sql = `
-      SELECT
-        run_id,
-        workflow,
-        suite_name,
-        filename,
-        branch,
-        commit_sha,
-        gha_run_id,
-        triggered_at,
-        total_tests,
-        passed,
-        failed,
-        skipped,
-        errors,
-        xpass,
-        duration_s
-      FROM ${cfg.db}.test_runs
-      WHERE 1=1 ${workflowFilter}
-      ORDER BY triggered_at DESC
-      LIMIT ${cfg.limit}
-    `;
-    return chQuery(sql.trim());
+    
+    const params = new URLSearchParams({
+      limit: cfg.limit.toString(),
+    });
+    
+    const result = await apiQuery(`/runs?${params}`);
+    return result.data || [];
   }
 
   // ─── Fetch all test cases for a run ───────────────────────
   async function fetchTestCases(runId) {
-    const cfg = getConfig();
-    const caseSql = `
-      SELECT
-        tc.case_id,
-        tc.classname,
-        tc.name,
-        tc.op_name,
-        tc.dtype,
-        tc.status,
-        tc.duration_s,
-        tc.fail_message
-      FROM ${cfg.db}.test_cases tc
-      WHERE tc.run_id = '${runId}'
-      ORDER BY tc.classname, tc.name
-    `;
-    const propSql = `
-      SELECT case_id, prop_name, prop_value
-      FROM ${cfg.db}.run_properties
-      WHERE run_id = '${runId}'
-    `;
-
-    const [caseRows, propRows] = await Promise.all([
-      chQuery(caseSql.trim()),
-      chQuery(propSql.trim()),
-    ]);
-
-    // Group properties by case_id
-    const propsByCase = {};
-    for (const p of propRows) {
-      if (!propsByCase[p.case_id]) propsByCase[p.case_id] = [];
-      // Reconstruct the property strings the dashboard expects:
-      // e.g. prop_name="tag" prop_value="model__granite3b" → "model__granite3b"
-      //      prop_name="granite" prop_value="True" → "granite"
-      const propString =
-        p.prop_name === "tag" ? p.prop_value : p.prop_name;
-      propsByCase[p.case_id].push(propString);
-    }
+    // Call backend API - SQL is in backend, not exposed to frontend
+    const result = await apiQuery(`/test-cases/${runId}`);
+    const caseRows = result.data || [];
 
     // Convert DB rows to the shape dashboard.html's parseXML() produces
     const tests = caseRows.map((row) => {
-      const properties = propsByCase[row.case_id] || [];
+      // Properties are already attached by backend
+      const properties = [];
+      if (row.properties && Array.isArray(row.properties)) {
+        row.properties.forEach(p => {
+          const propString = p.prop_name === "tag" ? p.prop_value : p.prop_name;
+          properties.push(propString);
+        });
+      }
       const tags = [];
       const re = /\[([^\[\]]+)\]/g;
       let m;
@@ -281,7 +193,7 @@
   // ─── Build the UI panel ────────────────────────────────────
   function buildFetchPanel() {
     const cfg = getConfig();
-    const configured = !!cfg.url;
+    const configured = !!cfg.apiUrl;
 
     // Inject a "Fetch from ClickHouse" section into the upload panel
     const uploadPanel = document.getElementById("panel-upload");
@@ -298,7 +210,7 @@
               Auto-fetch from ClickHouse
             </div>
             <div style="font-size:12px;color:var(--text3);margin-top:3px">
-              ${configured ? `Connected: <code style="font-size:11px">${cfg.url}</code>` : "Not configured — set SPYRE_CH_URL"}
+              ${configured ? `Connected via secure backend API` : "Not configured — backend API unavailable"}
             </div>
           </div>
           <button class="btn btn-primary" id="ch-fetch-btn"
@@ -489,110 +401,42 @@
   };
 
   // ─── Fetch test cases with properties for a commit ────────
-  async function fetchTestCasesForCommit(commitSha, branchFilter) {
-    const cfg = getConfig();
-    
-    // First get all test cases for this commit with branch filter
-    const casesSql = `
-      SELECT
-        tc.case_id,
-        tc.run_id,
-        tc.classname,
-        tc.name,
-        tc.op_name,
-        tc.dtype,
-        tc.status,
-        tc.duration_s,
-        tc.fail_message
-      FROM ${cfg.db}.test_cases tc
-      WHERE tc.run_id IN (
-        SELECT run_id FROM ${cfg.db}.test_runs WHERE commit_sha = '${commitSha.replace(/'/g, "\\'")}'
-        ${branchFilter}
-      )
-    `;
-    
-    // Get all properties for this commit with branch filter
-    const propsSql = `
-      SELECT
-        rp.case_id,
-        rp.prop_name,
-        rp.prop_value
-      FROM ${cfg.db}.run_properties rp
-      WHERE rp.run_id IN (
-        SELECT run_id FROM ${cfg.db}.test_runs WHERE commit_sha = '${commitSha.replace(/'/g, "\\'")}'
-        ${branchFilter}
-      )
-    `;
-    
-    const [cases, props] = await Promise.all([
-      chQuery(casesSql.trim()),
-      chQuery(propsSql.trim())
-    ]);
-    
-    // Group properties by case_id
-    const propsByCase = {};
-    props.forEach(p => {
-      if (!propsByCase[p.case_id]) propsByCase[p.case_id] = [];
-      propsByCase[p.case_id].push({ name: p.prop_name, value: p.prop_value });
+  async function fetchTestCasesForCommit(commitSha, branchFilters) {
+    // Call backend API with commit SHA and branch filters as parameters
+    const params = new URLSearchParams({
+      commit_sha: commitSha,
     });
     
-    // Combine cases with their properties
-    return cases.map(c => ({
-      ...c,
-      properties: propsByCase[c.case_id] || []
-    }));
+    // Add branch filters
+    if (branchFilters && Array.isArray(branchFilters)) {
+      branchFilters.forEach(filter => {
+        params.append('branch_filter', filter);
+      });
+    }
+    
+    const result = await apiQuery(`/commit-tests/${commitSha}?${params}`);
+    return result.data || [];
   }
 
   // ─── Load aggregated commit data (all workflows combined) ──
   window.__chLoadAllRunsForCommit = async function (commitSha, branch, workflow, branchFilters) {
     try {
-      const cfg = getConfig();
-      
       // Store the active branch filters (what user selected in the UI)
       const activeBranchFilters = branchFilters || ['push', 'merge-queue', 'commit'];
       
-      // Build branch filter conditions based on selected filters
-      let branchConditions = [];
       if (activeBranchFilters.length === 0) {
-        // No filters selected, return empty
         console.log('[spyre-clickhouse] No branch filters selected');
         return 0;
       }
       
-      if (activeBranchFilters.includes('push')) {
-        branchConditions.push("branch = 'main'");
-      }
-      if (activeBranchFilters.includes('merge-queue')) {
-        branchConditions.push("startsWith(branch, 'gh-readonly-queue')");
-      }
-      if (activeBranchFilters.includes('commit')) {
-        branchConditions.push("(branch != 'main' AND NOT startsWith(branch, 'gh-readonly-queue'))");
-      }
+      // Call backend API with parameters - NO SQL in frontend!
+      const params = new URLSearchParams();
+      activeBranchFilters.forEach(filter => {
+        params.append('branch_filter', filter);
+      });
       
-      const branchFilter = branchConditions.length > 0 ? `AND (${branchConditions.join(' OR ')})` : '';
-      
-      // Fetch aggregated commit data including all branches that match the filter
-      const sql = `
-        SELECT
-          commit_sha,
-          groupArray(DISTINCT branch) AS branches,
-          any(pr_number) AS pr_number,
-          groupArray(DISTINCT workflow) AS workflows,
-          groupArray(DISTINCT gha_run_id) AS gha_run_ids,
-          sum(passed) AS passed,
-          sum(failed) AS failed,
-          sum(xfail) AS xfail,
-          sum(xpass) AS xpass,
-          sum(skipped) AS skipped,
-          sum(total_tests) AS total_tests,
-          max(triggered_at) AS triggered_at
-        FROM ${cfg.db}.test_runs
-        WHERE commit_sha = '${commitSha.replace(/'/g, "\\'")}'
-          ${branchFilter}
-        GROUP BY commit_sha
-      `;
-      
-      const commitData = await chQuery(sql.trim());
+      const result = await apiQuery(`/commits/${commitSha}?${params}`);
+      const commitData = result.data || [];
       
       if (!commitData || commitData.length === 0) {
         throw new Error(`No data found for commit ${commitSha}`);
@@ -609,20 +453,24 @@
 
       // Fetch detailed test cases with properties for filtering
       console.log(`[spyre-clickhouse] Fetching test cases for commit ${shortSha} with branch filter...`);
-      const testCaseRows = await fetchTestCasesForCommit(commitSha, branchFilter);
+      const testCaseRows = await fetchTestCasesForCommit(commitSha, activeBranchFilters);
       
       // Convert to dashboard format
       const tests = testCaseRows.map(row => {
         const properties = [];
         if (row.properties && Array.isArray(row.properties)) {
           row.properties.forEach(prop => {
+            // Backend returns prop_name and prop_value (from ClickHouse)
+            const propName = prop.prop_name || prop.name;
+            const propValue = prop.prop_value || prop.value;
+            
             // Convert property to string format: "dtype__float32", "op__add", etc.
-            if (prop.name === 'tag') {
-              properties.push(prop.value);
-            } else if (prop.value === 'True' || prop.value === true) {
-              properties.push(prop.name);
+            if (propName === 'tag') {
+              properties.push(propValue);
+            } else if (propValue === 'True' || propValue === true) {
+              properties.push(propName);
             } else {
-              properties.push(`${prop.name}__${prop.value}`);
+              properties.push(`${propName}__${propValue}`);
             }
           });
         }
@@ -719,7 +567,7 @@
   async function maybeAutoLoad() {
     if (!window.SPYRE_CH_AUTOLOAD) return;
     const cfg = getConfig();
-    if (!cfg.url) return;
+    if (!cfg.apiUrl) return;
     try {
       const runRows = await fetchRecentRuns();
       if (!runRows.length) return;
