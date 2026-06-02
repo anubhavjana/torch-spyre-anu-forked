@@ -15,11 +15,9 @@ tests/dashboard/
 │   ├── Dockerfile.backend # Container image
 │   ├── start-backend.sh   # Startup script
 │   └── .env              # Environment variables (DO NOT COMMIT)
-├── docker-compose.yml     # Local development setup
 ├── nginx-local.conf       # Nginx proxy configuration
 ├── .gitignore            # Git ignore rules
 ├── LOCAL_SETUP.md        # Local development guide
-└── SECURITY.md           # Security architecture documentation
 ```
 
 ## Quick Start
@@ -48,13 +46,6 @@ tests/dashboard/
 
 See [LOCAL_SETUP.md](LOCAL_SETUP.md) for Kubernetes/Helm deployment instructions.
 
-## Security
-
-- ✅ No credentials exposed to browser
-- ✅ All SQL queries server-side only
-- ✅ Backend API handles authentication
-- ✅ Frontend uses parameter-based queries
-
 See [SECURITY.md](SECURITY.md) for complete security architecture.
 
 ## Architecture
@@ -62,4 +53,4 @@ See [SECURITY.md](SECURITY.md) for complete security architecture.
 ```
 Browser → Frontend (HTML/JS) → Backend API (Flask) → ClickHouse
          ↓                      ↓                      ↓
-    No secrets          Handles auth & SQL      Database
+         UI             Handles auth & SQL          Database
