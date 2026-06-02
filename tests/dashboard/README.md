@@ -42,13 +42,9 @@ tests/dashboard/
    open ../frontend/dashboard.html
    ```
 
-### Production Deployment
-
-See [LOCAL_SETUP.md](LOCAL_SETUP.md) for Kubernetes/Helm deployment instructions.
-
-See [SECURITY.md](SECURITY.md) for complete security architecture.
 
 ## Architecture
+check the readme.md file in backend folder
 
 ```
 Browser → Frontend (HTML/JS) → Backend API (Flask) → ClickHouse
