@@ -2,7 +2,6 @@
 
 This document explains all the ways to run the Spyre Dashboard backend API.
 
-
 ## Option 1: Using .env File (Recommended for Local Dev)
 
 **Best for:** Local development with persistent configuration
@@ -26,13 +25,12 @@ pip install -r requirements-backend.txt
 ```
 
 The `start-backend.sh` script automatically:
+
 - Loads variables from `.env`
 - Starts Flask on port 5000
 - Enables debug mode
 
-
 ---
-
 
 ## Option 2: Kubernetes/Helm (Production)
 
@@ -61,5 +59,16 @@ kubectl logs -f deployment/spyre-dashboard-backend -n your-namespace
 kubectl get route spyre-dashboard -n your-namespace
 ```
 
-
 ---
+
+### **API Endpoints**
+
+Frontend can only call these secure endpoints:
+
+- `GET /api/health` - Health check
+- `GET /api/config` - Safe configuration (no secrets)
+- `POST /api/query` - Execute SQL (backend validates)
+- `GET /api/commits` - Fetch commit list
+- `GET /api/runs` - Fetch test runs
+- `GET /api/test-cases/<run_id>` - Fetch test cases
+- `GET /api/commit-tests/<commit_sha>` - Fetch commit tests
