@@ -24,67 +24,57 @@
   "use strict";
 
   // ─── Configuration ─────────────────────────────────────────
+
   function getConfig() {
-    return {
-      url:      window.SPYRE_CH_URL      || configFromMeta("ch-url")      || "",
-      user:     window.SPYRE_CH_USER     || configFromMeta("ch-user")     || "default",
-      pass:     window.SPYRE_CH_PASS     || configFromMeta("ch-pass")     || "",
-      token:    window.SPYRE_CH_TOKEN    || configFromMeta("ch-token")    || "",
-      db:       window.SPYRE_CH_DB       || configFromMeta("ch-db")       || "spyre",
-      workflow: window.SPYRE_CH_WORKFLOW || configFromMeta("ch-workflow") || "",
-      limit:    parseInt(window.SPYRE_CH_LIMIT || configFromMeta("ch-limit") || "30", 10),
-    };
-  }
+  return {
+    url:      "/clickhouse",
+    db:       window.SPYRE_CH_DB       || configFromMeta("ch-db")       || "spyre",
+    workflow: window.SPYRE_CH_WORKFLOW || configFromMeta("ch-workflow") || "",
+    limit:    parseInt(window.SPYRE_CH_LIMIT || configFromMeta("ch-limit") || "30", 10),
+  };
+}
 
   function configFromMeta(name) {
     const el = document.querySelector(`meta[name="spyre-${name}"]`);
     return el ? el.getAttribute("content") : null;
   }
 
+
   // ─── ClickHouse HTTP query helper ──────────────────────────
   /**
    * Execute a ClickHouse SQL query via the HTTP interface.
    * Returns parsed JSON rows (FORMAT JSONEachRow).
    */
-  async function chQuery(sql) {
-    const cfg = getConfig();
-    if (!cfg.url) throw new Error("SPYRE_CH_URL is not configured");
 
-    const params = new URLSearchParams({
-      database:                   cfg.db,
-      default_format:             "JSONEachRow",
-      max_result_rows:            "100000",
-      result_overflow_mode:       "break",
-    });
+async function chQuery(sql) {
+  const cfg = getConfig();
 
-    const headers = { "Content-Type": "text/plain" };
-    // ClickHouse Cloud uses X-ClickHouse-User/Key headers, not Bearer tokens.
-    // cfg.token holds the password (stored in K8s secret as "token" key).
-    headers["X-ClickHouse-User"] = cfg.user;
-    headers["X-ClickHouse-Key"]  = cfg.token || cfg.pass;
+  const params = new URLSearchParams({
+    database:             cfg.db,
+    default_format:       "JSONEachRow",
+    max_result_rows:      "100000",
+    result_overflow_mode: "break",
+  });
 
-    const res = await fetch(`${cfg.url}?${params}`, {
-      method: "POST",
-      headers,
-      body: sql,
-    });
+  const res = await fetch(`/clickhouse/?${params}`, {
+    method:  "POST",
+    headers: { "Content-Type": "text/plain" },
+    body:    sql,
+    // No credentials — nginx adds X-ClickHouse-User and X-ClickHouse-Key
+  });
 
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`ClickHouse error ${res.status}: ${text.slice(0, 300)}`);
-    }
-
+  if (!res.ok) {
     const text = await res.text();
-    if (!text.trim()) return [];
-
-    // JSONEachRow → one JSON object per line
-    return text
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .map((line) => JSON.parse(line));
+    throw new Error(`ClickHouse error ${res.status}: ${text.slice(0, 300)}`);
   }
 
+  const text = await res.text();
+  if (!text.trim()) return [];
+
+  return text.trim().split("\n").filter(Boolean).map((line) => JSON.parse(line));
+}
+
+  
   // ─── Fetch commits list (grouped by commit SHA) ────────────
   async function fetchCommits(offset = 0, limit = 30, branchFilters = ['push', 'merge-queue', 'commit']) {
     const cfg = getConfig();

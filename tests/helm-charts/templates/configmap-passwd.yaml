@@ -67,29 +67,11 @@ data:
       exit 1
     fi
 
-    # Idempotency guard — skip if already patched
-    if grep -q 'spyre-ch-url' "$DASH"; then
+    # Idempotency guard
+    if grep -q 'src="/spyre-clickhouse.js"' "$DASH"; then
       echo "[patch-dashboard] Already patched — skipping."
       exit 0
     fi
-
-    # Build the meta-tag block from env vars injected by the pod spec
-    META=""
-    META="${META}<meta name=\"spyre-ch-url\"      content=\"${SPYRE_CH_URL}\">"
-    META="${META}<meta name=\"spyre-ch-db\"        content=\"${SPYRE_CH_DB}\">"
-    META="${META}<meta name=\"spyre-ch-user\"      content=\"${SPYRE_CH_USER}\">"
-    META="${META}<meta name=\"spyre-ch-token\"     content=\"${SPYRE_CH_TOKEN}\">"
-    META="${META}<meta name=\"spyre-ch-workflow\"  content=\"${SPYRE_CH_WORKFLOW}\">"
-    META="${META}<meta name=\"spyre-ch-limit\"     content=\"${SPYRE_CH_LIMIT}\">"
-
-    # Inject meta tags before the FIRST </head> only
-    awk -v meta="${META}" '
-      !done && /<\/head>/ {
-        sub(/<\/head>/, meta "</head>")
-        done=1
-      }
-      1
-    ' "$DASH" > /tmp/dash.tmp && mv /tmp/dash.tmp "$DASH"
 
     # Build the body inject block
     BODY_INJECT=""
@@ -98,7 +80,7 @@ data:
     fi
     BODY_INJECT="${BODY_INJECT}<script src=\"\/spyre-clickhouse.js\"><\/script>"
 
-    # Inject autoload flag + JS module before the LAST </body>
+    # Inject before the LAST </body>
     awk -v inject="${BODY_INJECT}" '
       /<\/body>/ { last_line=NR; last_content=$0 }
       { lines[NR]=$0 }
@@ -112,11 +94,17 @@ data:
       }
     ' "$DASH" > /tmp/dash.tmp && mv /tmp/dash.tmp "$DASH"
 
-  nginx-ch.conf: |
+    echo "[patch-dashboard] Patched successfully."
+
+
+  nginx-ch.conf.tmpl: |
     location /clickhouse/ {
       proxy_pass         https://{{ .Values.clickhouse.internalServiceHost }}:{{ .Values.clickhouse.internalServicePort }}/;
-      proxy_set_header   Host            {{ .Values.clickhouse.internalServiceHost }};
-      proxy_set_header   X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header   Host              {{ .Values.clickhouse.internalServiceHost }};
+      proxy_set_header   X-ClickHouse-User "{{ .Values.clickhouse.user }}";
+      proxy_set_header   X-ClickHouse-Key  "${CH_TOKEN}";
+      proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+      proxy_set_header   Authorization     "";
       proxy_read_timeout 120s;
       rewrite ^/clickhouse/(.*) /$1 break;
     }
