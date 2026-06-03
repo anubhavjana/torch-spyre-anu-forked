@@ -25,17 +25,22 @@ ssh:
   secretName: spyre-dashboard-ssh-key
 
 security:
-  runAsUser: 1000
-  runAsGroup: 1000
-  fsGroup: 1000
+  # context for fmaas cluster
+  # runAsUser: 1000
+  # runAsGroup: 1000
+  # fsGroup: 1000
+  # context for torch-cicd cluster
+  runAsUser: 1000840000
+  runAsGroup: 0
+  fsGroup: 1000840000
 
 resources:
   requests:
     cpu: 100m
-    memory: 64Mi
+    memory: 128Mi
   limits:
     cpu: 500m
-    memory: 128Mi
+    memory: 256Mi 
 
 service:
   port: 80
