@@ -78,7 +78,7 @@
     const cfg = getConfig();
     
     if (branchFilters.length === 0) {
-      return [];
+      return { data: [], count: 0, total: 0 };
     }
     
     // Build query parameters - NO SQL in frontend!
@@ -93,7 +93,12 @@
     });
     
     const result = await apiQuery(`/commits?${params}`);
-    return result.data || [];
+    // Return full result object with data, count, and total
+    return {
+      data: result.data || [],
+      count: result.count || 0,
+      total: result.total || 0
+    };
   }
 
   // ─── Fetch all runs for a specific commit ─────────────────

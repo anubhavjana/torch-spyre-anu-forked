@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Spyre · Model Coverage Dashboard</title>
+<title>Torch Spyre · Test Health Dashboard</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
 /* Dark Mode v2.1 - Fixed spacing */
@@ -116,7 +116,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .drop-label{font-size:14px;color:var(--text2)}
 .drop-hint{font-size:11px;font-family:var(--mono);color:var(--text3);margin-top:6px}
 .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--bg3);color:var(--text);font-family:var(--sans);font-size:12px;cursor:pointer;transition:all .15s}
-.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+.btn:disabled{opacity:0.5;cursor:not-allowed}
 .btn-primary{background:var(--accent2);border-color:var(--accent);color:#fff}
 .btn-primary:hover{background:var(--accent);color:#fff}
 .btn-sm{padding:5px 10px;font-size:11px}
@@ -137,8 +138,10 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .rb-fail{background:rgba(240,82,82,.15);color:var(--fail)}
 /* metrics */
 .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:24px}
-.metric{background:var(--bg2);box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:var(--radius-lg);padding:16px;position:relative}
-[data-theme="dark"] .metric{box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+.metric{background:linear-gradient(to bottom, rgba(255, 255, 255, 1) 0%, rgba(59, 130, 246, 0.08) 100%);box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:var(--radius-lg);padding:16px;position:relative;border:1px solid var(--border);transition:all .25s ease}
+.metric:hover{box-shadow:0 4px 12px rgba(0,0,0,0.15);border-color:var(--accent);transform:scale(1.02) translateY(-2px)}
+[data-theme="dark"] .metric{box-shadow:0 1px 3px rgba(0,0,0,0.3);background:linear-gradient(to bottom, rgba(30, 30, 30, 1) 0%, rgba(59, 130, 246, 0.15) 100%)}
+[data-theme="dark"] .metric:hover{box-shadow:0 4px 12px rgba(0,0,0,0.6)}
 .metric-label{font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between}
 .metric-value{font-size:26px;font-weight:300;line-height:1}
 .metric-sub{font-size:11px;color:var(--text3);margin-top:4px}
@@ -190,12 +193,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .legend{display:flex;flex-wrap:wrap;gap:16px;margin-bottom:18px}
 .leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text2)}
 .leg-dot{width:9px;height:9px;border-radius:2px}
-/* drawer */
-.drawer{background:var(--bg2);box-shadow:0 1px 3px rgba(0,0,0,0.08);border-radius:var(--radius-lg);margin-top:10px;overflow:hidden}
-[data-theme="dark"] .drawer{box-shadow:0 1px 3px rgba(0,0,0,0.3)}
-.drawer-hd{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
-.drawer-title{font-family:var(--mono);font-size:12px;color:var(--text2)}
-.drawer-actions{display:flex;gap:6px}
 .test-table{width:100%;border-collapse:collapse}
 .test-table th{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);background:var(--bg3)}
 .test-table td{padding:7px 12px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2)}
@@ -242,10 +239,30 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .overall-bar-wrap{margin-bottom:24px}
 .overall-bar-label{font-size:11px;font-family:var(--mono);color:var(--text3);margin-bottom:5px}
 .overall-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;gap:1px}
-/* toast */
-.toast{position:fixed;bottom:24px;right:24px;background:var(--bg3);box-shadow:0 4px 12px rgba(0,0,0,0.15);border-radius:var(--radius);padding:10px 16px;font-size:13px;color:var(--text);z-index:9999;transform:translateY(80px);opacity:0;transition:all .25s}
+/* toast - top right corner with icon, title, and message */
+.toast{position:fixed;top:24px;right:24px;background:var(--bg3);box-shadow:0 4px 12px rgba(0,0,0,0.15);border-radius:var(--radius);padding:14px 16px;font-size:13px;color:var(--text);z-index:9999;transform:translateX(400px);opacity:0;transition:all .3s;display:flex;align-items:center;gap:12px;min-width:300px;max-width:400px;border:1px solid var(--border2);border-left:4px solid var(--accent)}
 [data-theme="dark"] .toast{box-shadow:0 4px 12px rgba(0,0,0,0.4)}
-.toast.show{transform:translateY(0);opacity:1}
+.toast.show{transform:translateX(0);opacity:1}
+.toast.success{border-left-color:var(--pass)}
+.toast.error{border-left-color:var(--fail)}
+.toast-icon{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px}
+.toast.success .toast-icon{background:var(--pass);color:white}
+.toast.error .toast-icon{background:var(--fail);color:white}
+.toast-content{flex:1;display:flex;flex-direction:column;gap:4px}
+.toast-title{font-weight:600;font-size:13px;color:var(--text);display:flex;align-items:center;justify-content:space-between}
+.toast-message{font-size:12px;color:var(--text2);line-height:1.4}
+.toast-close{width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text3);font-size:14px;line-height:1;transition:all .2s;flex-shrink:0}
+.toast-close:hover{background:var(--bg2);color:var(--text)}
+/* info icon and tooltip */
+.info-icon{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--bg4);color:var(--text3);font-size:10px;font-weight:600;cursor:pointer;margin-left:6px;transition:all .2s;position:relative;border:1px solid var(--border2);z-index:1}
+[data-theme="dark"] .info-icon{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.2)}
+.info-icon:hover{background:var(--accent);color:#fff;border-color:var(--accent);transform:scale(1.1);z-index:10001}
+.info-icon::before{content:'i';font-style:normal;font-family:var(--sans)}
+.info-tooltip{position:absolute;top:50%;left:calc(100% + 12px);transform:translateY(-50%);background:var(--bg2);color:var(--text2);padding:10px 12px;border-radius:var(--radius);font-size:11px;line-height:1.5;white-space:normal;width:240px;opacity:0;pointer-events:none;transition:all .2s;z-index:10002;box-shadow:0 8px 24px rgba(0,0,0,0.2);border:1px solid var(--border2);font-family:var(--sans);font-weight:400}
+[data-theme="dark"] .info-tooltip{background:linear-gradient(135deg,#1e293b 0%,#0f172a 100%);box-shadow:0 8px 24px rgba(0,0,0,0.4);border:1px solid rgba(59,130,246,0.3)}
+.info-tooltip::after{content:'';position:absolute;top:50%;right:100%;transform:translateY(-50%);border:6px solid transparent;border-right-color:var(--bg2);z-index:10003}
+[data-theme="dark"] .info-tooltip::after{border-right-color:#1e293b}
+.info-icon:hover .info-tooltip{opacity:1;left:calc(100% + 16px)}
 .empty{text-align:center;padding:40px;color:var(--text3);font-size:13px}
 .export-row{display:flex;gap:8px;flex-wrap:wrap}
 .badge-new{font-size:9px;font-family:var(--mono);background:var(--accent2);color:#fff;padding:1px 5px;border-radius:8px;margin-left:4px;vertical-align:middle}
@@ -257,29 +274,19 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .loading-dots::after{content:'';animation:dots 1.5s steps(4,end) infinite}
 @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}100%{content:''}}
 
-/* Full-screen loader overlay */
-.loader-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;z-index:99999;flex-direction:column;gap:16px}
+/* Full-screen loader overlay - theme-aware and lighter */
+.loader-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.15);backdrop-filter:blur(2px);display:none;align-items:center;justify-content:center;z-index:99999;flex-direction:column;gap:16px}
+[data-theme="dark"] .loader-overlay{background:rgba(0,0,0,0.3)}
 .loader-overlay.show{display:flex}
-.loader-spinner{width:48px;height:48px;border:4px solid rgba(255,255,255,0.1);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
+.loader-spinner{width:48px;height:48px;border:4px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.loader-text{color:white;font-size:14px;font-weight:500}
+.loader-text{color:var(--text);font-size:14px;font-weight:500}
 /* sub-tabs */
 .sub-tabs{display:flex;gap:4px;margin-bottom:18px;border-bottom:2px solid var(--border);padding-bottom:0}
 .sub-tab-btn{font-family:var(--sans);font-size:13px;padding:10px 16px;border:none;background:transparent;color:var(--text2);cursor:pointer;transition:all .15s;border-bottom:2px solid transparent;margin-bottom:-2px;position:relative}
 .sub-tab-btn:hover{color:var(--text);background:var(--bg3)}
 .sub-tab-btn.active{color:var(--accent);border-bottom-color:var(--accent);font-weight:500}
 .sub-panel{display:none}.sub-panel.active{display:block}
-/* submenu styles */
-.nav-submenu{padding:8px 0 8px 8px;margin:8px 12px 8px 24px;border-left:2px solid rgba(59,130,246,0.3);transition:all .2s;background:rgba(255,255,255,0.02);border-radius:0 8px 8px 0}
-.sidebar-collapsed .nav-submenu{display:none!important}
-.nav-subitem{width:100%;text-align:left;padding:10px 14px;font-size:12px;background:transparent;border:none;color:var(--text2);cursor:pointer;border-radius:6px;transition:all .2s;font-family:var(--sans);position:relative;margin:2px 0;font-weight:400}
-[data-theme="dark"] .nav-subitem{color:rgba(255,255,255,0.65)}
-.nav-subitem::before{content:'';position:absolute;left:0;top:50%;transform:translateY(-50%);width:3px;height:0;background:linear-gradient(180deg,#3b82f6,#2563eb);border-radius:0 2px 2px 0;transition:height .2s}
-.nav-subitem:hover{background:var(--bg3);color:var(--text);padding-left:18px}
-[data-theme="dark"] .nav-subitem:hover{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.95)}
-.nav-subitem:hover::before{height:60%}
-.nav-subitem.active{background:linear-gradient(90deg,rgba(37,99,235,0.25),rgba(37,99,235,0.15));color:#60a5fa;font-weight:500;padding-left:18px;box-shadow:inset 0 0 0 1px rgba(59,130,246,0.3)}
-.nav-subitem.active::before{height:80%;background:linear-gradient(180deg,#60a5fa,#3b82f6)}
 @media(max-width:640px){.main{padding:14px}.topbar{padding:0 14px}.metrics{grid-template-columns:repeat(2,1fr)}}
 
 /* failure expand row */
@@ -296,12 +303,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .action-menu-item:hover{background:var(--bg3);color:var(--accent)}
 .action-menu-item:first-child{border-radius:var(--radius) var(--radius) 0 0}
 .action-menu-item:last-child{border-radius:0 0 var(--radius) var(--radius)}
-.action-menu-item.has-submenu::after{content:'▶';position:absolute;right:8px;font-size:9px;color:var(--text3)}
-.action-submenu{position:fixed;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--radius);box-shadow:0 4px 12px rgba(0,0,0,.15);min-width:120px;z-index:10000;display:none;pointer-events:auto;flex-direction:column}
-.action-menu-item.has-submenu:hover .action-submenu{display:flex}
-.action-submenu-item{display:block;width:100%;text-align:left;padding:8px 12px;font-size:11px;background:transparent;border:none;color:var(--text);cursor:pointer;transition:all .15s;font-family:var(--sans);white-space:nowrap}
-.action-submenu-item:hover{background:var(--bg3);color:var(--accent)}
-.action-submenu-item:first-child{border-radius:var(--radius) var(--radius) 0 0}
 
 /* Multi-select dropdown styles */
 .multiselect-dropdown{position:relative;display:inline-block;min-width:200px;z-index:100}
@@ -317,7 +318,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
 .multiselect-option{padding:8px 12px;cursor:pointer;font-size:12px;display:flex;align-items:center;gap:8px;transition:background-color .2s}
 .multiselect-option:hover{background-color:var(--bg3)}
 .multiselect-option input[type="checkbox"]{cursor:pointer}
-.action-submenu-item:last-child{border-radius:0 0 var(--radius) var(--radius)}
 .spacing-bottom{ margin-bottom: 18px;}
 </style>
 </head>
@@ -345,49 +345,41 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
           </defs>
         </svg>
       </div>
-      <div class="sidebar-logo-text">Spyre</div>
+      <div class="sidebar-logo-text">Spyre View</div>
     </div>
-    <div class="sidebar-title">navigation</div>
-      <div class="nav-list">
-        <button class="nav-item" id="nav-overview" onclick="switchTab('overview')" data-tooltip="Test Overview">
-          <span class="nav-icon">📊</span>
-          <span class="nav-text">Test Overview</span>
-        </button>
-        <button class="nav-item" id="nav-details" onclick="switchTab('details')" data-tooltip="Test Details">
-          <span class="nav-icon">📋</span>
-          <span class="nav-text">Test Details</span>
-        </button>
-        <button class="nav-item" id="nav-explorer" onclick="toggleExplorerSubmenu()" data-tooltip="Coverage Explorer">
-          <span class="nav-icon">🔍</span>
-          <span class="nav-text">Coverage Explorer</span>
-        </button>
-        <div class="nav-submenu" id="explorer-submenu" style="display:none">
-          <button class="nav-subitem" id="nav-explorer-model" onclick="switchExplorerGroupBy('model')">Model Tag</button>
-          <button class="nav-subitem" id="nav-explorer-module" onclick="switchExplorerGroupBy('module')">Module</button>
-          <button class="nav-subitem" id="nav-explorer-op" onclick="switchExplorerGroupBy('op')">Op Name</button>
-          <button class="nav-subitem" id="nav-explorer-dtype" onclick="switchExplorerGroupBy('dtype')">Dtype</button>
-        </div>
-        <button class="nav-item" id="nav-history" onclick="switchTab('trend')" data-tooltip="Run History">
-          <span class="nav-icon">📈</span>
-          <span class="nav-text">Run History</span>
-        </button>
-        <button class="nav-item active" id="nav-reports" onclick="switchTab('reports')" data-tooltip="All Reports">
-          <span class="nav-icon">📊</span>
-          <span class="nav-text">All Reports</span>
-        </button>
-        <!-- Hidden: Add Reports section not needed for ClickHouse-only mode -->
-        <!-- <button class="nav-item" id="nav-upload" onclick="switchTab('upload')" data-tooltip="Add Reports">
-          <span class="nav-icon">➕</span>
-          <span class="nav-text">Add Reports</span>
-        </button> -->
-      </div>
-      <div class="nav-help">Navigate between different views: overview, detailed analysis, coverage explorer, and history.</div>
-      <div class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"></polyline>
-        </svg>
-      </div>
-    </aside>
+    <div class="sidebar-title">Test Coverage</div>
+    <div class="nav-list">
+      <button class="nav-item active" id="nav-overview" onclick="switchTab('overview')" data-tooltip="Test Overview">
+        <span class="nav-icon">📊</span>
+        <span class="nav-text">Test Overview</span>
+      </button>
+      <button class="nav-item" id="nav-details" onclick="switchTab('details')" data-tooltip="Test Details">
+        <span class="nav-icon">📋</span>
+        <span class="nav-text">Test Details</span>
+      </button>
+      <!-- COMMENTED OUT: Run History Tab -->
+      <!-- <button class="nav-item" id="nav-history" onclick="switchTab('trend')" data-tooltip="Run History">
+        <span class="nav-icon">📈</span>
+        <span class="nav-text">Run History</span>
+      </button> -->
+      <button class="nav-item" id="nav-reports" onclick="switchTab('reports')" data-tooltip="All Commits">
+        <span class="nav-icon">📊</span>
+        <span class="nav-text">All Commits</span>
+      </button>
+      <!-- Hidden: Add Reports section not needed for ClickHouse-only mode -->
+      <!-- <button class="nav-item" id="nav-upload" onclick="switchTab('upload')" data-tooltip="Add Reports">
+        <span class="nav-icon">➕</span>
+        <span class="nav-text">Add Reports</span>
+      </button> -->
+    </div>
+    
+    <div class="nav-help">Navigate between different views: overview, detailed analysis, and history.</div>
+    <div class="sidebar-toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </div>
+  </aside>
 
     <div class="main-content-wrapper">
       <div class="topbar">
@@ -395,13 +387,6 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
           <span style="font-size:12px;color:var(--text2);font-weight:600" id="topbar-run-name">—</span>
         </div>
         <div class="topbar-tabs">
-        </div>
-        <div id="topbar-controls" style="margin-left:16px;display:none;gap:8px;align-items:center">
-          <select id="topbar-run-selector" class="btn btn-sm" onchange="selectRun(parseInt(this.value))" style="min-width:180px;max-width:250px">
-            <option value="-1">Select a run...</option>
-          </select>
-          <button class="btn btn-sm" onclick="exportCSV()" title="Export CSV">↓ CSV</button>
-          <button class="btn btn-sm" onclick="exportPDF()" title="Export PDF">↓ PDF</button>
         </div>
         <button class="theme-toggle" onclick="toggleTheme()" title="Toggle dark mode" id="theme-toggle">
           <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="display:none">
@@ -450,7 +435,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
       </div>
 
       <!-- REPORTS TABLE -->
-      <div class="panel active" id="panel-reports">
+      <div class="panel" id="panel-reports">
         <!-- <div class="hero-row spacing-bottom">
           <div>
             <div class="hero-kicker">all reports</div>
@@ -463,10 +448,13 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
         <div id="commits-section" style="margin-bottom:24px">
           <div class="surface">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:12px">
-              <div>
+              <div style="display:flex;align-items:center;gap:4px">
                 <div style="font-family:var(--mono);font-size:13px;font-weight:500;color:var(--text)">
-                  Latest Commits from ClickHouse
+                  Test Results by Commit
                 </div>
+                <span class="info-icon">
+                  <span class="info-tooltip">Test execution results for each commit from ClickHouse. Click "View Details" to see full test breakdown.</span>
+                </span>
               </div>
               <div style="display:flex;gap:8px;align-items:center">
                 <label style="font-size:11px;font-family:var(--mono);color:var(--text3)">FILTER:</label>
@@ -561,14 +549,25 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
       <div id="common-run-header" style="display:none"></div>
 
       <!-- OVERVIEW -->
-      <div class="panel" id="panel-overview">
-        <div id="overview-empty" class="empty" style="display:none">No data loaded. <a href="#" onclick="switchTab('upload');return false;" style="color:var(--accent)">Add a run →</a></div>
+      <div class="panel active" id="panel-overview">
+        <div id="overview-empty" class="empty" style="display:none">
+          <div style="text-align:center;padding:40px">
+            <div style="font-size:18px;color:var(--text2);margin-bottom:12px">⚠️ No Data Available</div>
+            <div style="font-size:14px;color:var(--text3);margin-bottom:16px">No test data has been loaded yet, or there was an error loading data from the database.</div>
+            <div style="font-size:13px;color:var(--text3)">Try selecting a commit from the <a href="#" onclick="switchTab('reports');return false;" style="color:var(--accent);text-decoration:underline">Commits tab</a></div>
+          </div>
+        </div>
         <div id="overview-content">
           
           <!-- Generic Filters -->
           <div class="surface" style="margin-bottom:18px;padding:12px 16px">
             <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-              <label style="font-size:11px;font-family:var(--mono);color:var(--text3);font-weight:600">FILTERS:</label>
+              <div style="display:flex;align-items:center;gap:4px">
+                <label style="font-size:11px;font-family:var(--mono);color:var(--text3);font-weight:600">TEST FILTERS:</label>
+                <span class="info-icon">
+                  <span class="info-tooltip">Filter tests by dtype, operation, model, or module. Select multiple values to narrow results.</span>
+                </span>
+              </div>
               
               <!-- Dtype Filter -->
               <div class="multiselect-dropdown" id="filter-dtype-container">
@@ -661,31 +660,39 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
               <!-- Status Distribution Chart -->
               <div class="chart-card">
                 <div class="section-hd" style="margin:0 0 14px">
-                  <span class="section-title">status distribution</span>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <span class="section-title">Test Status Distribution</span>
+                    <span class="info-icon">
+                      <span class="info-tooltip">Breakdown of test results: passed, failed, xfail (expected failures), xpass (unexpected passes), and skipped tests.</span>
+                    </span>
+                  </div>
                 </div>
-                <div class="chart-container" style="height:300px;display:flex;align-items:center;justify-content:center">
+                <div class="chart-container" style="height:320px;padding:16px">
                   <canvas id="summary-pie-chart"></canvas>
-                </div>
-                <div class="legend" style="margin-top:16px">
-                  <div class="leg-item"><div class="leg-dot" style="background:var(--pass)"></div>passed tests</div>
-                  <div class="leg-item"><div class="leg-dot" style="background:var(--fail)"></div>failed</div>
-                  <div class="leg-item"><div class="leg-dot" style="background:var(--xfail)"></div>xfail</div>
-                  <div class="leg-item"><div class="leg-dot" style="background:var(--xpass)"></div>xpass</div>
-                  <div class="leg-item"><div class="leg-dot" style="background:var(--skip)"></div>skipped</div>
                 </div>
               </div>
 
-              <div class="chart-card">
+              <div class="chart-card" style="display:flex;flex-direction:column">
                 <!-- Operation Coverage Section -->
-                <div>
-                  <div style="font-size:11px;font-family:var(--mono);color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Operation Coverage</div>
-                  <div id="model-op-coverage" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
+                <div style="flex:1;display:flex;flex-direction:column">
+                  <div style="font-size:11px;font-family:var(--mono);color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:4px">
+                    <span style="text-transform:uppercase;letter-spacing:.08em;">Operation Coverage</span>
+                    <span class="info-icon">
+                      <span class="info-tooltip">Test coverage for PyTorch operations. Shows number of tests and pass rate per operation.</span>
+                    </span>
+                  </div>
+                  <div id="model-op-coverage" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;flex:1"></div>
                 </div>
                 
                 <!-- Module Coverage Section -->
-                <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
-                  <div style="font-size:11px;font-family:var(--mono);color:var(--text2);text-transform:uppercase;letter-spacing:.08em;margin-bottom:10px">Module Coverage</div>
-                  <div id="model-module-coverage" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px"></div>
+                <div style="flex:1;margin-top:16px;padding-top:16px;border-top:1px solid var(--border);display:flex;flex-direction:column">
+                  <div style="font-size:11px;font-family:var(--mono);color:var(--text2);margin-bottom:10px;display:flex;align-items:center;gap:4px">
+                    <span style="text-transform:uppercase;letter-spacing:.08em;">Module Coverage</span>
+                    <span class="info-icon">
+                      <span class="info-tooltip">Test coverage by test module. Displays total tests and pass rate for each module.</span>
+                    </span>
+                  </div>
+                  <div id="model-module-coverage" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;flex:1"></div>
                 </div>
               </div>
               <!-- Model Test Results -->
@@ -761,7 +768,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
                   </div>
                 </div>
                 <div style="display:flex;gap:6px;align-items:center">
-                  <span style="font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase">Properties:</span>
+                  <span style="font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase">FILTERS:</span>
                   <div class="multiselect-dropdown" id="details-property-filter">
                     <div class="multiselect-button" onclick="toggleMultiselect('details-property-filter')">
                       <span class="multiselect-button-text" id="details-property-text">All Selected</span>
@@ -781,7 +788,16 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
             <div class="surface">
               <div class="table-wrap" style="max-height:600px">
                 <table class="test-table">
-                  <thead><tr><th>Test Name</th><th>Status</th><th>Dtype</th><th>Op</th><th>Time (s)</th></tr></thead>
+                  <thead><tr>
+                    <th>Test Name</th>
+                    <th>Status</th>
+                    <th>Dtype</th>
+                    <th>Op</th>
+                    <th>Module</th>
+                    <th onclick="toggleDetailsSortByTime()" style="cursor:pointer;user-select:none" title="Click to sort by time">
+                      Time (s) <span id="details-time-sort-indicator" style="font-size:14px;margin-left:4px;color:var(--text3)">⇅</span>
+                    </th>
+                  </tr></thead>
                   <tbody id="details-table-body"></tbody>
                 </table>
               </div>
@@ -793,219 +809,8 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
         </div>
       </div><!-- end panel-details -->
 
-      <!-- PANEL: COVERAGE EXPLORER -->
-      <div class="panel" id="panel-explorer">
-        <div id="explorer-groups-view">
-          <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:18px">
-            <h2 style="margin:0">Coverage Explorer</h2>
-            <span style="font-size:13px;color:var(--text3);font-family:var(--mono)">
-              <span style="color:var(--text3)">›</span>
-              <span id="explorer-groupby-label" style="color:var(--accent);font-weight:500">Model Tag</span>
-            </span>
-          </div>
-          <div class="overview-content">
-          
-
-          <div class="surface">
-            <!-- Filter Controls -->
-                <div  style="margin-bottom:12px;">
-                    
-                    <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-                      <div style="display:flex;gap:6px;align-items:center">
-                        <span style="font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase">Status:</span>
-                        <div class="multiselect-dropdown" id="explorer-status-filter">
-                          <div class="multiselect-button" onclick="toggleMultiselect('explorer-status-filter')">
-                            <span class="multiselect-button-text" id="explorer-status-text">All Selected</span>
-                            <span class="multiselect-arrow">▼</span>
-                          </div>
-                          <div class="multiselect-menu">
-                            <label class="multiselect-option">
-                              <input type="checkbox" checked onchange="updateExplorerStatusFilter()" data-status="passed"> Passed
-                            </label>
-                            <label class="multiselect-option">
-                              <input type="checkbox" checked onchange="updateExplorerStatusFilter()" data-status="failed"> Failed
-                            </label>
-                            <label class="multiselect-option">
-                              <input type="checkbox" checked onchange="updateExplorerStatusFilter()" data-status="xfail"> Xfail
-                            </label>
-                            <label class="multiselect-option">
-                              <input type="checkbox" checked onchange="updateExplorerStatusFilter()" data-status="skipped"> Skipped
-                            </label>
-                            <label class="multiselect-option">
-                              <input type="checkbox" checked onchange="updateExplorerStatusFilter()" data-status="xpass"> Xpass
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                      <div style="display:flex;gap:6px;align-items:center" id="explorer-model-filter-container">
-                        <span style="font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase">Model:</span>
-                        <select id="explorer-model-selector" class="btn btn-sm" onchange="filterExplorerByModel()" style="min-width:150px">
-                          <option value="">All Models</option>
-                        </select>
-                      </div>
-                      <div class="search-wrap" style="flex:1;margin:0">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                        <input class="search-input" id="explorer-search" placeholder="Search groups or tests…" oninput="filterExplorerTests()">
-                      </div>
-                    </div>
-                </div>
-                
-                <div class="table-wrap" style="max-height:600px">
-                  <table class="test-table">
-                    <thead>
-                      <tr>
-                        <th>Group Name</th>
-                        <th>Total Tests</th>
-                        <th>Passed</th>
-                        <th>Failed</th>
-                        <th>Xfail</th>
-                        <th>Xpass</th>
-                        <th>Skipped</th>
-                        <th>Pass Rate</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody id="groups-table-body"></tbody>
-                  </table>
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--border)">
-                  <div class="note-row" id="groups-note" style="margin:0"></div>
-                  <div id="groups-pagination" style="display:flex;gap:6px;align-items:center"></div>
-                </div>
-            </div>
-
-            <div id="detail-drawer" style="display:none" class="drawer fade-in">
-                <div class="drawer-hd">
-                  <span class="drawer-title" id="drawer-title"></span>
-                  <div class="drawer-actions">
-                    <button class="btn btn-sm" onclick="exportDrawerCSV()">↓ CSV</button>
-                    <button class="btn btn-sm" onclick="closeDrawer()">✕ close</button>
-                  </div>
-                </div>
-                
-                <!-- Filter controls for drawer -->
-                <div class="surface" style="margin:0 0 12px;padding:12px">
-                  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
-                    <div style="display:flex;gap:6px;align-items:center">
-                      <span style="font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase">Group by:</span>
-                      <select class="btn btn-sm" id="drawer-groupby" onchange="changeDrawerGroupBy(this.value)" style="padding:4px 8px">
-                        <option value="none">None (all tests)</option>
-                        <option value="status">Status</option>
-                        <option value="dtype">Dtype</option>
-                        <option value="op">Op</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
-                    <div style="display:flex;gap:6px;align-items:center">
-                      <span style="font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase">Filter:</span>
-                      <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">
-                        <input type="checkbox" checked onchange="filterDrawerTests()" id="drawer-filter-passed"> Passed
-                      </label>
-                      <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">
-                        <input type="checkbox" checked onchange="filterDrawerTests()" id="drawer-filter-failed"> Failed
-                      </label>
-                      <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">
-                        <input type="checkbox" checked onchange="filterDrawerTests()" id="drawer-filter-xfail"> Xfail
-                      </label>
-                      <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">
-                        <input type="checkbox" checked onchange="filterDrawerTests()" id="drawer-filter-skipped"> Skipped
-                      </label>
-                      <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer">
-                        <input type="checkbox" checked onchange="filterDrawerTests()" id="drawer-filter-xpass"> Xpass
-                      </label>
-                    </div>
-                    <div class="search-wrap" style="flex:1;margin:0">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-                      <input class="search-input" id="drawer-search" placeholder="Search test names…" oninput="filterDrawerTests()">
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="table-wrap">
-                  <table class="test-table">
-                    <thead><tr><th>test variant</th><th>status</th><th>dtype</th><th>op</th><th>time (s)</th></tr></thead>
-                    <tbody id="drawer-body"></tbody>
-                  </table>
-                </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--border)">
-                  <div class="note-row" id="drawer-note" style="margin:0"></div>
-                  <div id="drawer-pagination" style="display:flex;gap:6px;align-items:center"></div>
-                </div>
-            </div>
-          </div>
-          </div><!-- end overview-content -->
-        </div><!-- end explorer-groups-view -->
-        
-        <!-- GROUP DETAIL VIEW -->
-        <div id="explorer-detail-view" style="display:none">
-          <div style="margin-bottom:20px">
-            <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-              <button class="btn btn-sm" onclick="backToGroupsView()">← Back to Groups</button>
-              <div style="font-size:13px;color:var(--text3);font-family:var(--mono)">
-                <span>Coverage Explorer</span>
-                <span style="margin:0 8px">›</span>
-                <span id="detail-breadcrumb-group" style="color:var(--text)"></span>
-              </div>
-            </div>
-            <h2 id="detail-view-title" style="margin:0"></h2>
-          </div>
-          
-          <div class="surface">
-            <div style="display:flex;gap:12px;align-items:center;margin-bottom:16px">
-              <div style="display:flex;gap:6px;align-items:center">
-                <span style="font-size:11px;font-family:var(--mono);color:var(--text3);text-transform:uppercase">Filter:</span>
-                <div class="multiselect-dropdown" id="detail-view-status-filter">
-                  <div class="multiselect-button" onclick="toggleMultiselect('detail-view-status-filter')">
-                    <span class="multiselect-button-text" id="detail-view-status-text">All Selected</span>
-                    <span class="multiselect-arrow">▼</span>
-                  </div>
-                  <div class="multiselect-menu">
-                    <label class="multiselect-option">
-                      <input type="checkbox" checked onchange="updateDetailViewStatusFilter()" data-status="passed"> Passed
-                    </label>
-                    <label class="multiselect-option">
-                      <input type="checkbox" checked onchange="updateDetailViewStatusFilter()" data-status="failed"> Failed
-                    </label>
-                    <label class="multiselect-option">
-                      <input type="checkbox" checked onchange="updateDetailViewStatusFilter()" data-status="xfail"> Xfail
-                    </label>
-                    <label class="multiselect-option">
-                      <input type="checkbox" checked onchange="updateDetailViewStatusFilter()" data-status="xpass"> Xpass
-                    </label>
-                    <label class="multiselect-option">
-                      <input type="checkbox" checked onchange="updateDetailViewStatusFilter()" data-status="skipped"> Skipped
-                    </label>
-                  </div>
-                </div>
-              </div>
-              <div class="search-wrap" style="flex:1;margin:0">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="6"/><path d="m13 13 3 3"/></svg>
-                <input class="search-input" id="detail-view-search" placeholder="Search tests…" oninput="filterDetailViewTests()">
-              </div>
-              <button class="btn btn-sm" onclick="exportDetailViewCSV()">↓ Export CSV</button>
-            </div>
-            
-            
-            
-            <div class="table-wrap" style="max-height:600px">
-              <table class="test-table">
-                <thead><tr><th>Test Name</th><th>Status</th><th>Dtype</th><th>Op</th><th>Time (s)</th></tr></thead>
-                <tbody id="detail-view-table-body"></tbody>
-              </table>
-            </div>
-            <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-top:1px solid var(--border)">
-              <div class="note-row" id="detail-view-note" style="margin:0"></div>
-              <div id="detail-view-pagination" style="display:flex;gap:6px;align-items:center"></div>
-            </div>
-          </div>
-        </div><!-- end explorer-detail-view -->
-        
-      
-
-      <!-- TREND -->
-      <div class="panel" id="panel-trend">
+      <!-- COMMENTED OUT: TREND / RUN HISTORY PANEL -->
+      <!-- <div class="panel" id="panel-trend">
         <div id="trend-empty" class="trend-empty">
           No historical data yet.<br><br>
           Upload multiple XML files to see pass-rate trends over time.
@@ -1031,7 +836,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
             <div class="run-timeline" id="run-timeline"></div>
           </div>
         </div>
-      </div>
+      </div> -->
 
         </div><!-- end content-area -->
       </div><!-- end app-shell -->
@@ -1059,11 +864,10 @@ function toggleTheme() {
         renderOverview();
       } else if (panelId === 'panel-details') {
         renderTestDetails();
-      } else if (panelId === 'panel-explorer') {
-        renderCoverageExplorer();
-      } else if (panelId === 'panel-trend') {
-        renderTrend();
-      }
+      } 
+      // else if (panelId === 'panel-trend') {
+      //    renderTrend(); // COMMENTED OUT
+      // }
     }
   }
 }
@@ -1099,6 +903,10 @@ function getChartColors() {
     text2: isDark ? '#cbd5e1' : '#475569',
     text3: isDark ? '#94a3b8' : '#64748b',
     border: isDark ? '#334155' : '#ffffff',
+    border2: isDark ? '#475569' : '#e2e8f0',
+    bg: isDark ? '#0f172a' : '#ffffff',
+    bg2: isDark ? '#1e293b' : '#f8fafc',
+    bg3: isDark ? '#334155' : '#f1f5f9',
     gridColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(148,163,184,0.18)'
   };
 }
@@ -1134,270 +942,270 @@ let trendChart = null;
   Actually in newer pytest: xpass with --strict-markers produces <failure type="pytest.xfail">
   and without strict produces bare <testcase>. We'll check both.
 */
-function parseXML(text) {
-  const doc = new DOMParser().parseFromString(text, 'text/xml');
-  const tests = [];
+// function parseXML(text) {
+//   const doc = new DOMParser().parseFromString(text, 'text/xml');
+//   const tests = [];
 
-  // Read suite-level counters.
-  // Non-strict xpass appears as bare <testcase> (no children), same as truly-passed.
-  // Formula: xpass_bare = bareCount + max(0, suiteFailures - trueFailRaw - strictXpassRaw)
-  //   where strictXpassRaw = <failure type="pytest.xfail"> elements (strict mode)
-  //   and   nonStrictInFailures = 0 for non-strict mode (your case)
-  //   so    xpassToPromote = bareCount (all bare = xpass)
-  const suiteEl      = doc.querySelector('testsuite');
-  const suiteTests   = suiteEl ? parseInt(suiteEl.getAttribute('tests')    || '0', 10) : 0;
-  const suiteSkipped = suiteEl ? parseInt(suiteEl.getAttribute('skipped')  || '0', 10) : 0;
-  const suiteFailures= suiteEl ? parseInt(suiteEl.getAttribute('failures') || '0', 10) : 0;
-  const suiteErrors  = suiteEl ? parseInt(suiteEl.getAttribute('errors')   || '0', 10) : 0;
+//   // Read suite-level counters.
+//   // Non-strict xpass appears as bare <testcase> (no children), same as truly-passed.
+//   // Formula: xpass_bare = bareCount + max(0, suiteFailures - trueFailRaw - strictXpassRaw)
+//   //   where strictXpassRaw = <failure type="pytest.xfail"> elements (strict mode)
+//   //   and   nonStrictInFailures = 0 for non-strict mode (your case)
+//   //   so    xpassToPromote = bareCount (all bare = xpass)
+//   const suiteEl      = doc.querySelector('testsuite');
+//   const suiteTests   = suiteEl ? parseInt(suiteEl.getAttribute('tests')    || '0', 10) : 0;
+//   const suiteSkipped = suiteEl ? parseInt(suiteEl.getAttribute('skipped')  || '0', 10) : 0;
+//   const suiteFailures= suiteEl ? parseInt(suiteEl.getAttribute('failures') || '0', 10) : 0;
+//   const suiteErrors  = suiteEl ? parseInt(suiteEl.getAttribute('errors')   || '0', 10) : 0;
 
-  // First pass: classify every testcase
-  const rawTests = [];
-  doc.querySelectorAll('testcase').forEach(tc => {
-    const name    = tc.getAttribute('name') || '';
-    const cls     = tc.getAttribute('classname') || '';
-    const timeVal = parseFloat(tc.getAttribute('time') || '0');
-    const file    = tc.getAttribute('file') || cls.replace(/\./g, '/') + '.py';
+//   // First pass: classify every testcase
+//   const rawTests = [];
+//   doc.querySelectorAll('testcase').forEach(tc => {
+//     const name    = tc.getAttribute('name') || '';
+//     const cls     = tc.getAttribute('classname') || '';
+//     const timeVal = parseFloat(tc.getAttribute('time') || '0');
+//     const file    = tc.getAttribute('file') || cls.replace(/\./g, '/') + '.py';
 
-    const failEl  = tc.querySelector('failure');
-    const errorEl = tc.querySelector('error');
-    const skipEl  = tc.querySelector('skipped');
+//     const failEl  = tc.querySelector('failure');
+//     const errorEl = tc.querySelector('error');
+//     const skipEl  = tc.querySelector('skipped');
 
-    let status  = 'passed';
-    let failMsg = '';
-    let isBare  = false;
+//     let status  = 'passed';
+//     let failMsg = '';
+//     let isBare  = false;
 
-    // Extract properties from <properties><property name="..." value="..."/></properties>
-    // Store in format: dtype__float32, op__add, model__granite, etc.
-    // A test can have multiple properties of different types
-    const properties = [];
-    const propsEl = tc.querySelector('properties');
-    if (propsEl) {
-      propsEl.querySelectorAll('property').forEach(prop => {
-        const propName = prop.getAttribute('name');
-        const propValue = prop.getAttribute('value');
+//     // Extract properties from <properties><property name="..." value="..."/></properties>
+//     // Store in format: dtype__float32, op__add, model__granite, etc.
+//     // A test can have multiple properties of different types
+//     const properties = [];
+//     const propsEl = tc.querySelector('properties');
+//     if (propsEl) {
+//       propsEl.querySelectorAll('property').forEach(prop => {
+//         const propName = prop.getAttribute('name');
+//         const propValue = prop.getAttribute('value');
         
-        if (!propName || !propValue) return;
+//         if (!propName || !propValue) return;
         
-        // Categorize properties by type - a test can have multiple properties
-        // dtype properties: dtype, data_type, etc.
-        if (propName.toLowerCase().includes('dtype') || propName.toLowerCase() === 'data_type') {
-          properties.push(`dtype__${propValue}`);
-        }
-        // op properties: op, operation, op_name, etc.
-        else if (propName.toLowerCase().includes('op') && !propName.toLowerCase().includes('prop')) {
-          properties.push(`op__${propValue}`);
-        }
-        // model properties: model, tag, model_name, etc.
-        else if (propName.toLowerCase().includes('model') || propName === 'tag') {
-          properties.push(`model__${propValue}`);
-        }
-        // module properties: module .
-        else if (propName.toLowerCase().includes('module') || propName === 'tag') {
-          properties.push(`model__${propValue}`);
-        }
-        // For boolean properties (True/1), infer category from name
-        else if (propValue.toLowerCase() === 'true' || propValue === '1') {
-          // Common model names as boolean flags
-          if (propName.match(/^(granite|llama|mistral|gpt|ministral)/i)) {
-            properties.push(`model__${propName}`);
-          }
-          // Common op names as boolean flags
-          else if (propName.match(/^(add|mul|matmul|conv|linear|softmax|relu|gelu)/i)) {
-            properties.push(`op__${propName}`);
-          }
-          // Otherwise store as-is for backward compatibility
-          else {
-            properties.push(propName);
-          }
-        }
-        // Store other properties with their values
-        else {
-          properties.push(`${propName}__${propValue}`);
-        }
-      });
-    }
+//         // Categorize properties by type - a test can have multiple properties
+//         // dtype properties: dtype, data_type, etc.
+//         if (propName.toLowerCase().includes('dtype') || propName.toLowerCase() === 'data_type') {
+//           properties.push(`dtype__${propValue}`);
+//         }
+//         // op properties: op, operation, op_name, etc.
+//         else if (propName.toLowerCase().includes('op') && !propName.toLowerCase().includes('prop')) {
+//           properties.push(`op__${propValue}`);
+//         }
+//         // model properties: model, tag, model_name, etc.
+//         else if (propName.toLowerCase().includes('model') || propName === 'tag') {
+//           properties.push(`model__${propValue}`);
+//         }
+//         // module properties: module .
+//         else if (propName.toLowerCase().includes('module') || propName === 'tag') {
+//           properties.push(`model__${propValue}`);
+//         }
+//         // For boolean properties (True/1), infer category from name
+//         else if (propValue.toLowerCase() === 'true' || propValue === '1') {
+//           // Common model names as boolean flags
+//           if (propName.match(/^(granite|llama|mistral|gpt|ministral)/i)) {
+//             properties.push(`model__${propName}`);
+//           }
+//           // Common op names as boolean flags
+//           else if (propName.match(/^(add|mul|matmul|conv|linear|softmax|relu|gelu)/i)) {
+//             properties.push(`op__${propName}`);
+//           }
+//           // Otherwise store as-is for backward compatibility
+//           else {
+//             properties.push(propName);
+//           }
+//         }
+//         // Store other properties with their values
+//         else {
+//           properties.push(`${propName}__${propValue}`);
+//         }
+//       });
+//     }
 
-    if (errorEl) {
-      status  = 'error';
-      failMsg = (errorEl.getAttribute('message') || '') + '\n' + (errorEl.textContent || '');
-    } else if (failEl) {
-      const ftype = (failEl.getAttribute('type') || '').toLowerCase();
-      if (ftype === 'pytest.xfail' || ftype.includes('xfail')) {
-        status = 'xpass'; // strict-mode xpass recorded as <failure type="pytest.xfail">
-      } else {
-        status = 'failed';
-      }
-      failMsg = (failEl.getAttribute('message') || '') + '\n' + (failEl.textContent || '');
-    } else if (skipEl) {
-      const stype = (skipEl.getAttribute('type') || '').toLowerCase();
-      const smsg  = skipEl.getAttribute('message') || skipEl.textContent || '';
-      status  = (stype === 'pytest.xfail' || stype.includes('xfail')) ? 'xfail' : 'skipped';
-      failMsg = smsg;
-    } else {
-      isBare = true; // bare testcase — passed OR non-strict xpass
-    }
+//     if (errorEl) {
+//       status  = 'error';
+//       failMsg = (errorEl.getAttribute('message') || '') + '\n' + (errorEl.textContent || '');
+//     } else if (failEl) {
+//       const ftype = (failEl.getAttribute('type') || '').toLowerCase();
+//       if (ftype === 'pytest.xfail' || ftype.includes('xfail')) {
+//         status = 'xpass'; // strict-mode xpass recorded as <failure type="pytest.xfail">
+//       } else {
+//         status = 'failed';
+//       }
+//       failMsg = (failEl.getAttribute('message') || '') + '\n' + (failEl.textContent || '');
+//     } else if (skipEl) {
+//       const stype = (skipEl.getAttribute('type') || '').toLowerCase();
+//       const smsg  = skipEl.getAttribute('message') || skipEl.textContent || '';
+//       status  = (stype === 'pytest.xfail' || stype.includes('xfail')) ? 'xfail' : 'skipped';
+//       failMsg = smsg;
+//     } else {
+//       isBare = true; // bare testcase — passed OR non-strict xpass
+//     }
 
-    rawTests.push({ name, cls, timeVal, file, status, failMsg, isBare, properties });
-  });
+//     rawTests.push({ name, cls, timeVal, file, status, failMsg, isBare, properties });
+//   });
 
-  // Second pass: promote bare 'passed' → 'xpass'
-  //
-  // Key insight: pytest suite attributes record:
-  //   skipped  = xfail_count + hard_skip_count   (both use <skipped> child)
-  //   failures = true_fail_count + strict_xpass_count  (strict xpass uses <failure type="pytest.xfail">)
-  //   errors   = error_count
-  //   tests    = total
-  //
-  // Therefore: passed_count + xpass_count = tests - skipped - failures - errors
-  //   (because both passed and non-strict-xpass are bare testcases)
-  //
-  // From our first pass we know:
-  //   bare_count  = rawTests.filter(isBare).length  = passed + non_strict_xpass
-  //   strict_xpass = rawTests.filter(status==='xpass').length  (already detected via <failure type=xfail>)
-  //   true_fail    = rawTests.filter(status==='failed').length
-  //   error_count  = rawTests.filter(status==='error').length
-  //   xml_skipped  = rawTests.filter(status==='xfail'||'skipped').length
-  //
-  // From suite attrs: expected_bare = suiteTests - suiteSkipped - suiteFailures - suiteErrors
-  // This gives passed + non_strict_xpass.
-  //
-  // Now: suiteFailures = true_fail + strict_xpass + (non_strict_xpass counted as failures in some pytest versions)
-  // In pytest non-strict xfail mode (your case): non_strict xpass is NOT counted in failures attr.
-  // So: suiteFailures = true_fail + strict_xpass
-  //     expected_bare = suiteTests - suiteSkipped - (true_fail + strict_xpass) - suiteErrors
-  //                   = suiteTests - suiteSkipped - suiteFailures - suiteErrors
-  //
-  // And bare_count (from XML) should equal expected_bare. If it does, then ALL bare are either
-  // passed or xpass. To split: non_strict_xpass = bare_count - true_pass.
-  // But we don't know true_pass from the XML alone — it's not an attribute.
-  //
-  // However: pytest summary says "X passed, Y xpassed". The suite XML attrs don't expose this split.
-  // BUT: if we trust that in Spyre's test framework, xpass is the ONLY thing that produces bare testcases
-  // (i.e., there are no genuinely passing tests in this run), then bare_count = xpass_count.
-  //
-  // More generally: we can compute non_strict_xpass by comparing what suiteFailures says vs what
-  // the raw failure/error/xfail child elements account for:
-  //
-  //   accounted_failures = true_fail_raw + strict_xpass_raw + xml_skip_count
-  //   accounted_failures should equal suiteSkipped + suiteFailures + suiteErrors
-  //
-  //   If suiteFailures > (true_fail_raw + strict_xpass_raw):
-  //     → some xpass are counted as failures in the suite attr (strict mode or old pytest)
-  //     → non_strict_xpass_as_failures = suiteFailures - true_fail_raw - strict_xpass_raw
-  //
-  // For non-strict (your case): suiteFailures = true_fail_raw = 1. strict_xpass_raw = 0. 
-  //   non_strict_xpass_as_failures = 1 - 1 - 0 = 0. ← previous (wrong) approach stopped here.
-  //
-  // The remaining xpass (non-strict) = bare_count - true_pass_count.
-  // Since we can't get true_pass from XML, use:
-  //   true_pass = suiteTests - suiteSkipped - suiteFailures - suiteErrors - bare_count
-  //             = expected_bare - bare_count ... this would be 0 if they match, which they do.
-  //
-  // So that gives true_pass = 0, meaning ALL bare = xpass. That is the correct answer here!
-  // The formula: true_pass = max(0, (suiteTests - suiteSkipped - suiteFailures - suiteErrors) - bare_count)
-  //              xpass_bare = bare_count - true_pass
+//   // Second pass: promote bare 'passed' → 'xpass'
+//   //
+//   // Key insight: pytest suite attributes record:
+//   //   skipped  = xfail_count + hard_skip_count   (both use <skipped> child)
+//   //   failures = true_fail_count + strict_xpass_count  (strict xpass uses <failure type="pytest.xfail">)
+//   //   errors   = error_count
+//   //   tests    = total
+//   //
+//   // Therefore: passed_count + xpass_count = tests - skipped - failures - errors
+//   //   (because both passed and non-strict-xpass are bare testcases)
+//   //
+//   // From our first pass we know:
+//   //   bare_count  = rawTests.filter(isBare).length  = passed + non_strict_xpass
+//   //   strict_xpass = rawTests.filter(status==='xpass').length  (already detected via <failure type=xfail>)
+//   //   true_fail    = rawTests.filter(status==='failed').length
+//   //   error_count  = rawTests.filter(status==='error').length
+//   //   xml_skipped  = rawTests.filter(status==='xfail'||'skipped').length
+//   //
+//   // From suite attrs: expected_bare = suiteTests - suiteSkipped - suiteFailures - suiteErrors
+//   // This gives passed + non_strict_xpass.
+//   //
+//   // Now: suiteFailures = true_fail + strict_xpass + (non_strict_xpass counted as failures in some pytest versions)
+//   // In pytest non-strict xfail mode (your case): non_strict xpass is NOT counted in failures attr.
+//   // So: suiteFailures = true_fail + strict_xpass
+//   //     expected_bare = suiteTests - suiteSkipped - (true_fail + strict_xpass) - suiteErrors
+//   //                   = suiteTests - suiteSkipped - suiteFailures - suiteErrors
+//   //
+//   // And bare_count (from XML) should equal expected_bare. If it does, then ALL bare are either
+//   // passed or xpass. To split: non_strict_xpass = bare_count - true_pass.
+//   // But we don't know true_pass from the XML alone — it's not an attribute.
+//   //
+//   // However: pytest summary says "X passed, Y xpassed". The suite XML attrs don't expose this split.
+//   // BUT: if we trust that in Spyre's test framework, xpass is the ONLY thing that produces bare testcases
+//   // (i.e., there are no genuinely passing tests in this run), then bare_count = xpass_count.
+//   //
+//   // More generally: we can compute non_strict_xpass by comparing what suiteFailures says vs what
+//   // the raw failure/error/xfail child elements account for:
+//   //
+//   //   accounted_failures = true_fail_raw + strict_xpass_raw + xml_skip_count
+//   //   accounted_failures should equal suiteSkipped + suiteFailures + suiteErrors
+//   //
+//   //   If suiteFailures > (true_fail_raw + strict_xpass_raw):
+//   //     → some xpass are counted as failures in the suite attr (strict mode or old pytest)
+//   //     → non_strict_xpass_as_failures = suiteFailures - true_fail_raw - strict_xpass_raw
+//   //
+//   // For non-strict (your case): suiteFailures = true_fail_raw = 1. strict_xpass_raw = 0. 
+//   //   non_strict_xpass_as_failures = 1 - 1 - 0 = 0. ← previous (wrong) approach stopped here.
+//   //
+//   // The remaining xpass (non-strict) = bare_count - true_pass_count.
+//   // Since we can't get true_pass from XML, use:
+//   //   true_pass = suiteTests - suiteSkipped - suiteFailures - suiteErrors - bare_count
+//   //             = expected_bare - bare_count ... this would be 0 if they match, which they do.
+//   //
+//   // So that gives true_pass = 0, meaning ALL bare = xpass. That is the correct answer here!
+//   // The formula: true_pass = max(0, (suiteTests - suiteSkipped - suiteFailures - suiteErrors) - bare_count)
+//   //              xpass_bare = bare_count - true_pass
 
-  const bareCount        = rawTests.filter(r => r.isBare).length;
-  const trueFailRaw      = rawTests.filter(r => r.status === 'failed' || r.status === 'error').length;
-  const strictXpassRaw   = rawTests.filter(r => r.status === 'xpass').length;
-  const expectedBare     = suiteTests - suiteSkipped - suiteFailures - suiteErrors;
-  // true_pass = expectedBare - bareCount would be negative if xpass counted in failures.
-  // true_pass = max(0, expectedBare - bareCount) won't work since expectedBare == bareCount always.
-  // 
-  // Instead: non_strict_xpass counted as failures in suite = max(0, suiteFailures - trueFailRaw - strictXpassRaw)
-  // Then total xpass = strictXpassRaw + non_strict_xpass_in_failures + bare_xpass
-  // bare_xpass = bareCount - true_pass
-  // true_pass = suiteTests - suiteSkipped - (suiteFailures + non_strict_xpass_counted_as_failures_extra) - suiteErrors - bareCount
-  // 
-  // Simplest correct formula that works for BOTH strict and non-strict:
-  //   total_accounted_as_pass_or_xpass = suiteTests - suiteSkipped - suiteFailures - suiteErrors
-  //   non_strict_in_failures = max(0, suiteFailures - trueFailRaw - strictXpassRaw)
-  //   total_xpass = strictXpassRaw + non_strict_in_failures + (bareCount - true_pass)
-  //   true_pass = total_accounted_as_pass_or_xpass - non_strict_in_failures - (bareCount - true_pass)... circular
-  //
-  // FINAL SIMPLEST that works: promote ALL bare to xpass, then subtract suite-reported pass count.
-  // suite doesn't report pass count. So:
-  //   xpass_bare_count = bareCount - max(0, suiteTests - suiteSkipped - suiteFailures - suiteErrors - bareCount)
-  // When expectedBare == bareCount (normal case): xpass_bare = bareCount - 0 = bareCount. ✓
-  // When there are truly passed tests: expectedBare > bareCount would be impossible (expectedBare = bareCount by def).
-  // Actually expectedBare is derived from attrs and bareCount from XML children—they should match.
-  // If they differ, the difference IS the non_strict_xpass counted in failures.
+//   const bareCount        = rawTests.filter(r => r.isBare).length;
+//   const trueFailRaw      = rawTests.filter(r => r.status === 'failed' || r.status === 'error').length;
+//   const strictXpassRaw   = rawTests.filter(r => r.status === 'xpass').length;
+//   const expectedBare     = suiteTests - suiteSkipped - suiteFailures - suiteErrors;
+//   // true_pass = expectedBare - bareCount would be negative if xpass counted in failures.
+//   // true_pass = max(0, expectedBare - bareCount) won't work since expectedBare == bareCount always.
+//   // 
+//   // Instead: non_strict_xpass counted as failures in suite = max(0, suiteFailures - trueFailRaw - strictXpassRaw)
+//   // Then total xpass = strictXpassRaw + non_strict_xpass_in_failures + bare_xpass
+//   // bare_xpass = bareCount - true_pass
+//   // true_pass = suiteTests - suiteSkipped - (suiteFailures + non_strict_xpass_counted_as_failures_extra) - suiteErrors - bareCount
+//   // 
+//   // Simplest correct formula that works for BOTH strict and non-strict:
+//   //   total_accounted_as_pass_or_xpass = suiteTests - suiteSkipped - suiteFailures - suiteErrors
+//   //   non_strict_in_failures = max(0, suiteFailures - trueFailRaw - strictXpassRaw)
+//   //   total_xpass = strictXpassRaw + non_strict_in_failures + (bareCount - true_pass)
+//   //   true_pass = total_accounted_as_pass_or_xpass - non_strict_in_failures - (bareCount - true_pass)... circular
+//   //
+//   // FINAL SIMPLEST that works: promote ALL bare to xpass, then subtract suite-reported pass count.
+//   // suite doesn't report pass count. So:
+//   //   xpass_bare_count = bareCount - max(0, suiteTests - suiteSkipped - suiteFailures - suiteErrors - bareCount)
+//   // When expectedBare == bareCount (normal case): xpass_bare = bareCount - 0 = bareCount. ✓
+//   // When there are truly passed tests: expectedBare > bareCount would be impossible (expectedBare = bareCount by def).
+//   // Actually expectedBare is derived from attrs and bareCount from XML children—they should match.
+//   // If they differ, the difference IS the non_strict_xpass counted in failures.
 
-  const nonStrictInFailures = Math.max(0, suiteFailures - trueFailRaw - strictXpassRaw);
-  // Only promote non-strict xpass that are counted in suite.failures
-  // Keep all other bare testcases as 'passed' (normal passing tests)
-  let xpassToPromote = nonStrictInFailures;
-  for (const r of rawTests) {
-    if (xpassToPromote <= 0) break;
-    if (r.isBare) { r.status = 'xpass'; xpassToPromote--; }
-  }
-  // Remaining bare tests stay as 'passed'
+//   const nonStrictInFailures = Math.max(0, suiteFailures - trueFailRaw - strictXpassRaw);
+//   // Only promote non-strict xpass that are counted in suite.failures
+//   // Keep all other bare testcases as 'passed' (normal passing tests)
+//   let xpassToPromote = nonStrictInFailures;
+//   for (const r of rawTests) {
+//     if (xpassToPromote <= 0) break;
+//     if (r.isBare) { r.status = 'xpass'; xpassToPromote--; }
+//   }
+//   // Remaining bare tests stay as 'passed'
 
-  // Third pass: extract metadata and push to tests[]
-  const dtypeNames = ['float16','float32','float64','bfloat16','int8','int16','int32','int64','uint8','bool','complex64','complex128','complex32'];
-  const testMethods = ['test_contig_vs_transposed','test_scalar_support','test_add','test_forward','test_compare_cpu'];
+//   // Third pass: extract metadata and push to tests[]
+//   const dtypeNames = ['float16','float32','float64','bfloat16','int8','int16','int32','int64','uint8','bool','complex64','complex128','complex32'];
+//   const testMethods = ['test_contig_vs_transposed','test_scalar_support','test_add','test_forward','test_compare_cpu'];
 
-  // Track if report has op__ or module__ tags
-  let hasOpTags = false;
-  let hasModuleTags = false;
+//   // Track if report has op__ or module__ tags
+//   let hasOpTags = false;
+//   let hasModuleTags = false;
 
-  rawTests.forEach(({ name, cls, timeVal, file, status, failMsg, properties }) => {
-    // Extract [model_tag] brackets
-    const tags = [];
-    const re = /\[([^\[\]]+)\]/g;
-    let m;
-    while ((m = re.exec(name)) !== null) {
-      m[1].split('][').forEach(t => { if (t && !tags.includes(t)) tags.push(t); });
-    }
+//   rawTests.forEach(({ name, cls, timeVal, file, status, failMsg, properties }) => {
+//     // Extract [model_tag] brackets
+//     const tags = [];
+//     const re = /\[([^\[\]]+)\]/g;
+//     let m;
+//     while ((m = re.exec(name)) !== null) {
+//       m[1].split('][').forEach(t => { if (t && !tags.includes(t)) tags.push(t); });
+//     }
 
-    // Extract dtype and op from structured properties first
-    let opName = '(no op)', dtype = '', shortName = name;
-    if (properties && properties.length > 0) {
-      const dtypeTag = properties.find(prop => prop.startsWith('dtype__'));
-      if (dtypeTag) {
-        dtype = dtypeTag.substring(7); // Remove 'dtype__' prefix for display
-      }
-    }
-    if (shortName.endsWith('_spyre'))      shortName = shortName.slice(0, -6);
-    if (shortName.endsWith('_privateuse1')) shortName = shortName.slice(0, -12);
+//     // Extract dtype and op from structured properties first
+//     let opName = '(no op)', dtype = '', shortName = name;
+//     if (properties && properties.length > 0) {
+//       const dtypeTag = properties.find(prop => prop.startsWith('dtype__'));
+//       if (dtypeTag) {
+//         dtype = dtypeTag.substring(7); // Remove 'dtype__' prefix for display
+//       }
+//     }
+//     if (shortName.endsWith('_spyre'))      shortName = shortName.slice(0, -6);
+//     if (shortName.endsWith('_privateuse1')) shortName = shortName.slice(0, -12);
 
-    let testMethod = '';
-    for (const tm of testMethods) {
-      if (shortName === tm || shortName.startsWith(tm + '_')) {
-        testMethod = tm;
-        break;
-      }
-    }
-    if (!testMethod) {
-      const parts = shortName.split('_');
-      testMethod = parts.slice(0,3).join('_');
-    }
+//     let testMethod = '';
+//     for (const tm of testMethods) {
+//       if (shortName === tm || shortName.startsWith(tm + '_')) {
+//         testMethod = tm;
+//         break;
+//       }
+//     }
+//     if (!testMethod) {
+//       const parts = shortName.split('_');
+//       testMethod = parts.slice(0,3).join('_');
+//     }
 
-    // Extract op ONLY from op__ tag in properties
-    if (properties && properties.length > 0) {
-      const opTag = properties.find(prop => prop.startsWith('op__'));
-      if (opTag) {
-        opName = opTag.substring(4); // Remove 'op__' prefix for display
-        hasOpTags = true;
-      }
-      // Check for module tags
-      if (!hasModuleTags && properties.some(prop => prop.startsWith('module__'))) {
-        hasModuleTags = true;
-      }
-    }
+//     // Extract op ONLY from op__ tag in properties
+//     if (properties && properties.length > 0) {
+//       const opTag = properties.find(prop => prop.startsWith('op__'));
+//       if (opTag) {
+//         opName = opTag.substring(4); // Remove 'op__' prefix for display
+//         hasOpTags = true;
+//       }
+//       // Check for module tags
+//       if (!hasModuleTags && properties.some(prop => prop.startsWith('module__'))) {
+//         hasModuleTags = true;
+//       }
+//     }
 
-    const clsParts = cls.split('.');
-    const clsShort = clsParts[clsParts.length-1] || cls;
+//     const clsParts = cls.split('.');
+//     const clsShort = clsParts[clsParts.length-1] || cls;
 
-    tests.push({ name, cls, clsShort, timeVal, file, status, failMsg: failMsg.trim(), tags, testMethod, opName, dtype, properties: properties || [] });
-  });
+//     tests.push({ name, cls, clsShort, timeVal, file, status, failMsg: failMsg.trim(), tags, testMethod, opName, dtype, properties: properties || [] });
+//   });
   
-  // Store metadata about available tags as non-enumerable properties
-  Object.defineProperty(tests, 'hasOpTags', { value: hasOpTags, enumerable: false });
-  Object.defineProperty(tests, 'hasModuleTags', { value: hasModuleTags, enumerable: false });
+//   // Store metadata about available tags as non-enumerable properties
+//   Object.defineProperty(tests, 'hasOpTags', { value: hasOpTags, enumerable: false });
+//   Object.defineProperty(tests, 'hasModuleTags', { value: hasModuleTags, enumerable: false });
   
-  return tests;
-}
+//   return tests;
+// }
 
 function buildGroupMap(tests, by) {
   const map = {};
@@ -1543,21 +1351,10 @@ function selectRun(i) {
   selectedGroup = null;
   updateRunList();
   
-  // Update submenu visibility based on available tags
-  const run = currentRun();
-  if (run && run.tests) {
-    const opItem = document.getElementById('nav-explorer-op');
-    const moduleItem = document.getElementById('nav-explorer-module');
-    
-    if (opItem) opItem.style.display = run.tests.hasOpTags ? 'block' : 'none';
-    if (moduleItem) moduleItem.style.display = run.tests.hasModuleTags ? 'block' : 'none';
-  }
-  
   // Refresh all pages with the new run data
   renderOverview();
   renderTestDetails();
-  renderCoverageExplorer();
-  renderTrend();
+  // renderTrend(); // COMMENTED OUT
   renderReports();
 }
 function removeRun(i) {
@@ -1565,7 +1362,7 @@ function removeRun(i) {
   if (selectedRunIndex >= runs.length) selectedRunIndex = runs.length - 1;
   updateRunList();
   renderOverview();
-  renderTrend();
+  // renderTrend(); // COMMENTED OUT
   renderReports();
 }
 function clearAll() {
@@ -1574,7 +1371,7 @@ function clearAll() {
   updateRunList();
   selectedGroup=null;
   renderOverview();
-  renderTrend();
+  // renderTrend(); // COMMENTED OUT
   renderReports();
 }
 
@@ -1620,7 +1417,7 @@ function renderReports() {
         <td style="text-align:center">
           <button class="action-menu-btn" onclick="toggleReportActionMenu(${idx}, event)" title="Actions">⋮</button>
           <div class="action-dropdown" id="action-menu-${idx}" style="display:none">
-            <button class="action-dropdown-item" onclick="selectRun(${idx});switchTab('overview');closeAllMenus()">View Details</button>
+            <button class="action-dropdown-item" onclick="selectRun(${idx});switchTab('overview');closeAllMenus()">view details</button>
             <button class="action-dropdown-item" onclick="exportRunCSV(${idx});closeAllMenus()">Export CSV</button>
             <button class="action-dropdown-item danger" onclick="removeRun(${idx});renderReports();closeAllMenus()">Delete Report</button>
           </div>
@@ -1680,19 +1477,16 @@ function switchTab(tab) {
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
-  const labels = {overview:'Summary',details:'Details',explorer:'Explorer',trend:'History',reports:'Reports',upload:'Upload'};
+  const labels = {overview:'Summary',details:'Details',trend:'History',reports:'Reports',upload:'Upload'};
   document.querySelectorAll('.tab-btn').forEach(b => {
     if (b.textContent.trim().startsWith(labels[tab]?.charAt(0) || '?')) b.classList.add('active');
   });
   
-  // Show/hide topbar controls based on tab
-  const topbarControls = document.getElementById('topbar-controls');
+  // Show/hide topbar run info based on tab
   const topbarRunInfo = document.getElementById('topbar-run-info');
   if (tab === 'upload' || tab === 'reports') {
-    if (topbarControls) topbarControls.style.display = 'none';
     if (topbarRunInfo) topbarRunInfo.style.display = 'none';
   } else {
-    if (topbarControls && runs.length > 0) topbarControls.style.display = 'flex';
     if (topbarRunInfo && runs.length > 0) topbarRunInfo.style.display = 'block';
   }
   
@@ -1704,33 +1498,17 @@ function switchTab(tab) {
     document.getElementById('nav-details')?.classList.add('active');
     renderTestDetails();
   }
-  if (tab === 'explorer') {
-    document.getElementById('nav-explorer')?.classList.add('active');
-    // Show submenu when explorer is selected
-    const submenu = document.getElementById('explorer-submenu');
-    if (submenu) submenu.style.display = 'block';
-    renderCoverageExplorer();
-  } else {
-    // Hide submenu when other tabs are selected
-    const submenu = document.getElementById('explorer-submenu');
-    if (submenu) submenu.style.display = 'none';
-    // Ensure detail view is hidden when leaving explorer
-    const detailView = document.getElementById('explorer-detail-view');
-    if (detailView) detailView.style.display = 'none';
-    const groupsView = document.getElementById('explorer-groups-view');
-    if (groupsView) groupsView.style.display = 'block';
-  }
-  if (tab === 'trend') {
-    document.getElementById('nav-history')?.classList.add('active');
-    renderTrend();
-  }
+  // if (tab === 'trend') {
+  //   document.getElementById('nav-history')?.classList.add('active');
+  //    renderTrend(); // COMMENTED OUT
+  // }
   if (tab === 'reports') {
     document.getElementById('nav-reports')?.classList.add('active');
     renderReports();
     // Auto-load commits when reports tab is opened
-    console.log('[switchTab] Switched to reports tab, __commitsLoaded:', window.__commitsLoaded);
+    
     if (!window.__commitsLoaded) {
-      console.log('[switchTab] Initializing commits table for the first time');
+      
       window.__commitsLoaded = true;
       initCommitsTable();
     } else {
@@ -1759,96 +1537,27 @@ document.addEventListener('DOMContentLoaded', () => {
     document.querySelector('.main')?.classList.add('sidebar-collapsed');
   }
   
-  // Initialize commits table if reports panel is active on load
-  const reportsPanel = document.getElementById('panel-reports');
-  if (reportsPanel && reportsPanel.classList.contains('active')) {
-    // Use setTimeout to ensure spyre-api-client.js has loaded
-    setTimeout(() => {
-      if (!window.__commitsLoaded) {
-        window.__commitsLoaded = true;
-        initCommitsTable();
-      }
-    }, 100);
-  }
+  // Render overview initially to show "No data" message if no data is loaded
+  renderOverview();
+  
+  // Show loader immediately
+  showLoader('Loading latest commit...');
+  
+  // Auto-load latest commit on page load (regardless of active panel)
+  // Use setTimeout to ensure spyre-api-client.js has loaded
+  setTimeout(() => {
+    if (!window.__commitsLoaded) {
+      window.__commitsLoaded = true;
+      initCommitsTable();
+    }
+  }, 100);
 });
-
-// ─── explorer submenu functions ──────────────────────────────────────────────
-function toggleExplorerSubmenu() {
-  const submenu = document.getElementById('explorer-submenu');
-  if (submenu) {
-    const isVisible = submenu.style.display !== 'none';
-    submenu.style.display = isVisible ? 'none' : 'block';
-  }
-  // Also switch to explorer tab
-  switchTab('explorer');
-}
-
-function updateSearchPlaceholders() {
-  const placeholders = {
-    'model': 'Search models or tests…',
-    'module': 'Search modules or tests…',
-    'op': 'Search operations or tests…',
-    'dtype': 'Search dtypes or tests…'
-  };
-  
-  const explorerSearch = document.getElementById('explorer-search');
-  if (explorerSearch) {
-    explorerSearch.placeholder = placeholders[groupBy] || 'Search groups or tests…';
-  }
-}
-
-function switchExplorerGroupBy(groupByValue) {
-  // Update active state in submenu
-  document.querySelectorAll('.nav-subitem').forEach(item => item.classList.remove('active'));
-  document.getElementById('nav-explorer-' + groupByValue)?.classList.add('active');
-  
-  // Update groupBy and render
-  groupBy = groupByValue;
-  rebuildGroupMaps();
-  
-  // Update search placeholder
-  updateSearchPlaceholders();
-  
-  // Update the groupBy label in the page header
-  updateExplorerGroupByLabel();
-  
-  // Make sure we're on explorer tab and showing groups view
-  switchTab('explorer');
-  
-  // Populate model selector (will show/hide based on groupBy)
-  populateExplorerModelSelector();
-  
-  // If in detail view, go back to groups view
-  if (document.getElementById('explorer-detail-view').style.display !== 'none') {
-    backToGroupsView();
-  }
-}
-
-function updateExplorerGroupByLabel() {
-  const labels = {
-    'model': 'Model Tag',
-    'module': 'Module',
-    'op': 'Op Name',
-    'dtype': 'Dtype'
-  };
-  const labelEl = document.getElementById('explorer-groupby-label');
-  if (labelEl) {
-    labelEl.textContent = labels[groupBy] || groupBy;
-  }
-}
-
 
 let selectedRunIndex = -1;
 let currentSubTab = 'summary';
 let summaryPieChart = null;
 let detailsCurrentPage = 1;
 let detailsItemsPerPage = 10;
-let drawerCurrentPage = 1;
-let drawerItemsPerPage = 10;
-let drawerGroupBy = 'none';
-let drawerTests = [];
-let groupsCurrentPage = 1;
-let groupsItemsPerPage = 10;
 
 // ─── render functions for each panel ─────────────────────────────────────────
 function renderTestDetails() {
@@ -1864,102 +1573,6 @@ function renderTestDetails() {
   filterTestDetails();
 }
 
-function renderCoverageExplorer() {
-  if (selectedRunIndex < 0) return;
-  
-  // Update filename display
-  const run = currentRun();
-  const filenameEl = document.getElementById('explorer-filename');
-  if (filenameEl && run) {
-    filenameEl.textContent = run.filename || '—';
-  }
-  
-  // Ensure we're showing groups view, not detail view
-  document.getElementById('explorer-groups-view').style.display = 'block';
-  document.getElementById('explorer-detail-view').style.display = 'none';
-  
-  // Update active state in submenu based on current groupBy
-  document.querySelectorAll('.nav-subitem').forEach(item => item.classList.remove('active'));
-  document.getElementById('nav-explorer-' + groupBy)?.classList.add('active');
-  
-  // Update search placeholder
-  updateSearchPlaceholders();
-  
-  groupsCurrentPage = 1;
-  
-  // Populate model selector (will show/hide based on groupBy)
-  populateExplorerModelSelector();
-  
-  filterExplorerTests();
-}
-
-// ─── helper function to display group name without prefix ────────────────────
-function displayGroupName(name) {
-  if (name.startsWith('model__')) return name.substring(7);
-  if (name.startsWith('module__')) return name.substring(8);
-  return name;
-}
-
-// ─── explorer model filter ────────────────────────────────────────────────────
-function populateExplorerModelSelector() {
-  const run = currentRun();
-  const selector = document.getElementById('explorer-model-selector');
-  const container = document.getElementById('explorer-model-filter-container');
-  
-  if (!run || !selector || !container) return;
-  
-  // Show model filter for all groupBy modes
-  container.style.display = 'flex';
-  
-  // Extract models from test properties (XML <property> tags)
-  // Only include tags that start with "model__"
-  const modelSet = new Set();
-  run.tests.forEach(test => {
-    // First check properties (from XML <property> tags)
-    if (test.properties && test.properties.length > 0) {
-      test.properties.forEach(prop => {
-        if (prop.startsWith('model__')) {
-          modelSet.add(prop);
-        }
-      });
-    }
-    // Fallback to tags (from test name brackets) if no properties
-    else if (test.tags && test.tags.length > 0) {
-      test.tags.forEach(tag => {
-        if (tag.startsWith('model__')) {
-          modelSet.add(tag);
-        }
-      });
-    }
-  });
-  const models = Array.from(modelSet).sort();
-  
-  if (models.length === 0) {
-    selector.innerHTML = '<option value="">No models available</option>';
-    selector.disabled = true;
-  } else {
-    selector.innerHTML = '<option value="">All Models</option>' +
-      models.map(model => `<option value="${escAttr(model)}">${esc(displayGroupName(model))}</option>`).join('');
-    selector.disabled = false;
-  }
-}
-
-function filterExplorerByModel() {
-  // Just trigger the existing filter function
-  filterExplorerTests();
-}
-
-// Legacy function - no longer needed but kept for compatibility
-function switchSubTab(subTab) {
-  // This function is deprecated - use switchTab instead
-  if (subTab === 'summary') {
-    switchTab('overview');
-  } else if (subTab === 'details') {
-    switchTab('details');
-  } else if (subTab === 'explorer') {
-    switchTab('explorer');
-  }
-}
 
 function setGroupBy(by) {
   groupBy = by;
@@ -1968,7 +1581,6 @@ function setGroupBy(by) {
   document.querySelectorAll('.gb-btn').forEach(b => b.classList.remove('active'));
   event.target.classList.add('active');
   rebuildGroupMaps();
-  closeDrawer();
   renderOverview();
 }
 
@@ -1987,12 +1599,20 @@ function renderOverview() {
     document.getElementById('overview-content').style.display = 'none';
     return;
   }
+  
+  // Check if run has no tests
+  if (!run.tests || run.tests.length === 0) {
+    document.getElementById('overview-empty').style.display = 'block';
+    document.getElementById('overview-empty').innerHTML = '<div style="text-align:center;padding:40px"><div style="font-size:18px;color:var(--text2);margin-bottom:12px">⚠️ No Test Data Available</div><div style="font-size:14px;color:var(--text3)">The selected run contains no test results. This may be due to a data loading error.</div></div>';
+    document.getElementById('overview-content').style.display = 'none';
+    return;
+  }
+  
   document.getElementById('overview-empty').style.display = 'none';
   document.getElementById('overview-content').style.display = 'block';
 
-  // Populate run selector dropdowns (both old and new topbar)
+  // Populate run selector dropdown
   const selector = document.getElementById('run-selector');
-  const topbarSelector = document.getElementById('topbar-run-selector');
   const selectorHTML = runs.map((r, i) => {
     const stats = getRunStats(r);
     const p = stats.total ? Math.round(stats.passed / stats.total * 100) : 0;
@@ -2002,20 +1622,13 @@ function renderOverview() {
   if (selector && runs.length > 0) {
     selector.innerHTML = selectorHTML;
   }
-  if (topbarSelector && runs.length > 0) {
-    topbarSelector.innerHTML = selectorHTML;
-  }
   
   // Update topbar run info
   const topbarRunInfo = document.getElementById('topbar-run-info');
   const topbarRunName = document.getElementById('topbar-run-name');
-  const topbarControls = document.getElementById('topbar-controls');
   if (topbarRunInfo && topbarRunName && runs.length > 0) {
     topbarRunInfo.style.display = 'block';
     topbarRunName.textContent = run.filename;
-  }
-  if (topbarControls && runs.length > 0) {
-    topbarControls.style.display = 'flex';
   }
   
   // Populate all filters
@@ -2062,17 +1675,24 @@ function renderOverview() {
     {label:'xfail',          val:stats.xfail,            sub:pct(stats.xfail)+'%',    color:'var(--xfail)', status:'xfail'},
     {label:'xpass',          val:stats.xpass,            sub:pct(stats.xpass)+'%',    color:'var(--xpass)', status:'xpass'},
     {label:'skipped',        val:stats.skipped,          sub:pct(stats.skipped)+'%',  color:'var(--skip)', status:'skipped'},
-    {label:'duration',       val:run._isAggregated ? 'N/A' : totalTime.toFixed(1)+'s', sub:run._isAggregated ? 'Aggregated' : (totalTime/60).toFixed(1)+' min', color:'var(--text)', status:'duration'},
   ].map(m => `<div class="metric">
     <div class="metric-label">
       <span>${m.label}</span>
-      ${m.status !== 'duration' ? `<button class="metric-download" onclick="downloadMetricData('${m.status}')" title="Download ${m.label} test cases">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-      </button>` : ''}
+      <div style="display:flex;gap:4px">
+        <button class="metric-download" onclick="viewMetricDetails('${m.status}')" title="View ${m.label} test cases">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+        <button class="metric-download" onclick="downloadMetricData('${m.status}')" title="Download ${m.label} test cases">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+        </button>
+      </div>
     </div>
     <div class="metric-value" style="color:${m.color}">${m.val}</div>
     <div class="metric-sub">${m.sub}</div>
@@ -2112,35 +1732,140 @@ function renderSummary() {
     total = stats.total;
   }
   
+  // Check if there's no data
+  if (total === 0) {
+    const ctx = document.getElementById('summary-pie-chart');
+    if (ctx && ctx.parentElement) {
+      ctx.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:250px;color:var(--text3);font-size:14px">No test data available</div>';
+    }
+    if (summaryPieChart) {
+      summaryPieChart.destroy();
+      summaryPieChart = null;
+    }
+    return;
+  }
+  
   // Render pie chart
   const ctx = document.getElementById('summary-pie-chart');
   if (ctx) {
     if (summaryPieChart) summaryPieChart.destroy();
     const colors = getChartColors();
-    summaryPieChart = new Chart(ctx.getContext('2d'), {
+    // Add shadow effect to canvas
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const canvasCtx = ctx.getContext('2d');
+    canvasCtx.shadowColor = isDark ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.15)';
+    canvasCtx.shadowBlur = 20;
+    canvasCtx.shadowOffsetX = 0;
+    canvasCtx.shadowOffsetY = 4;
+    
+    summaryPieChart = new Chart(canvasCtx, {
       type: 'doughnut',
       data: {
         labels: ['Passed', 'Failed', 'Xfail', 'Xpass', 'Skipped'],
         datasets: [{
           data: [stats.passed - stats.xpass, stats.failed, stats.xfail, stats.xpass, stats.skipped],
           backgroundColor: ['#16a34a', '#dc2626', '#d97706', '#6366f1', '#6b7280'],
-          borderWidth: 2,
-          borderColor: colors.border
+          hoverBackgroundColor: isDark ? ['#22c55e', '#ef4444', '#f59e0b', '#818cf8', '#9ca3af'] : ['#15803d', '#b91c1c', '#c2410c', '#4f46e5', '#52525b'],
+          borderWidth: 4,
+          borderColor: isDark ? '#1e293b' : '#ffffff',
+          hoverBorderWidth: 8,
+          hoverBorderColor: isDark ? '#475569' : '#cbd5e1',
+          hoverOffset: 20,
+          spacing: 0
         }]
       },
       options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
+        cutout: '65%',
+        layout: {
+          padding: {
+            left: 10,
+            right: 10,
+            top: 10,
+            bottom: 10
+          }
+        },
+        animation: {
+          animateRotate: true,
+          animateScale: true,
+          duration: 1000,
+          easing: 'easeInOutQuart'
+        },
         plugins: {
-          legend: { display: false },
+          legend: {
+            display: true,
+            position: 'right',
+            align: 'center',
+            onClick: (e, legendItem, legend) => {
+              const index = legendItem.index;
+              const chart = legend.chart;
+              const meta = chart.getDatasetMeta(0);
+              
+              // Toggle visibility
+              meta.data[index].hidden = !meta.data[index].hidden;
+              chart.update();
+            },
+            labels: {
+              font: {
+                family: 'IBM Plex Sans',
+                size: 13,
+                weight: '600',
+                lineHeight: 1.8
+              },
+              padding: 14,
+              usePointStyle: true,
+              pointStyle: 'rectRounded',
+              boxWidth: 12,
+              boxHeight: 12,
+              color: colors.text,
+              textAlign: 'left',
+              generateLabels: (chart) => {
+                const data = chart.data;
+                const currentColors = getChartColors();
+                return data.labels.map((label, i) => {
+                  const value = data.datasets[0].data[i];
+                  const pct = Math.round(value / total * 100);
+                  const meta = chart.getDatasetMeta(0);
+                  const hidden = meta.data[i].hidden;
+                  
+                  return {
+                    text: `${label}  ${pct}%`,
+                    fillStyle: hidden ? currentColors.text3 : data.datasets[0].backgroundColor[i],
+                    fontColor: currentColors.text,
+                    strokeStyle: data.datasets[0].backgroundColor[i],
+                    lineWidth: 2,
+                    hidden: hidden,
+                    index: i,
+                    textDecoration: hidden ? 'line-through' : ''
+                  };
+                });
+              }
+            }
+          },
           tooltip: {
+            enabled: true,
+            backgroundColor: colors.bg3,
+            titleColor: colors.text,
+            bodyColor: colors.text2,
+            borderColor: colors.border2,
+            borderWidth: 1,
+            padding: 12,
+            displayColors: true,
+            boxWidth: 10,
+            boxHeight: 10,
+            usePointStyle: true,
             callbacks: {
               label: (ctx) => {
                 const pct = Math.round(ctx.parsed / total * 100);
-                return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+                return ` ${ctx.label}: ${ctx.parsed} tests (${pct}%)`;
               }
             }
           }
+        },
+        interaction: {
+          mode: 'nearest',
+          intersect: true
         }
       }
     });
@@ -2174,6 +1899,13 @@ function renderSummary() {
 }
 
 function renderOverallCoverage(tests) {
+  // Check if there are no tests
+  if (!tests || tests.length === 0) {
+    document.getElementById('model-op-coverage').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:14px">No test data available</div>';
+    document.getElementById('model-module-coverage').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:14px">No test data available</div>';
+    return;
+  }
+  
   // Calculate operation coverage
   const opMap = {};
   tests.forEach(t => {
@@ -2185,21 +1917,35 @@ function renderOverallCoverage(tests) {
   });
   
   const totalOps = Object.keys(opMap).length;
-  // Fully passing: 100% pass rate (all tests passed, no failures, no skips, no xfail)
-  const fullyPassingOps = Object.values(opMap).filter(o => o.passed === o.total && o.total > 0).length;
-  // Partially failing: has at least one failed test
-  const partiallyFailingOps = Object.values(opMap).filter(o => o.failed > 0).length;
   
-  document.getElementById('model-op-coverage').innerHTML = [
-    {label: 'Total Ops', val: totalOps, color: 'var(--text)'},
-    {label: 'Fully Passing', val: fullyPassingOps, pct: totalOps > 0 ? Math.round((fullyPassingOps / totalOps) * 100) : 0, color: 'var(--pass)'},
-    {label: 'Partially Failing', val: partiallyFailingOps, pct: totalOps > 0 ? Math.round((partiallyFailingOps / totalOps) * 100) : 0, color: 'var(--fail)'}
+  // Check if no operations found
+  if (totalOps === 0) {
+    document.getElementById('model-op-coverage').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:14px">No operation data available</div>';
+  } else {
+    // Fully passing: 100% pass rate (all tests passed, no failures, no skips, no xfail)
+    const fullyPassingOps = Object.values(opMap).filter(o => o.passed === o.total && o.total > 0).length;
+    // Partially failing: NOT fully passing (includes ops with failures, xfails, skips, etc.)
+    const partiallyFailingOps = Object.values(opMap).filter(o => o.passed < o.total && o.total > 0).length;
+    
+    document.getElementById('model-op-coverage').innerHTML = [
+    {label: 'Total Ops', val: totalOps, color: 'var(--text)', filter: null},
+    {label: 'Fully Passing', val: fullyPassingOps, pct: totalOps > 0 ? Math.round((fullyPassingOps / totalOps) * 100) : 0, color: 'var(--pass)', filter: 'op_passing'},
+    {label: 'Partially Failing', val: partiallyFailingOps, pct: totalOps > 0 ? Math.round((partiallyFailingOps / totalOps) * 100) : 0, color: 'var(--fail)', filter: 'op_failing'}
   ].map(m =>
-    `<div style="padding:8px 10px;background:var(--bg3);border-radius:var(--radius);border-left:3px solid ${m.color}">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${m.label}</div>
+    `<div style="padding:8px 10px;background:var(--bg3);border-radius:var(--radius);border-left:3px solid ${m.color};position:relative">
+      <div style="font-size:10px;color:var(--text3);margin-bottom:3px;display:flex;justify-content:space-between;align-items:center">
+        <span>${m.label}</span>
+        ${m.filter ? `<button class="metric-download" onclick="viewCoverageDetails('${m.filter}')" title="View ${m.label}" style="width:16px;height:16px;padding:2px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>` : ''}
+      </div>
       <div style="font-size:16px;font-weight:600;color:${m.color}">${m.val}${m.pct !== undefined ? ` <span style="font-size:10px;font-weight:400;color:var(--text3)">(${m.pct}%)</span>` : ''}</div>
     </div>`
   ).join('');
+  }
   
   // Calculate module coverage
   const moduleMap = {};
@@ -2212,19 +1958,33 @@ function renderOverallCoverage(tests) {
   });
   
   const totalModules = Object.keys(moduleMap).length;
-  const fullyPassingModules = Object.values(moduleMap).filter(m => m.failed === 0 && m.total > 0).length;
-  const partiallyFailingModules = Object.values(moduleMap).filter(m => m.failed > 0).length;
   
-  document.getElementById('model-module-coverage').innerHTML = [
-    {label: 'Total Modules', val: totalModules, color: 'var(--text)'},
-    {label: 'Fully Passing', val: fullyPassingModules, pct: totalModules > 0 ? Math.round((fullyPassingModules / totalModules) * 100) : 0, color: 'var(--pass)'},
-    {label: 'Partially Failing', val: partiallyFailingModules, pct: totalModules > 0 ? Math.round((partiallyFailingModules / totalModules) * 100) : 0, color: 'var(--fail)'}
-  ].map(m =>
-    `<div style="padding:8px 10px;background:var(--bg3);border-radius:var(--radius);border-left:3px solid ${m.color}">
-      <div style="font-size:10px;color:var(--text3);margin-bottom:3px">${m.label}</div>
-      <div style="font-size:16px;font-weight:600;color:${m.color}">${m.val}${m.pct !== undefined ? ` <span style="font-size:10px;font-weight:400;color:var(--text3)">(${m.pct}%)</span>` : ''}</div>
-    </div>`
-  ).join('');
+  // Check if no modules found
+  if (totalModules === 0) {
+    document.getElementById('model-module-coverage').innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:14px">No module data available</div>';
+  } else {
+    const fullyPassingModules = Object.values(moduleMap).filter(m => m.passed === m.total && m.total > 0).length;
+    const partiallyFailingModules = Object.values(moduleMap).filter(m => m.passed < m.total && m.total > 0).length;
+    
+    document.getElementById('model-module-coverage').innerHTML = [
+      {label: 'Total Modules', val: totalModules, color: 'var(--text)', filter: null},
+      {label: 'Fully Passing', val: fullyPassingModules, pct: totalModules > 0 ? Math.round((fullyPassingModules / totalModules) * 100) : 0, color: 'var(--pass)', filter: 'module_passing'},
+      {label: 'Partially Failing', val: partiallyFailingModules, pct: totalModules > 0 ? Math.round((partiallyFailingModules / totalModules) * 100) : 0, color: 'var(--fail)', filter: 'module_failing'}
+    ].map(m =>
+      `<div style="padding:8px 10px;background:var(--bg3);border-radius:var(--radius);border-left:3px solid ${m.color};position:relative">
+        <div style="font-size:10px;color:var(--text3);margin-bottom:3px;display:flex;justify-content:space-between;align-items:center">
+          <span>${m.label}</span>
+          ${m.filter ? `<button class="metric-download" onclick="viewCoverageDetails('${m.filter}')" title="View ${m.label}" style="width:16px;height:16px;padding:2px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>` : ''}
+        </div>
+        <div style="font-size:16px;font-weight:600;color:${m.color}">${m.val}${m.pct !== undefined ? ` <span style="font-size:10px;font-weight:400;color:var(--text3)">(${m.pct}%)</span>` : ''}</div>
+      </div>`
+    ).join('');
+  }
 }
 
 // ─── model pie chart ──────────────────────────────────────────────────────────
@@ -2348,11 +2108,15 @@ function updateModelPieChart() {
         plugins: {
           legend: {
             display: true,
-            position: 'bottom',
+            position: 'right',
+            align: 'center',
             labels: {
               font: { family: 'IBM Plex Sans', size: 11 },
-              padding: 12,
+              padding: 8,
               usePointStyle: true,
+              pointStyle: 'circle',
+              boxWidth: 8,
+              boxHeight: 8,
               color: colors.text2
             }
           },
@@ -2462,8 +2226,85 @@ function renderTestDetails() {
   // Populate property filter
   populatePropertyFilter('details-property-filter', 'details-property-menu', 'details-property-text', 'updateDetailsPropertyFilter');
   
-  detailsCurrentPage = 1;
-  filterTestDetails();
+  // Apply pending filters if they exist (from Overview page View buttons)
+  if (window.pendingDetailsFilters) {
+    const { status, properties } = window.pendingDetailsFilters;
+    
+    // Apply status filter
+    if (status && status.length > 0) {
+      const statusDropdown = document.getElementById('details-status-filter');
+      if (statusDropdown) {
+        statusDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+          const cbStatus = cb.getAttribute('data-status');
+          cb.checked = status.includes(cbStatus);
+        });
+        updateMultiselectText('details-status-filter', 'details-status-text');
+      }
+    }
+    
+    // Apply property filters
+    if (properties && Object.keys(properties).length > 0) {
+      // Wait for property filter to be populated, then apply filters
+      setTimeout(() => {
+        const propertyDropdown = document.getElementById('details-property-filter');
+        if (propertyDropdown) {
+          // Get all property checkboxes
+          const checkboxes = propertyDropdown.querySelectorAll('input[type="checkbox"]');
+          
+          // Get all filter types that have properties in the dropdown
+          const filterTypesInDropdown = new Set();
+          checkboxes.forEach(cb => {
+            const propValue = cb.getAttribute('data-property');
+            ['dtype', 'op', 'model', 'module'].forEach(filterType => {
+              if (propValue.startsWith(filterType + '__')) {
+                filterTypesInDropdown.add(filterType);
+              }
+            });
+          });
+          
+          // For each checkbox, determine if it should be checked
+          checkboxes.forEach(cb => {
+            const propValue = cb.getAttribute('data-property');
+            let shouldCheck = false;
+            
+            // Check each filter type (dtype, op, model, module)
+            ['dtype', 'op', 'model', 'module'].forEach(filterType => {
+              const prefix = filterType + '__';
+              if (propValue.startsWith(prefix)) {
+                // If this filter type was used in Overview, check only selected values
+                if (properties[filterType]) {
+                  const value = propValue.replace(prefix, '');
+                  shouldCheck = properties[filterType].includes(value);
+                } else {
+                  // If this filter type was NOT used in Overview, check all (show all)
+                  shouldCheck = true;
+                }
+              }
+            });
+            
+            cb.checked = shouldCheck;
+          });
+          
+          updateMultiselectText('details-property-filter', 'details-property-text');
+        }
+        
+        // Clear pending filters after applying
+        window.pendingDetailsFilters = null;
+        
+        // Trigger filter update
+        filterTestDetails();
+      }, 50);
+    } else {
+      // No property filters, just clear pending and filter
+      window.pendingDetailsFilters = null;
+      detailsCurrentPage = 1;
+      filterTestDetails();
+    }
+  } else {
+    // No pending filters, normal render
+    detailsCurrentPage = 1;
+    filterTestDetails();
+  }
 }
 
 // ─── multi-select dropdown functions ──────────────────────────────────────────
@@ -2538,15 +2379,6 @@ function updateDetailsStatusFilter() {
   filterTestDetails();
 }
 
-function updateExplorerStatusFilter() {
-  updateMultiselectText('explorer-status-filter', 'explorer-status-text');
-  filterExplorerTests();
-}
-
-function updateDetailViewStatusFilter() {
-  updateMultiselectText('detail-view-status-filter', 'detail-view-status-text');
-  filterDetailViewTests();
-}
 
 // ─── property filter functions ────────────────────────────────────────────────
 function getAllProperties(tests) {
@@ -2566,16 +2398,8 @@ function populatePropertyFilter(dropdownId, menuId, textId, updateFn) {
     return;
   }
   
-  console.log('populatePropertyFilter: Processing', run.tests.length, 'tests');
-  
-  // Debug: Check first few tests for properties
-  console.log('Sample test properties:', run.tests.slice(0, 3).map(t => ({
-    name: t.name,
-    properties: t.properties
-  })));
   
   const allProps = getAllProperties(run.tests);
-  console.log('populatePropertyFilter: Found properties:', allProps);
   
   const menu = document.getElementById(menuId);
   if (!menu) {
@@ -2599,7 +2423,6 @@ function populatePropertyFilter(dropdownId, menuId, textId, updateFn) {
   ).join('');
   
   if (textEl) textEl.textContent = 'All Selected';
-  console.log('populatePropertyFilter: Successfully populated with', allProps.length, 'properties');
 }
 
 function getSelectedProperties(dropdownId) {
@@ -2619,15 +2442,110 @@ function getSelectedProperties(dropdownId) {
     }
   });
   
-  return selected.length > 0 ? selected : []; // empty array means none selected
+  // If no properties selected, treat as "show all" (return null) instead of "show none" (return [])
+  return selected.length > 0 ? selected : null;
 }
 
 function testMatchesProperties(test, selectedProps) {
   if (!selectedProps || selectedProps === null) return true; // no filter
-  if (selectedProps.length === 0) return false; // none selected = show nothing
+  if (selectedProps.length === 0) return true; // none selected = show all (changed from false)
   
-  // Test must have ALL selected properties
-  return selectedProps.every(prop => test.properties && test.properties.includes(prop));
+  // Group selected properties by type (dtype, op, model, module)
+  const propsByType = {};
+  const allPropsByType = {}; // Track all available properties by type
+  
+  selectedProps.forEach(prop => {
+    const parts = prop.split('__');
+    if (parts.length === 2) {
+      const [type, value] = parts;
+      if (!propsByType[type]) {
+        propsByType[type] = [];
+      }
+      propsByType[type].push(value);
+      
+      if (!allPropsByType[type]) {
+        allPropsByType[type] = new Set();
+      }
+      allPropsByType[type].add(value);
+    }
+  });
+  
+  // Get all available properties for each type from the property filter
+  const propertyDropdown = document.getElementById('details-property-filter');
+  const allAvailableByType = {};
+  if (propertyDropdown) {
+    propertyDropdown.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+      const propValue = cb.getAttribute('data-property');
+      const parts = propValue.split('__');
+      if (parts.length === 2) {
+        const [type, value] = parts;
+        if (!allAvailableByType[type]) {
+          allAvailableByType[type] = new Set();
+        }
+        allAvailableByType[type].add(value);
+      }
+    });
+  }
+  
+  // Test must match ALL filter types that are actually filtered (AND logic across types)
+  // But only needs to match ONE value within each type (OR logic within type)
+  // If all values of a type are selected, that type is not filtered
+  return Object.keys(propsByType).every(filterType => {
+    const selectedValues = propsByType[filterType];
+    const availableValues = allAvailableByType[filterType];
+    
+    // If all available values are selected, this filter type is not active - skip it
+    if (availableValues && selectedValues.length === availableValues.size) {
+      return true;
+    }
+    
+    const prefix = filterType + '__';
+    const noFilterKey = 'No_' + filterType;
+    
+    // Check if user selected "No_filtertype" option
+    const hasNoFilterSelected = selectedValues.includes(noFilterKey);
+    
+    // Check if test has any properties of this filter type
+    const testHasFilterType = test.properties && Array.isArray(test.properties) &&
+      test.properties.some(prop => prop.startsWith(prefix));
+    
+    // If "No_filtertype" is selected
+    if (hasNoFilterSelected) {
+      // If ONLY "No_filtertype" is selected, show tests without this property
+      if (selectedValues.length === 1) {
+        return !testHasFilterType;
+      }
+      // If "No_filtertype" AND other values are selected, show tests that either:
+      // 1. Don't have this property type, OR
+      // 2. Have one of the selected values
+      else {
+        if (!testHasFilterType) {
+          return true; // Test has no property of this type
+        }
+        // Test has the property, check if it matches selected values
+        return test.properties.some(prop => {
+          if (prop.startsWith(prefix)) {
+            const value = prop.replace(prefix, '');
+            return selectedValues.includes(value);
+          }
+          return false;
+        });
+      }
+    }
+    
+    // Normal filtering: test must have the property type and match selected values
+    if (!test.properties || !Array.isArray(test.properties)) {
+      return false;
+    }
+    
+    return test.properties.some(prop => {
+      if (prop.startsWith(prefix)) {
+        const value = prop.replace(prefix, '');
+        return selectedValues.includes(value);
+      }
+      return false;
+    });
+  });
 }
 
 function updateDetailsPropertyFilter() {
@@ -2635,6 +2553,31 @@ function updateDetailsPropertyFilter() {
   filterTestDetails();
 }
 
+function toggleDetailsSortByTime() {
+  // Toggle between: null (default status sort) -> 'asc' -> 'desc' -> null
+  if (!window.detailsSortByTime) {
+    window.detailsSortByTime = 'asc';
+  } else if (window.detailsSortByTime === 'asc') {
+    window.detailsSortByTime = 'desc';
+  } else {
+    window.detailsSortByTime = null;
+  }
+  
+  // Update indicator - always show double arrow, but change color/style
+  const indicator = document.getElementById('details-time-sort-indicator');
+  if (indicator) {
+    if (window.detailsSortByTime === 'asc') {
+      indicator.innerHTML = '<span style="color:var(--text3);font-size: 14px;">↑</span>';
+    } else if (window.detailsSortByTime === 'desc') {
+      indicator.innerHTML = '<span style="color:var(--text3);font-size: 14px;">↓</span>';
+    } else {
+      indicator.innerHTML = '<span style="color:var(--text3);font-size: 14px;">⇅</span>';
+    }
+  }
+  
+  // Re-filter to apply new sort
+  filterTestDetails();
+}
 
 function filterTestDetails() {
   const run = currentRun();
@@ -2660,11 +2603,20 @@ function filterTestDetails() {
     return true;
   });
   
-  // Sort: failures first
-  filtered.sort((a, b) => {
-    const order = {failed:0, error:1, xpass:2, passed:3, xfail:4, skipped:5};
-    return (order[a.status] ?? 9) - (order[b.status] ?? 9);
-  });
+  // Sort based on current sort settings
+  if (window.detailsSortByTime) {
+    // Sort by time
+    filtered.sort((a, b) => {
+      const diff = a.timeVal - b.timeVal;
+      return window.detailsSortByTime === 'asc' ? diff : -diff;
+    });
+  } else {
+    // Default sort: failures first
+    filtered.sort((a, b) => {
+      const order = {failed:0, error:1, xpass:2, passed:3, xfail:4, skipped:5};
+      return (order[a.status] ?? 9) - (order[b.status] ?? 9);
+    });
+  }
   
   // Pagination
   const totalPages = Math.ceil(filtered.length / detailsItemsPerPage);
@@ -2673,6 +2625,7 @@ function filterTestDetails() {
   const startIdx = (detailsCurrentPage - 1) * detailsItemsPerPage;
   const endIdx = startIdx + detailsItemsPerPage;
   const showing = filtered.slice(startIdx, endIdx);
+
   
   document.getElementById('details-table-body').innerHTML = showing.map((t, i) => {
     const hasFailMsg = (t.status === 'failed' || t.status === 'error') && t.failMsg;
@@ -2682,8 +2635,9 @@ function filterTestDetails() {
       <td><span class="status-badge sb-${t.status}">${t.status}</span></td>
       <td style="color:var(--text3)">${esc(t.dtype)}</td>
       <td style="color:var(--text3)">${esc(t.opName)}</td>
+      <td style="color:var(--text3)">${esc(t.module || t.clsShort || '')}</td>
       <td style="color:var(--text3)">${t.timeVal.toFixed(2)}</td>
-    </tr>${hasFailMsg ? `<tr class="failure-row" id="${rowId}" style="display:none"><td colspan="5"><div class="failure-row-inner">${esc(t.failMsg)}</div></td></tr>` : ''}`;
+    </tr>${hasFailMsg ? `<tr class="failure-row" id="${rowId}" style="display:none"><td colspan="6"><div class="failure-row-inner">${esc(t.failMsg)}</div></td></tr>` : ''}`;
   }).join('');
   
   // Update note
@@ -2743,482 +2697,7 @@ function changeDetailsItemsPerPage(items) {
   filterTestDetails();
 }
 
-// ─── explorer filtering ───────────────────────────────────────────────────────
-// Note: changeExplorerGroupBy is now handled by switchExplorerGroupBy in the submenu
-
-function filterExplorerTests() {
-  filterGroupsTable();
-}
-
-function renderCards() {
-  const run = currentRun();
-  if (!run) return;
-  
-  // Initialize explorer filters
-  const groupBySelect = document.getElementById('explorer-groupby');
-  if (groupBySelect) groupBySelect.value = groupBy;
-  
-  renderOverallBar();
-  groupsCurrentPage = 1;
-  filterGroupsTable();
-}
-
-function filterGroupsTable() {
-  const run = currentRun();
-  if (!run) return;
-  
-  // Get filter values
-  const statuses = getSelectedStatuses('explorer-status-filter');
-  const searchTerm = (document.getElementById('explorer-search')?.value || '').toLowerCase().trim();
-  
-  // Get selected model filter (applies to all groupBy modes)
-  const selectedModel = document.getElementById('explorer-model-selector')?.value || '';
-  
-  let keys = Object.keys(run.modelMap).sort();
-  
-  // Filter by selected model if groupBy is 'model' and a model is selected
-  if (groupBy === 'model' && selectedModel) {
-    keys = keys.filter(key => key === selectedModel);
-  }
-
-  // Build group data with filtered tests
-  const groupData = keys.map(key => {
-    // Apply model and status filters
-    let tests = run.modelMap[key].filter(t => {
-      // Model filter (applies when groupBy is NOT 'model')
-      if (selectedModel && groupBy !== 'model') {
-        // Filter tests by their model properties
-        const hasModel = (t.properties && t.properties.includes(selectedModel)) ||
-                        (t.tags && t.tags.includes(selectedModel));
-        if (!hasModel) return false;
-      }
-      
-      // Status filter
-      if (!statuses.passed && t.status === 'passed') return false;
-      if (!statuses.failed && (t.status === 'failed' || t.status === 'error')) return false;
-      if (!statuses.xfail && t.status === 'xfail') return false;
-      if (!statuses.skipped && t.status === 'skipped') return false;
-      if (!statuses.xpass && t.status === 'xpass') return false;
-      return true;
-    });
-    
-    // Apply search filter
-    if (searchTerm) {
-      const matchesGroup = key.toLowerCase().includes(searchTerm);
-      if (!matchesGroup) {
-        tests = tests.filter(t => t.name.toLowerCase().includes(searchTerm));
-      }
-    }
-    
-    const cnt = countStatuses(tests);
-    const total = tests.length;
-    const effectivePass = cnt.passed + cnt.xpass;
-    const effectivePct = total ? Math.round(effectivePass/total*100) : 0;
-    
-    return { key, tests, cnt, total, effectivePct };
-  }).filter(g => g.total > 0); // Only show groups with tests
-
-  if (!groupData.length) {
-    document.getElementById('groups-table-body').innerHTML = '<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--text3)">No matching groups or tests</td></tr>';
-    document.getElementById('groups-note').textContent = '';
-    document.getElementById('groups-pagination').innerHTML = '';
-    return;
-  }
-
-  // Sort by pass rate (descending)
-  groupData.sort((a, b) => b.effectivePct - a.effectivePct);
-
-  // Pagination
-  const totalPages = Math.ceil(groupData.length / groupsItemsPerPage);
-  if (groupsCurrentPage > totalPages) groupsCurrentPage = Math.max(1, totalPages);
-  
-  const startIdx = (groupsCurrentPage - 1) * groupsItemsPerPage;
-  const endIdx = startIdx + groupsItemsPerPage;
-  const showing = groupData.slice(startIdx, endIdx);
-  
-  // Render table rows without expand functionality
-  document.getElementById('groups-table-body').innerHTML = showing.map((g, idx) => {
-    const rowId = 'group-row-' + idx;
-    const menuId = 'group-action-menu-' + idx;
-    
-    const displayKey = (groupBy === 'model' || groupBy === 'module') ? displayGroupName(g.key) : g.key;
-    return `<tr id="${rowId}">
-      <td style="font-family:var(--mono);font-size:12px">${esc(displayKey)}</td>
-      <td style="text-align:left">${g.total}</td>
-      <td style="text-align:left;color:var(--pass)">${g.cnt.passed}</td>
-      <td style="text-align:left;color:var(--fail)">${g.cnt.failed}</td>
-      <td style="text-align:left;color:var(--xfail)">${g.cnt.xfail}</td>
-      <td style="text-align:left;color:var(--xpass)">${g.cnt.xpass}</td>
-      <td style="text-align:left;color:var(--skip)">${g.cnt.skipped}</td>
-      <td style="text-align:left;font-weight:500;color:${g.effectivePct >= 80 ? 'var(--pass)' : g.effectivePct >= 50 ? 'var(--xfail)' : 'var(--fail)'}">${g.effectivePct}%</td>
-      <td style="text-align:left">
-        <div class="action-menu-container">
-          <button class="action-menu-btn" onclick="toggleActionMenu('${menuId}', event)">⋮</button>
-          <div class="action-menu-dropdown" id="${menuId}">
-            <button class="action-menu-item" onclick="viewGroupDetails('${escAttr(g.key)}', ${g.total}, ${g.cnt.passed}, ${g.cnt.failed}, ${g.cnt.xfail}, ${g.cnt.xpass}, ${g.cnt.skipped}, ${g.effectivePct})">View Details</button>
-            <button class="action-menu-item has-submenu" onmouseenter="positionSubmenu(this, '${menuId}-submenu')" onmouseleave="hideSubmenu(this, '${menuId}-submenu')">Print</button>
-          </div>
-          <div class="action-submenu" id="${menuId}-submenu" onmouseenter="keepSubmenuOpen('${menuId}-submenu')" onmouseleave="hideSubmenuById('${menuId}-submenu')">
-            <button class="action-submenu-item" onclick="printGroupData('${escAttr(g.key)}', ${g.total}, ${g.cnt.passed}, ${g.cnt.failed}, ${g.cnt.xfail}, ${g.cnt.xpass}, ${g.cnt.skipped}, ${g.effectivePct}, 'csv')">CSV</button>
-            <button class="action-submenu-item" onclick="printGroupData('${escAttr(g.key)}', ${g.total}, ${g.cnt.passed}, ${g.cnt.failed}, ${g.cnt.xfail}, ${g.cnt.xpass}, ${g.cnt.skipped}, ${g.effectivePct}, 'pdf')">PDF</button>
-          </div>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-  
-  // Update note
-  document.getElementById('groups-note').textContent = groupData.length
-    ? `Showing ${startIdx + 1}-${Math.min(endIdx, groupData.length)} of ${groupData.length} group${groupData.length !== 1 ? 's' : ''}`
-    : '';
-  
-  // Render pagination
-  renderGroupsPagination(totalPages, groupData.length);
-}
-
-function renderGroupsPagination(totalPages, totalItems) {
-  const paginationEl = document.getElementById('groups-pagination');
-  if (!paginationEl) return;
-  
-  if (totalPages <= 1) {
-    paginationEl.innerHTML = '';
-    return;
-  }
-  
-  let html = '';
-  
-  // Previous button
-  html += `<button class="btn btn-sm" ${groupsCurrentPage === 1 ? 'disabled' : ''} onclick="goToGroupsPage(${groupsCurrentPage - 1})" style="${groupsCurrentPage === 1 ? 'opacity:0.5;cursor:not-allowed' : ''}">← Prev</button>`;
-  
-  // Page input
-  html += `<span style="padding:0 8px;display:inline-flex;align-items:center;gap:6px;font-size:12px">
-    <span>Page</span>
-    <input type="number" min="1" max="${totalPages}" value="${groupsCurrentPage}"
-           onchange="goToGroupsPage(parseInt(this.value))"
-           style="width:60px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:12px">
-    <span>of ${totalPages}</span>
-  </span>`;
-  
-  // Next button
-  html += `<button class="btn btn-sm" ${groupsCurrentPage === totalPages ? 'disabled' : ''} onclick="goToGroupsPage(${groupsCurrentPage + 1})" style="${groupsCurrentPage === totalPages ? 'opacity:0.5;cursor:not-allowed' : ''}">Next →</button>`;
-  
-  // Items per page selector
-  html += `<select class="btn btn-sm" onchange="changeGroupsItemsPerPage(parseInt(this.value))" style="margin-left:8px">
-    <option value="10" ${groupsItemsPerPage === 10 ? 'selected' : ''}>10 per page</option>
-    <option value="15" ${groupsItemsPerPage === 15 ? 'selected' : ''}>15 per page</option>
-    <option value="25" ${groupsItemsPerPage === 25 ? 'selected' : ''}>25 per page</option>
-    <option value="50" ${groupsItemsPerPage === 50 ? 'selected' : ''}>50 per page</option>
-  </select>`;
-  
-  paginationEl.innerHTML = html;
-}
-
-function goToGroupsPage(page) {
-  groupsCurrentPage = page;
-  filterGroupsTable();
-}
-
-function changeGroupsItemsPerPage(items) {
-  groupsItemsPerPage = items;
-  groupsCurrentPage = 1;
-  filterGroupsTable();
-}
-
-function toggleDetail(key) {
-  if (selectedGroup === key) {
-    selectedGroup = null;
-    closeDrawer();
-    filterGroupsTable();
-    return;
-  }
-  selectedGroup = key;
-  filterGroupsTable();
-  showDrawer(key);
-}
-
-function toggleGroupDetail(key, detailId) {
-  if (selectedGroup === key) {
-    selectedGroup = null;
-  } else {
-    selectedGroup = key;
-  }
-  filterGroupsTable();
-}
-
-function renderExpandedGroupDetails(key, containerId) {
-  const run = currentRun();
-  if (!run) return;
-  
-  const tests = run.modelMap[key] || [];
-  
-  // Apply filters
-  const showPassed = document.getElementById('explorer-filter-passed')?.checked ?? true;
-  const showFailed = document.getElementById('explorer-filter-failed')?.checked ?? true;
-  const showXfail = document.getElementById('explorer-filter-xfail')?.checked ?? true;
-  const showSkipped = document.getElementById('explorer-filter-skipped')?.checked ?? true;
-  const showXpass = document.getElementById('explorer-filter-xpass')?.checked ?? true;
-  const searchTerm = (document.getElementById('explorer-search')?.value || '').toLowerCase().trim();
-  
-  let filtered = tests.filter(t => {
-    if (!showPassed && t.status === 'passed') return false;
-    if (!showFailed && (t.status === 'failed' || t.status === 'error')) return false;
-    if (!showXfail && t.status === 'xfail') return false;
-    if (!showSkipped && t.status === 'skipped') return false;
-    if (!showXpass && t.status === 'xpass') return false;
-    if (searchTerm && !t.name.toLowerCase().includes(searchTerm)) return false;
-    return true;
-  });
-  
-  // Sort: failures first
-  filtered.sort((a, b) => {
-    const order = {failed:0, error:1, xpass:2, passed:3, xfail:4, skipped:5};
-    return (order[a.status] ?? 9) - (order[b.status] ?? 9);
-  });
-  
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  
-  if (filtered.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3)">No tests match the current filters</div>';
-    return;
-  }
-  
-  // Show first 50 tests inline
-  const maxShow = 50;
-  const showing = filtered.slice(0, maxShow);
-  
-  let html = `
-    <div style="margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
-      <span style="font-size:12px;color:var(--text2)">
-        Showing ${showing.length} of ${filtered.length} test${filtered.length !== 1 ? 's' : ''}
-        ${filtered.length > maxShow ? '(first ' + maxShow + ')' : ''}
-      </span>
-      <button class="btn btn-sm" onclick="showDrawer('${escAttr(key)}')">View All in Detail Panel →</button>
-    </div>
-    <div style="max-height:400px;overflow:auto;border:1px solid var(--border);border-radius:var(--radius)">
-      <table class="test-table" style="margin:0">
-        <thead style="position:sticky;top:0;background:var(--bg2);z-index:1">
-          <tr>
-            <th>Test Name</th>
-            <th style="width:100px">Status</th>
-            <th style="width:100px">Dtype</th>
-            <th style="width:100px">Op</th>
-            <th style="width:80px">Time (s)</th>
-          </tr>
-        </thead>
-        <tbody>`;
-  
-  showing.forEach((t, i) => {
-    const hasFailMsg = (t.status === 'failed' || t.status === 'error') && t.failMsg;
-    const rowId = 'inline-frow-' + i;
-    html += `<tr ${hasFailMsg ? `onclick="toggleFailure('${rowId}',event)" style="cursor:pointer"` : ''}>
-      <td style="font-size:11px">${esc(t.name)}${hasFailMsg ? ' <span style="font-size:9px;color:var(--fail);opacity:.7">▶ error</span>' : ''}</td>
-      <td><span class="status-badge sb-${t.status}">${t.status}</span></td>
-      <td style="color:var(--text3);font-size:11px">${esc(t.dtype)}</td>
-      <td style="color:var(--text3);font-size:11px">${esc(t.opName)}</td>
-      <td style="color:var(--text3);font-size:11px">${t.timeVal.toFixed(2)}</td>
-    </tr>`;
-    if (hasFailMsg) {
-      html += `<tr class="failure-row" id="${rowId}" style="display:none"><td colspan="5"><div class="failure-row-inner">${esc(t.failMsg)}</div></td></tr>`;
-    }
-  });
-  
-  html += `</tbody></table></div>`;
-  container.innerHTML = html;
-}
-
 let expandedFailures = new Set();
-
-function showDrawer(key) {
-  const run = currentRun();
-  drawerTests = run.modelMap[key] || [];
-  document.getElementById('drawer-title').textContent = key + '  —  ' + drawerTests.length + ' tests';
-  expandedFailures.clear();
-  
-  // Reset filters and pagination
-  drawerCurrentPage = 1;
-  drawerGroupBy = 'none';
-  document.getElementById('drawer-groupby').value = 'none';
-  document.getElementById('drawer-filter-passed').checked = true;
-  document.getElementById('drawer-filter-failed').checked = true;
-  document.getElementById('drawer-filter-xfail').checked = true;
-  document.getElementById('drawer-filter-skipped').checked = true;
-  document.getElementById('drawer-filter-xpass').checked = true;
-  document.getElementById('drawer-search').value = '';
-  
-  document.getElementById('detail-drawer').style.display = 'block';
-  filterDrawerTests();
-  setTimeout(() => document.getElementById('detail-drawer').scrollIntoView({behavior:'smooth',block:'nearest'}), 50);
-}
-
-function changeDrawerGroupBy(groupBy) {
-  drawerGroupBy = groupBy;
-  drawerCurrentPage = 1;
-  filterDrawerTests();
-}
-
-function filterDrawerTests() {
-  if (!drawerTests.length) return;
-  
-  const showPassed = document.getElementById('drawer-filter-passed')?.checked ?? true;
-  const showFailed = document.getElementById('drawer-filter-failed')?.checked ?? true;
-  const showXfail = document.getElementById('drawer-filter-xfail')?.checked ?? true;
-  const showSkipped = document.getElementById('drawer-filter-skipped')?.checked ?? true;
-  const showXpass = document.getElementById('drawer-filter-xpass')?.checked ?? true;
-  const searchTerm = (document.getElementById('drawer-search')?.value || '').toLowerCase();
-  
-  let filtered = drawerTests.filter(t => {
-    if (!showPassed && t.status === 'passed') return false;
-    if (!showFailed && (t.status === 'failed' || t.status === 'error')) return false;
-    if (!showXfail && t.status === 'xfail') return false;
-    if (!showSkipped && t.status === 'skipped') return false;
-    if (!showXpass && t.status === 'xpass') return false;
-    if (searchTerm && !t.name.toLowerCase().includes(searchTerm)) return false;
-    return true;
-  });
-  
-  // Sort: failures first
-  filtered.sort((a, b) => {
-    const order = {failed:0, error:1, xpass:2, passed:3, xfail:4, skipped:5};
-    return (order[a.status] ?? 9) - (order[b.status] ?? 9);
-  });
-  
-  // Group by if needed
-  if (drawerGroupBy !== 'none') {
-    renderDrawerGrouped(filtered);
-  } else {
-    renderDrawerPaginated(filtered);
-  }
-}
-
-function renderDrawerGrouped(filtered) {
-  const groups = {};
-  filtered.forEach(t => {
-    let key;
-    if (drawerGroupBy === 'status') key = t.status;
-    else if (drawerGroupBy === 'dtype') key = t.dtype || '(no dtype)';
-    else if (drawerGroupBy === 'op') key = t.opName || '(no op)';
-    else key = 'all';
-    
-    if (!groups[key]) groups[key] = [];
-    groups[key].push(t);
-  });
-  
-  const sortedKeys = Object.keys(groups).sort();
-  let html = '';
-  
-  sortedKeys.forEach(key => {
-    const tests = groups[key];
-    const cnt = countStatuses(tests);
-    html += `<tr style="background:var(--bg3);font-weight:500">
-      <td colspan="5" style="padding:10px">
-        <span style="font-family:var(--mono);font-size:12px">${esc(key)}</span>
-        <span style="margin-left:12px;font-size:11px;color:var(--text3);font-weight:400">
-          ${tests.length} tests ·
-          ${cnt.passed ? cnt.passed + ' passed · ' : ''}
-          ${cnt.xpass ? cnt.xpass + ' xpass · ' : ''}
-          ${cnt.failed ? cnt.failed + ' failed · ' : ''}
-          ${cnt.xfail ? cnt.xfail + ' xfail · ' : ''}
-          ${cnt.skipped ? cnt.skipped + ' skipped' : ''}
-        </span>
-      </td>
-    </tr>`;
-    
-    tests.forEach((t, i) => {
-      const hasFailMsg = (t.status === 'failed' || t.status === 'error') && t.failMsg;
-      const rowId = 'frow-' + key + '-' + i;
-      html += `<tr onclick="${hasFailMsg ? `toggleFailure('${rowId}',event)` : ''}" style="${hasFailMsg ? 'cursor:pointer' : ''}">
-        <td title="${esc(t.name)}">${esc(t.name)}${hasFailMsg ? ' <span style="font-size:9px;color:var(--fail);opacity:.7">▶ error</span>' : ''}</td>
-        <td><span class="status-badge sb-${t.status}">${t.status}</span></td>
-        <td style="color:var(--text3)">${esc(t.dtype)}</td>
-        <td style="color:var(--text3)">${esc(t.opName)}</td>
-        <td style="color:var(--text3)">${t.timeVal.toFixed(2)}</td>
-      </tr>${hasFailMsg ? `<tr class="failure-row" id="${rowId}" style="display:none"><td colspan="5"><div class="failure-row-inner">${esc(t.failMsg)}</div></td></tr>` : ''}`;
-    });
-  });
-  
-  document.getElementById('drawer-body').innerHTML = html;
-  document.getElementById('drawer-note').textContent = `Showing ${filtered.length} test${filtered.length !== 1 ? 's' : ''} grouped by ${drawerGroupBy}`;
-  document.getElementById('drawer-pagination').innerHTML = '';
-}
-
-function renderDrawerPaginated(filtered) {
-  // Pagination
-  const totalPages = Math.ceil(filtered.length / drawerItemsPerPage);
-  if (drawerCurrentPage > totalPages) drawerCurrentPage = Math.max(1, totalPages);
-  
-  const startIdx = (drawerCurrentPage - 1) * drawerItemsPerPage;
-  const endIdx = startIdx + drawerItemsPerPage;
-  const showing = filtered.slice(startIdx, endIdx);
-  
-  document.getElementById('drawer-body').innerHTML = showing.map((t, i) => {
-    const hasFailMsg = (t.status === 'failed' || t.status === 'error') && t.failMsg;
-    const rowId = 'frow-' + (startIdx + i);
-    return `<tr onclick="${hasFailMsg ? `toggleFailure('${rowId}',event)` : ''}" style="${hasFailMsg ? 'cursor:pointer' : ''}">
-      <td title="${esc(t.name)}">${esc(t.name)}${hasFailMsg ? ' <span style="font-size:9px;color:var(--fail);opacity:.7">▶ error</span>' : ''}</td>
-      <td><span class="status-badge sb-${t.status}">${t.status}</span></td>
-      <td style="color:var(--text3)">${esc(t.dtype)}</td>
-      <td style="color:var(--text3)">${esc(t.opName)}</td>
-      <td style="color:var(--text3)">${t.timeVal.toFixed(2)}</td>
-    </tr>${hasFailMsg ? `<tr class="failure-row" id="${rowId}" style="display:none"><td colspan="5"><div class="failure-row-inner">${esc(t.failMsg)}</div></td></tr>` : ''}`;
-  }).join('');
-  
-  // Update note
-  document.getElementById('drawer-note').textContent = filtered.length
-    ? `Showing ${startIdx + 1}-${Math.min(endIdx, filtered.length)} of ${filtered.length} test${filtered.length !== 1 ? 's' : ''}`
-    : 'No tests match the current filters';
-  
-  // Render pagination
-  renderDrawerPagination(totalPages, filtered.length);
-}
-
-function renderDrawerPagination(totalPages, totalItems) {
-  const paginationEl = document.getElementById('drawer-pagination');
-  if (!paginationEl) return;
-  
-  if (totalPages <= 1) {
-    paginationEl.innerHTML = '';
-    return;
-  }
-  
-  let html = '';
-  
-  // Previous button
-  html += `<button class="btn btn-sm" ${drawerCurrentPage === 1 ? 'disabled' : ''} onclick="goToDrawerPage(${drawerCurrentPage - 1})" style="${drawerCurrentPage === 1 ? 'opacity:0.5;cursor:not-allowed' : ''}">← Prev</button>`;
-  
-  // Page input
-  html += `<span style="padding:0 8px;display:inline-flex;align-items:center;gap:6px;font-size:12px">
-    <span>Page</span>
-    <input type="number" min="1" max="${totalPages}" value="${drawerCurrentPage}"
-           onchange="goToDrawerPage(parseInt(this.value))"
-           style="width:60px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:12px">
-    <span>of ${totalPages}</span>
-  </span>`;
-  
-  // Next button
-  html += `<button class="btn btn-sm" ${drawerCurrentPage === totalPages ? 'disabled' : ''} onclick="goToDrawerPage(${drawerCurrentPage + 1})" style="${drawerCurrentPage === totalPages ? 'opacity:0.5;cursor:not-allowed' : ''}">Next →</button>`;
-  
-  // Items per page selector
-  html += `<select class="btn btn-sm" onchange="changeDrawerItemsPerPage(parseInt(this.value))" style="margin-left:8px">
-    <option value="10" ${drawerItemsPerPage === 10 ? 'selected' : ''}>10 per page</option>
-    <option value="25" ${drawerItemsPerPage === 25 ? 'selected' : ''}>25 per page</option>
-    <option value="50" ${drawerItemsPerPage === 50 ? 'selected' : ''}>50 per page</option>
-    <option value="100" ${drawerItemsPerPage === 100 ? 'selected' : ''}>100 per page</option>
-  </select>`;
-  
-  paginationEl.innerHTML = html;
-}
-
-function goToDrawerPage(page) {
-  drawerCurrentPage = page;
-  filterDrawerTests();
-}
-
-function changeDrawerItemsPerPage(items) {
-  drawerItemsPerPage = items;
-  drawerCurrentPage = 1;
-  filterDrawerTests();
-}
 
 function toggleFailure(id, e) {
   e.stopPropagation();
@@ -3268,334 +2747,9 @@ document.addEventListener('click', function(e) {
   }
 });
 
-function positionSubmenu(menuItem, submenuId) {
-  const submenu = document.getElementById(submenuId);
-  if (submenu) {
-    const rect = menuItem.getBoundingClientRect();
-    submenu.style.top = rect.top + 'px';
-    submenu.style.left = (rect.right + 4) + 'px';
-    submenu.style.display = 'flex';
-  }
-}
 
-function hideSubmenu(menuItem, submenuId) {
-  setTimeout(() => {
-    const submenu = document.getElementById(submenuId);
-    if (submenu && !submenu.matches(':hover')) {
-      submenu.style.display = 'none';
-    }
-  }, 100);
-}
-
-function keepSubmenuOpen(submenuId) {
-  const submenu = document.getElementById(submenuId);
-  if (submenu) {
-    submenu.style.display = 'flex';
-  }
-}
-
-function hideSubmenuById(submenuId) {
-  setTimeout(() => {
-    const submenu = document.getElementById(submenuId);
-    if (submenu) {
-      submenu.style.display = 'none';
-    }
-  }, 100);
-}
-
-let detailViewTests = [];
-let detailViewCurrentPage = 1;
-let detailViewItemsPerPage = 10;
-let currentDetailGroup = '';
-
-function viewGroupDetails(key, total, passed, failed, xfail, xpass, skipped, effectivePct) {
-  // Close the menu
-  if (currentOpenMenu) {
-    const menu = document.getElementById(currentOpenMenu);
-    if (menu) menu.classList.remove('show');
-    currentOpenMenu = null;
-  }
-  
-  // Switch to detail view
-  currentDetailGroup = key;
-  document.getElementById('explorer-groups-view').style.display = 'none';
-  document.getElementById('explorer-detail-view').style.display = 'block';
-  
-  // Update breadcrumb and title
-  document.getElementById('detail-breadcrumb-group').textContent = key;
-  document.getElementById('detail-view-title').textContent = key + ' - ' + total + ' tests';
-  
-  // Load tests for this group
-  const run = currentRun();
-  if (run) {
-    detailViewTests = run.modelMap[key] || [];
-    detailViewCurrentPage = 1;
-    filterDetailViewTests();
-  }
-}
-
-function backToGroupsView() {
-  document.getElementById('explorer-detail-view').style.display = 'none';
-  document.getElementById('explorer-groups-view').style.display = 'block';
-  currentDetailGroup = '';
-}
-
-function filterDetailViewTests() {
-  if (!detailViewTests.length) return;
-  
-  const statuses = getSelectedStatuses('detail-view-status-filter');
-  const searchTerm = (document.getElementById('detail-view-search')?.value || '').toLowerCase();
-  
-  let filtered = detailViewTests.filter(t => {
-    if (!statuses.passed && t.status === 'passed') return false;
-    if (!statuses.failed && (t.status === 'failed' || t.status === 'error')) return false;
-    if (!statuses.xfail && t.status === 'xfail') return false;
-    if (!statuses.skipped && t.status === 'skipped') return false;
-    if (!statuses.xpass && t.status === 'xpass') return false;
-    if (searchTerm && !t.name.toLowerCase().includes(searchTerm)) return false;
-    return true;
-  });
-  
-  filtered.sort((a, b) => {
-    const order = {failed:0, error:1, xpass:2, passed:3, xfail:4, skipped:5};
-    return (order[a.status] ?? 9) - (order[b.status] ?? 9);
-  });
-  
-  renderDetailViewTable(filtered);
-}
-
-function renderDetailViewTable(filtered) {
-  const totalPages = Math.ceil(filtered.length / detailViewItemsPerPage);
-  if (detailViewCurrentPage > totalPages) detailViewCurrentPage = Math.max(1, totalPages);
-  
-  const startIdx = (detailViewCurrentPage - 1) * detailViewItemsPerPage;
-  const endIdx = startIdx + detailViewItemsPerPage;
-  const showing = filtered.slice(startIdx, endIdx);
-  
-  const tbody = document.getElementById('detail-view-table-body');
-  if (!tbody) return;
-  
-  if (showing.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)">No tests match filters</td></tr>';
-    document.getElementById('detail-view-note').textContent = '';
-    document.getElementById('detail-view-pagination').innerHTML = '';
-    return;
-  }
-  
-  tbody.innerHTML = showing.map((t, i) => {
-    const hasFailMsg = (t.status === 'failed' || t.status === 'error') && t.failMsg;
-    const rowId = 'detail-frow-' + i;
-    let html = `<tr ${hasFailMsg ? `onclick="toggleFailure('${rowId}',event)" style="cursor:pointer"` : ''}>
-      <td style="font-size:11px">${esc(t.name)}${hasFailMsg ? ' <span style="font-size:9px;color:var(--fail);opacity:.7">▶ error</span>' : ''}</td>
-      <td><span class="status-badge sb-${t.status}">${t.status}</span></td>
-      <td style="color:var(--text3);font-size:11px">${esc(t.dtype)}</td>
-      <td style="color:var(--text3);font-size:11px">${esc(t.opName)}</td>
-      <td style="color:var(--text3);font-size:11px">${t.timeVal.toFixed(2)}</td>
-    </tr>`;
-    if (hasFailMsg) {
-      html += `<tr class="failure-row" id="${rowId}" style="display:none"><td colspan="5"><div class="failure-row-inner">${esc(t.failMsg)}</div></td></tr>`;
-    }
-    return html;
-  }).join('');
-  
-  document.getElementById('detail-view-note').textContent = filtered.length
-    ? `Showing ${startIdx + 1}-${Math.min(endIdx, filtered.length)} of ${filtered.length} test${filtered.length !== 1 ? 's' : ''}`
-    : '';
-  
-  renderDetailViewPagination(totalPages, filtered.length);
-}
-
-function renderDetailViewPagination(totalPages, totalItems) {
-  const paginationEl = document.getElementById('detail-view-pagination');
-  if (!paginationEl || totalPages <= 1) {
-    if (paginationEl) paginationEl.innerHTML = '';
-    return;
-  }
-  
-  let html = '';
-  
-  // Previous button
-  html += `<button class="btn btn-sm" ${detailViewCurrentPage === 1 ? 'disabled' : ''} onclick="goToDetailViewPage(${detailViewCurrentPage - 1})" style="${detailViewCurrentPage === 1 ? 'opacity:0.5;cursor:not-allowed' : ''}">← Prev</button>`;
-  
-  // Page input
-  html += `<span style="padding:0 8px;display:inline-flex;align-items:center;gap:6px;font-size:12px">
-    <span>Page</span>
-    <input type="number" min="1" max="${totalPages}" value="${detailViewCurrentPage}"
-           onchange="goToDetailViewPage(parseInt(this.value))"
-           style="width:60px;padding:4px 8px;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:12px">
-    <span>of ${totalPages}</span>
-  </span>`;
-  
-  // Next button
-  html += `<button class="btn btn-sm" ${detailViewCurrentPage === totalPages ? 'disabled' : ''} onclick="goToDetailViewPage(${detailViewCurrentPage + 1})" style="${detailViewCurrentPage === totalPages ? 'opacity:0.5;cursor:not-allowed' : ''}">Next →</button>`;
-  
-  // Items per page selector
-  html += `<select class="btn btn-sm" onchange="changeDetailViewItemsPerPage(parseInt(this.value))" style="margin-left:8px">
-    <option value="10" ${detailViewItemsPerPage === 10 ? 'selected' : ''}>10 per page</option>
-    <option value="25" ${detailViewItemsPerPage === 25 ? 'selected' : ''}>25 per page</option>
-    <option value="50" ${detailViewItemsPerPage === 50 ? 'selected' : ''}>50 per page</option>
-    <option value="100" ${detailViewItemsPerPage === 100 ? 'selected' : ''}>100 per page</option>
-  </select>`;
-  
-  paginationEl.innerHTML = html;
-}
-
-function goToDetailViewPage(page) {
-  detailViewCurrentPage = page;
-  filterDetailViewTests();
-}
-
-function changeDetailViewItemsPerPage(items) {
-  detailViewItemsPerPage = items;
-  detailViewCurrentPage = 1;
-  filterDetailViewTests();
-}
-
-function exportDetailViewCSV() {
-  if (!detailViewTests.length) return;
-  
-  const csvHeader = 'Test Name,Status,Dtype,Op,Time(s),Error\n';
-  const csvRows = detailViewTests.map(t => [
-    `"${t.name.replace(/"/g, '""')}"`,
-    t.status,
-    t.dtype,
-    t.opName,
-    t.timeVal.toFixed(3),
-    `"${(t.failMsg || '').replace(/"/g, '""')}"`
-  ].join(',')).join('\n');
-  
-  const blob = new Blob([csvHeader + csvRows], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = `${currentDetailGroup.replace(/[^a-zA-Z0-9]/g, '_')}_tests.csv`;
-  link.style.visibility = 'hidden';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  
-  showToast('CSV exported successfully');
-}
-
-function printGroupData(key, total, passed, failed, xfail, xpass, skipped, effectivePct, format) {
-  // Close the menu
-  if (currentOpenMenu) {
-    const menu = document.getElementById(currentOpenMenu);
-    if (menu) menu.classList.remove('show');
-    currentOpenMenu = null;
-  }
-  
-  // Get test details for this group
-  const run = currentRun();
-  if (!run) return;
-  
-  const tests = run.modelMap[key] || [];
-  
-  if (format === 'csv') {
-    // Generate CSV data with group summary and test details
-    let csvContent = '# Group Summary\n';
-    csvContent += 'Group,Total,Passed,Failed,Xfail,Xpass,Skipped,PassRate\n';
-    csvContent += [
-      `"${key.replace(/"/g, '""')}"`,
-      total,
-      passed,
-      failed,
-      xfail,
-      xpass,
-      skipped,
-      effectivePct + '%'
-    ].join(',') + '\n\n';
-    
-    // Add test details
-    csvContent += '# Test Details\n';
-    csvContent += 'Test Name,Status,Dtype,Op,Time(s),Error\n';
-    csvContent += tests.map(t => [
-      `"${t.name.replace(/"/g, '""')}"`,
-      t.status,
-      t.dtype || '',
-      t.opName || '',
-      t.timeVal ? t.timeVal.toFixed(3) : '0.000',
-      `"${(t.failMsg || '').replace(/"/g, '""')}"`
-    ].join(',')).join('\n');
-    
-    // Download CSV
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    link.setAttribute('download', `group_${key.replace(/[^a-zA-Z0-9]/g, '_')}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    
-    showToast('CSV exported successfully');
-  } else if (format === 'pdf') {
-    // For PDF, create a printable HTML page with group summary and test details
-    const printWindow = window.open('', '_blank');
-    
-    // Build test details table
-    let testDetailsHTML = '<h2 style="margin-top:30px;font-size:16px;color:#2563eb">Test Details</h2>' +
-      '<table style="font-size:11px">' +
-      '<thead><tr>' +
-      '<th>Test Name</th><th>Status</th><th>Dtype</th><th>Op</th><th>Time(s)</th>' +
-      '</tr></thead><tbody>';
-    
-    tests.forEach(t => {
-      const statusColor = t.status === 'passed' ? '#16a34a' :
-                         t.status === 'failed' || t.status === 'error' ? '#dc2626' :
-                         t.status === 'xfail' ? '#d97706' :
-                         t.status === 'xpass' ? '#6366f1' : '#6b7280';
-      testDetailsHTML += '<tr>' +
-        '<td style="font-size:10px">' + (t.name || '') + '</td>' +
-        '<td style="color:' + statusColor + ';font-weight:600">' + t.status + '</td>' +
-        '<td>' + (t.dtype || '') + '</td>' +
-        '<td>' + (t.opName || '') + '</td>' +
-        '<td>' + (t.timeVal ? t.timeVal.toFixed(3) : '0.000') + '</td>' +
-        '</tr>';
-    });
-    testDetailsHTML += '</tbody></table>';
-    
-    const printContent = '<!DOCTYPE html>' +
-      '<html><head>' +
-      '<title>Group Report - ' + key + '</title>' +
-      '<style>' +
-      'body { font-family: Arial, sans-serif; padding: 20px; }' +
-      'h1 { color: #2563eb; font-size: 18px; margin-bottom: 20px; }' +
-      'h2 { color: #2563eb; font-size: 16px; margin-top: 30px; margin-bottom: 15px; }' +
-      'table { width: 100%; border-collapse: collapse; margin-top: 10px; }' +
-      'th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }' +
-      'th { background-color: #f1f5f9; font-weight: 600; }' +
-      '.pass-rate { font-size: 24px; font-weight: bold; color: ' + (effectivePct >= 80 ? '#16a34a' : effectivePct >= 50 ? '#d97706' : '#dc2626') + '; }' +
-      '@media print { body { padding: 10px; } h1 { font-size: 16px; } h2 { font-size: 14px; } }' +
-      '</style></head><body>' +
-      '<h1>Group Coverage Report</h1><table>' +
-      '<tr><th>Group Name</th><td>' + key + '</td></tr>' +
-      '<tr><th>Total Tests</th><td>' + total + '</td></tr>' +
-      '<tr><th>Passed</th><td style="color:#16a34a">' + passed + '</td></tr>' +
-      '<tr><th>Failed</th><td style="color:#dc2626">' + failed + '</td></tr>' +
-      '<tr><th>Xfail</th><td style="color:#d97706">' + xfail + '</td></tr>' +
-      '<tr><th>Xpass</th><td style="color:#6366f1">' + xpass + '</td></tr>' +
-      '<tr><th>Skipped</th><td style="color:#6b7280">' + skipped + '</td></tr>' +
-      '<tr><th>Pass Rate</th><td><span class="pass-rate">' + effectivePct + '%</span></td></tr>' +
-      '</table>' +
-      testDetailsHTML +
-      '<scr' + 'ipt>window.onload = function() { window.print(); };</scr' + 'ipt>' +
-      '</body></html>';
-    
-    printWindow.document.write(printContent);
-    printWindow.document.close();
-    
-    showToast('PDF print dialog opened');
-  }
-}
-
-function closeDrawer() {
-  selectedGroup = null;
-  document.getElementById('detail-drawer').style.display = 'none';
-}
-
-// ─── trend ────────────────────────────────────────────────────────────────────
-function renderTrend() {
+// ─── COMMENTED OUT: trend / run history ───────────────────────────────────────
+/* function renderTrend() {
   if (!runs.length) {
     document.getElementById('trend-empty').style.display='block';
     document.getElementById('trend-content').style.display='none';
@@ -3661,7 +2815,7 @@ function renderTrend() {
       </div>
     </div>`;
   }).join('');
-}
+} */
 
 // ─── exports ──────────────────────────────────────────────────────────────────
 function exportCSV() {
@@ -3673,17 +2827,7 @@ function exportCSV() {
   toast('Exported CSV');
 }
 
-function exportDrawerCSV() {
-  const run = currentRun();
-  if (!run || !selectedGroup) return;
-  const tests = run.modelMap[selectedGroup] || [];
-  const rows = [['test_name','op','dtype','test_method','status','fail_message','time_s','tags']];
-  tests.forEach(t => rows.push([q(t.name),q(t.opName),q(t.dtype),q(t.testMethod),t.status,q(t.failMsg),t.timeVal.toFixed(3),q(t.tags.join(';'))]));
-  downloadCSV(rows, (selectedGroup+'_tests').replace(/[^a-z0-9_]/gi,'_')+'.csv');
-  toast('Exported CSV for ' + selectedGroup);
-}
-
-function exportTrendCSV() {
+/* function exportTrendCSV() {
   const header = ['run','filename','total','passed','xpass','failed','xfail','skipped','pass_pct'];
   const rows = [header];
   runs.forEach((r,i) => {
@@ -3694,7 +2838,7 @@ function exportTrendCSV() {
   });
   downloadCSV(rows,'spyre_trend.csv');
   toast('Exported trend CSV');
-}
+} */
 
 function downloadCSV(rows, filename) {
   const csv = rows.map(r=>r.join(',')).join('\n');
@@ -3703,6 +2847,162 @@ function downloadCSV(rows, filename) {
   a.href = URL.createObjectURL(blob);
   a.download = filename;
   a.click();
+}
+
+// ─── View metric details in test details tab ──────────────────────────────────
+function viewMetricDetails(status) {
+  const run = currentRun();
+  if (!run) {
+    toast('No run selected');
+    return;
+  }
+  
+  // Store current property filters from Overview page
+  const overviewPropertyFilters = {};
+  ['dtype', 'op', 'model', 'module'].forEach(filterType => {
+    if (propertyFilters[filterType].selected.length > 0 &&
+        propertyFilters[filterType].selected.length < propertyFilters[filterType].available.length) {
+      overviewPropertyFilters[filterType] = [...propertyFilters[filterType].selected];
+    }
+  });
+  
+  // Map status parameter to checkbox values
+  const statusMap = {
+    'all': ['passed', 'failed', 'xfail', 'xpass', 'skipped', 'error'],
+    'total': ['passed', 'failed', 'xfail', 'xpass', 'skipped', 'error'],
+    'effective_pass': ['passed', 'xpass'],
+    'passed': ['passed'],
+    'failed': ['failed', 'error'],
+    'xfail': ['xfail'],
+    'xpass': ['xpass'],
+    'skipped': ['skipped']
+  };
+  
+  const statusesToShow = statusMap[status] || [];
+  
+  // Store filters to apply after tab switch
+  window.pendingDetailsFilters = {
+    status: statusesToShow,
+    properties: overviewPropertyFilters
+  };
+  
+  // Switch to details tab
+  switchTab('details');
+  
+  // Scroll to top
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  
+  // toast(`Viewing ${status} tests`);
+}
+
+// ─── View coverage details (operations/modules) ────────────────────────────────
+function viewCoverageDetails(filterType) {
+  const run = currentRun();
+  if (!run) {
+    toast('No run selected');
+    return;
+  }
+  
+  // Store current property filters from Overview page
+  const overviewPropertyFilters = {};
+  ['dtype', 'op', 'model', 'module'].forEach(type => {
+    if (propertyFilters[type].selected.length > 0 &&
+        propertyFilters[type].selected.length < propertyFilters[type].available.length) {
+      overviewPropertyFilters[type] = [...propertyFilters[type].selected];
+    }
+  });
+  
+  // Parse filterType to determine what to filter
+  // filterType can be: 'op_passing', 'op_failing', 'module_passing', 'module_failing'
+  const [category, status] = filterType.split('_');
+  
+  // Calculate which ops/modules match the filter
+  if (category === 'op') {
+    // Calculate operation coverage
+    const opMap = {};
+    run.tests.forEach(t => {
+      const op = t.opName || '(no op)';
+      if (!opMap[op]) opMap[op] = {total: 0, passed: 0, failed: 0};
+      opMap[op].total++;
+      if (t.status === 'passed' || t.status === 'xpass') opMap[op].passed++;
+      if (t.status === 'failed' || t.status === 'error') opMap[op].failed++;
+    });
+    
+    // Filter ops based on status
+    const matchingOps = Object.entries(opMap)
+      .filter(([op, stats]) => {
+        if (status === 'passing') {
+          // Fully passing: 100% pass rate
+          return stats.passed === stats.total && stats.total > 0;
+        } else if (status === 'failing') {
+          // Partially failing: NOT fully passing (includes failures, xfails, skips, etc.)
+          return stats.passed < stats.total && stats.total > 0;
+        }
+        return false;
+      })
+      .map(([op]) => op);
+    
+    // Add op filter to properties
+    if (matchingOps.length > 0) {
+      overviewPropertyFilters['op'] = matchingOps;
+    }
+  } else if (category === 'module') {
+    // Calculate module coverage
+    const moduleMap = {};
+    run.tests.forEach(t => {
+      const module = t.clsShort || '(unknown)';
+      if (!moduleMap[module]) moduleMap[module] = {total: 0, passed: 0, failed: 0};
+      moduleMap[module].total++;
+      if (t.status === 'passed' || t.status === 'xpass') moduleMap[module].passed++;
+      if (t.status === 'failed' || t.status === 'error') moduleMap[module].failed++;
+    });
+    
+    // Filter modules based on status
+    const matchingModules = Object.entries(moduleMap)
+      .filter(([module, stats]) => {
+        if (status === 'passing') {
+          // Fully passing: 100% pass rate
+          return stats.passed === stats.total && stats.total > 0;
+        } else if (status === 'failing') {
+          // Partially failing: NOT fully passing (includes failures, xfails, skips, etc.)
+          return stats.passed < stats.total && stats.total > 0;
+        }
+        return false;
+      })
+      .map(([module]) => module);
+    
+    // Add module filter to properties
+    if (matchingModules.length > 0) {
+      overviewPropertyFilters['module'] = matchingModules;
+    }
+  }
+  
+  // Store filters to apply after tab switch (show all statuses for coverage view)
+  window.pendingDetailsFilters = {
+    status: ['passed', 'failed', 'xfail', 'xpass', 'skipped', 'error'],
+    properties: overviewPropertyFilters
+  };
+  
+  // Switch to details tab
+  switchTab('details');
+  
+  // Scroll to top
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  
+  const filterLabel = filterType.replace('_', ' ');
+  // toast(`Viewing ${filterLabel} tests`);
+}
+
+// ─── Clear all filters helper ─────────────────────────────────────────────────
+function setFilters() {
+  // Clear all active filters
+  // activeFilters.dtype = [];
+  // activeFilters.op = [];
+  // activeFilters.model = [];
+  // activeFilters.module = [];
+  
+  // // Update filter UI
+  // updateFilterUI();
 }
 
 // ─── Download metric-specific data ────────────────────────────────────────────
@@ -3825,63 +3125,63 @@ function downloadMetricData(status) {
 
 function q(s) { return '"' + String(s||'').replace(/"/g,'""') + '"'; }
 
-function exportPDF() {
-  const run = currentRun();
-  if (!run) return;
-  const cnt = countStatuses(run.tests);
-  const total = run.tests.length;
-  const pct = v => total ? Math.round(v/total*100) : 0;
-  const effectivePct = pct(cnt.passed + cnt.xpass);
+// function exportPDF() {
+//   const run = currentRun();
+//   if (!run) return;
+//   const cnt = countStatuses(run.tests);
+//   const total = run.tests.length;
+//   const pct = v => total ? Math.round(v/total*100) : 0;
+//   const effectivePct = pct(cnt.passed + cnt.xpass);
 
-  const modelRows = Object.entries(run.modelMap).sort().map(([key, tests]) => {
-    const c = countStatuses(tests);
-    const ep = tests.length ? Math.round((c.passed+c.xpass)/tests.length*100) : 0;
-    return `<tr><td>${key}</td><td>${tests.length}</td><td style="color:#166534">${c.passed}</td><td style="color:#3730a3">${c.xpass}</td><td style="color:#991b1b">${c.failed}</td><td style="color:#92400e">${c.xfail}</td><td style="color:#374151">${c.skipped}</td><td><b>${ep}%</b></td></tr>`;
-  }).join('');
+//   const modelRows = Object.entries(run.modelMap).sort().map(([key, tests]) => {
+//     const c = countStatuses(tests);
+//     const ep = tests.length ? Math.round((c.passed+c.xpass)/tests.length*100) : 0;
+//     return `<tr><td>${key}</td><td>${tests.length}</td><td style="color:#166534">${c.passed}</td><td style="color:#3730a3">${c.xpass}</td><td style="color:#991b1b">${c.failed}</td><td style="color:#92400e">${c.xfail}</td><td style="color:#374151">${c.skipped}</td><td><b>${ep}%</b></td></tr>`;
+//   }).join('');
 
-  const failures = run.tests.filter(t=>t.status==='failed'||t.status==='error');
-  const failRows = failures.slice(0,50).map(t =>
-    `<tr><td style="font-family:monospace;font-size:11px">${t.name}</td><td style="color:#991b1b">${t.status}</td><td style="font-size:10px;color:#6b7280;max-width:400px;overflow:hidden;text-overflow:ellipsis">${t.failMsg.split('\n')[0]}</td></tr>`
-  ).join('');
+//   const failures = run.tests.filter(t=>t.status==='failed'||t.status==='error');
+//   const failRows = failures.slice(0,50).map(t =>
+//     `<tr><td style="font-family:monospace;font-size:11px">${t.name}</td><td style="color:#991b1b">${t.status}</td><td style="font-size:10px;color:#6b7280;max-width:400px;overflow:hidden;text-overflow:ellipsis">${t.failMsg.split('\n')[0]}</td></tr>`
+//   ).join('');
 
-  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<title>Spyre Coverage — ${run.filename}</title>
-<style>body{font-family:'IBM Plex Sans',sans-serif;color:#111;padding:32px;max-width:960px;margin:0 auto}
-h1{font-size:20px;margin-bottom:4px}h2{font-size:14px;font-weight:500;margin:28px 0 10px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
-.sub{color:#6b7280;font-size:13px;margin-bottom:24px}
-.metrics{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:28px}
-.m{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px;min-width:100px}
-.ml{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em}.mv{font-size:22px;font-weight:300}
-table{width:100%;border-collapse:collapse;font-size:13px}
-th{background:#f3f4f6;text-align:left;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280}
-td{padding:7px 10px;border-bottom:1px solid #f3f4f6}
-.note{font-size:11px;color:#9ca3af;margin-top:4px}
-.footer{margin-top:32px;font-size:11px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:12px}
-</style></head><body>
-<h1>Spyre Model Coverage Report</h1>
-<div class="sub">${run.filename} · Generated ${new Date().toLocaleString()} · Grouped by: ${groupBy}</div>
-<div class="metrics">
-  <div class="m"><div class="ml">Total</div><div class="mv">${total}</div></div>
-  <div class="m"><div class="ml">Passed</div><div class="mv" style="color:#166534">${cnt.passed}</div></div>
-  <div class="m"><div class="ml">Xpass</div><div class="mv" style="color:#3730a3">${cnt.xpass}</div></div>
-  <div class="m"><div class="ml">Failed</div><div class="mv" style="color:#991b1b">${cnt.failed}</div></div>
-  <div class="m"><div class="ml">Xfail</div><div class="mv" style="color:#92400e">${cnt.xfail}</div></div>
-  <div class="m"><div class="ml">Skipped</div><div class="mv" style="color:#374151">${cnt.skipped}</div></div>
-  <div class="m"><div class="ml">Pass rate</div><div class="mv">${effectivePct}%</div></div>
-</div>
-<h2>Coverage by ${groupBy}</h2>
-<table><thead><tr><th>Group</th><th>Tests</th><th>Passed</th><th>Xpass</th><th>Failed</th><th>Xfail</th><th>Skipped</th><th>Pass %</th></tr></thead>
-<tbody>${modelRows}</tbody></table>
-${failures.length ? `<h2>Failures (${Math.min(failures.length,50)} of ${failures.length})</h2>
-<table><thead><tr><th>Test</th><th>Status</th><th>Error</th></tr></thead><tbody>${failRows}</tbody></table>` : ''}
-<div class="footer">Spyre Coverage Dashboard · IBM Research</div>
-</body></html>`;
-  const win = window.open('','_blank');
-  win.document.write(html);
-  win.document.close();
-  setTimeout(()=>{win.focus();win.print();},400);
-  toast('PDF report opened — use Print → Save as PDF');
-}
+//   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+// <title>Spyre Coverage — ${run.filename}</title>
+// <style>body{font-family:'IBM Plex Sans',sans-serif;color:#111;padding:32px;max-width:960px;margin:0 auto}
+// h1{font-size:20px;margin-bottom:4px}h2{font-size:14px;font-weight:500;margin:28px 0 10px;text-transform:uppercase;letter-spacing:.08em;color:#6b7280}
+// .sub{color:#6b7280;font-size:13px;margin-bottom:24px}
+// .metrics{display:flex;gap:16px;flex-wrap:wrap;margin-bottom:28px}
+// .m{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 18px;min-width:100px}
+// .ml{font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:.05em}.mv{font-size:22px;font-weight:300}
+// table{width:100%;border-collapse:collapse;font-size:13px}
+// th{background:#f3f4f6;text-align:left;padding:8px 10px;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280}
+// td{padding:7px 10px;border-bottom:1px solid #f3f4f6}
+// .note{font-size:11px;color:#9ca3af;margin-top:4px}
+// .footer{margin-top:32px;font-size:11px;color:#9ca3af;border-top:1px solid #f3f4f6;padding-top:12px}
+// </style></head><body>
+// <h1>Torch Spyre · Test Health Dashboard</h1>
+// <div class="sub">${run.filename} · Generated ${new Date().toLocaleString()} · Grouped by: ${groupBy}</div>
+// <div class="metrics">
+//   <div class="m"><div class="ml">Total</div><div class="mv">${total}</div></div>
+//   <div class="m"><div class="ml">Passed</div><div class="mv" style="color:#166534">${cnt.passed}</div></div>
+//   <div class="m"><div class="ml">Xpass</div><div class="mv" style="color:#3730a3">${cnt.xpass}</div></div>
+//   <div class="m"><div class="ml">Failed</div><div class="mv" style="color:#991b1b">${cnt.failed}</div></div>
+//   <div class="m"><div class="ml">Xfail</div><div class="mv" style="color:#92400e">${cnt.xfail}</div></div>
+//   <div class="m"><div class="ml">Skipped</div><div class="mv" style="color:#374151">${cnt.skipped}</div></div>
+//   <div class="m"><div class="ml">Pass rate</div><div class="mv">${effectivePct}%</div></div>
+// </div>
+// <h2>Coverage by ${groupBy}</h2>
+// <table><thead><tr><th>Group</th><th>Tests</th><th>Passed</th><th>Xpass</th><th>Failed</th><th>Xfail</th><th>Skipped</th><th>Pass %</th></tr></thead>
+// <tbody>${modelRows}</tbody></table>
+// ${failures.length ? `<h2>Failures (${Math.min(failures.length,50)} of ${failures.length})</h2>
+// <table><thead><tr><th>Test</th><th>Status</th><th>Error</th></tr></thead><tbody>${failRows}</tbody></table>` : ''}
+// <div class="footer">Spyre Coverage Dashboard · IBM Research</div>
+// </body></html>`;
+//   const win = window.open('','_blank');
+//   win.document.write(html);
+//   win.document.close();
+//   setTimeout(()=>{win.focus();win.print();},400);
+//   toast('PDF report opened — use Print → Save as PDF');
+// }
 
 // ─── sample data ──────────────────────────────────────────────────────────────
 // Represents a realistic Spyre run: mostly xfail, some passed, one failure
@@ -4008,13 +3308,49 @@ function makeSampleTests() {
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// ─── helper function to display group name without prefix ────────────────────
+function displayGroupName(name) {
+  if (name.startsWith('model__')) return name.substring(7);
+  if (name.startsWith('module__')) return name.substring(8);
+  return name;
+}
 function escAttr(s){ return String(s||'').replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
-function toast(msg,isErr){
-  const el=document.getElementById('toast');
-  el.textContent=msg;
-  el.style.borderColor=isErr?'rgba(240,82,82,.4)':'var(--border2)';
+function toast(msg, isErr){
+  const el = document.getElementById('toast');
+  
+  // Determine status and icon
+  const title = isErr ? 'Error' : 'Success';
+  const statusClass = isErr ? 'error' : 'success';
+  const icon = isErr ? '✕' : '✓';
+  
+  // Format with icon on left, title with close button inline, message on bottom
+  el.innerHTML = `
+    <div class="toast-icon">${icon}</div>
+    <div class="toast-content">
+      <div class="toast-title">
+        ${title}
+        <div class="toast-close" onclick="closeToast()" title="Close">✕</div>
+      </div>
+      <div class="toast-message">${esc(msg)}</div>
+    </div>
+  `;
+  
+  // Remove previous status classes and add new one
+  el.classList.remove('error', 'success');
+  el.classList.add(statusClass);
   el.classList.add('show');
-  setTimeout(()=>el.classList.remove('show'),3000);
+  
+  // Clear any existing timeout
+  if (window.toastTimeout) clearTimeout(window.toastTimeout);
+  
+  // Auto-hide after 3 seconds
+  window.toastTimeout = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+function closeToast() {
+  const el = document.getElementById('toast');
+  el.classList.remove('show');
+  if (window.toastTimeout) clearTimeout(window.toastTimeout);
 }
 
 // ─── ClickHouse Commits Pagination ────────────────────────────────────────────
@@ -4029,11 +3365,11 @@ let propertyFilters = {
   dtype: { selected: [], available: [] },
   op: { selected: [], available: [] },
   model: { selected: [], available: [] },
-  module: { selected: [], available: []}
+  module: { selected: [], available: []},
+  status: { selected: [], available: ['passed', 'failed', 'xfail', 'xpass', 'skipped', 'error'] }
 };
 
 function extractPropertiesFromTests(tests, propertyType) {
-  console.log("tests for current run",tests)
   const properties = new Set();
   const prefix = propertyType + '__';
   const noFilterKey = 'No_' + propertyType;
@@ -4084,7 +3420,7 @@ function populateFilter(filterType) {
 }
 
 function renderFilterOptions(filterType, options) {
-  console.log(filterType,options)
+  
   const optionsList = document.getElementById(`filter-${filterType}-options`);
   if (!optionsList) return;
   
@@ -4198,6 +3534,11 @@ function getFilteredTests() {
         return true;
       }
       
+      // Special handling for status filter (not a property, but test.status field)
+      if (filterType === 'status') {
+        return filter.selected.includes(test.status);
+      }
+      
       const prefix = filterType + '__';
       const noFilterKey = 'No_' + filterType;
       
@@ -4296,19 +3637,55 @@ function initCommitsTable() {
 async function loadInitialCommits() {
   commitsOffset = 0;
   commitsData = [];
-  await loadCommitsPage();
+  
+  try {
+    const commits = await loadCommitsPage();
+    
+    // Auto-load the latest commit (first in the list) to overview page
+    if (commits && commits.length > 0) {
+      const latestCommit = commits[0];
+      const sha = latestCommit.commit_sha;
+      const branch = latestCommit.branch || '';
+      const workflows = latestCommit.workflows || [];
+      const workflow = workflows.length > 0 ? workflows[0] : '';
+      
+      // Load all runs for the latest commit with custom loader message
+      await loadAllRunsForCommit(sha, branch, workflow, selectedCommitTypes, true);
+    } else {
+      // No commits available, hide loader
+      hideLoader();
+      toast('No commits available', true);
+    }
+  } catch (err) {
+    console.error('[commits] Error during initial load:', err);
+    hideLoader();
+    toast(`Error loading initial data: ${err.message}`, true);
+  }
 }
 
 async function loadNextCommits() {
   if (!hasMoreCommits) return;
   commitsOffset += commitsPageSize;
-  await loadCommitsPage();
+  try {
+    await loadCommitsPage();
+  } catch (err) {
+    // Error already handled and displayed by loadCommitsPage
+    // Just reset offset on error
+    commitsOffset = Math.max(0, commitsOffset - commitsPageSize);
+  }
 }
 
 async function loadPreviousCommits() {
   if (commitsOffset === 0) return;
+  const previousOffset = commitsOffset;
   commitsOffset = Math.max(0, commitsOffset - commitsPageSize);
-  await loadCommitsPage();
+  try {
+    await loadCommitsPage();
+  } catch (err) {
+    // Error already handled and displayed by loadCommitsPage
+    // Just restore offset on error
+    commitsOffset = previousOffset;
+  }
 }
 
 function toggleCommitTypeFilter(event) {
@@ -4385,18 +3762,36 @@ async function loadCommitsPage() {
   
   try {
     // Pass selected filters to ClickHouse query for server-side filtering
-    const commits = await window.__chFetchCommits(commitsOffset, commitsPageSize, selectedCommitTypes);
+    const response = await window.__chFetchCommits(commitsOffset, commitsPageSize, selectedCommitTypes);
+    // Extract commits data and total count from response
+    const commits = response.data || response; // Support both {data: [], total: N} and legacy array format
+    const totalCommitCount = response.total || 0;
     
     if (!commits || commits.length === 0) {
       hasMoreCommits = false;
       tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text3)">No commits found</td></tr>';
       if (status) status.textContent = selectedCommitTypes.length === 0 ? 'No filter selected' : 'No commits available';
       if (paginationInfo) paginationInfo.textContent = 'No commits';
-      return;
+      // Enable/disable pagination buttons for empty state
+      if (prevBtn) {
+        prevBtn.disabled = commitsOffset === 0;
+        prevBtn.style.opacity = commitsOffset === 0 ? '0.5' : '1';
+        prevBtn.style.cursor = commitsOffset === 0 ? 'not-allowed' : 'pointer';
+      }
+      if (nextBtn) {
+        nextBtn.disabled = true;
+        nextBtn.style.opacity = '0.5';
+        nextBtn.style.cursor = 'not-allowed';
+      }
+      return [];
     }
     
-    // Check if there are more commits (if we got exactly the page size, there might be more)
-    hasMoreCommits = commits.length === commitsPageSize;
+    // Check if there are more commits using total count if available, otherwise use page size heuristic
+    if (totalCommitCount > 0) {
+      hasMoreCommits = (commitsOffset + commits.length) < totalCommitCount;
+    } else {
+      hasMoreCommits = commits.length === commitsPageSize;
+    }
     
     // Render commits table
     tbody.innerHTML = commits.map((commit, idx) => {
@@ -4411,6 +3806,9 @@ async function loadCommitsPage() {
       const passed = commit.passed || 0;
       const failed = commit.failed || 0;
       const xpass = commit.xpass || 0;
+      const xfailed = commit.xfail || 0;
+      const xpassed = commit.xpassed || 0;
+      const xtotal = commit.xtotal || 0;
       const passRate = totalTests > 0 ? Math.round(((passed + xpass) / totalTests) * 100) : 0;
       const triggeredAt = commit.triggered_at ? new Date(commit.triggered_at).toLocaleString() : 'N/A';
       const passColor = passRate >= 90 ? 'var(--pass)' : passRate >= 60 ? 'var(--xfail)' : 'var(--fail)';
@@ -4441,16 +3839,16 @@ async function loadCommitsPage() {
             <span class="status-badge sb-pass">${passed + xpass}</span>
           </td>
           <td style="text-align:center">
-            <span class="status-badge sb-fail">${failed}</span>
+            <span class="status-badge sb-fail">${failed + xfailed}</span>
           </td>
           <td style="text-align:center;font-weight:600;color:${passColor}">${passRate}%</td>
           <td style="text-align:center;font-size:11px;color:var(--text3)">${triggeredAt}</td>
           <td style="text-align:center">
             <button class="action-menu-btn" onclick="toggleReportActionMenu(${idx}, event)" title="Actions">⋮</button>
             <div class="action-dropdown" id="action-menu-${idx}" style="display:none">
-              <button class="action-dropdown-item" onclick="loadAllRunsForCommit('${escAttr(sha)}', '${escAttr(branch)}', '', selectedCommitTypes);closeAllMenus()">View Details</button>
+              <button class="action-dropdown-item" onclick="loadAllRunsForCommit('${escAttr(sha)}', '${escAttr(branch)}', '', selectedCommitTypes, false, 'overview');closeAllMenus()">View Overview</button>
+              <button class="action-dropdown-item" onclick="loadAllRunsForCommit('${escAttr(sha)}', '${escAttr(branch)}', '', selectedCommitTypes, false, 'details');closeAllMenus()">View Details</button>
               <button class="action-dropdown-item" onclick="exportRunCSV(${idx});closeAllMenus()">Export CSV</button>
-              <button class="action-dropdown-item danger" onclick="removeRun(${idx});renderReports();closeAllMenus()">Delete Report</button>
             </div>
           </td>
         </tr>
@@ -4461,16 +3859,57 @@ async function loadCommitsPage() {
     const startNum = commitsOffset + 1;
     const endNum = commitsOffset + commits.length;
     if (status) status.textContent = `Showing commits ${startNum}-${endNum}`;
-    if (paginationInfo) paginationInfo.textContent = `Showing ${startNum}-${endNum} commits`;
+    if (paginationInfo) paginationInfo.textContent = `Showing ${startNum}-${endNum} of ${totalCommitCount} commits`;
     
     // Enable/disable pagination buttons
-    if (prevBtn) prevBtn.disabled = commitsOffset === 0;
-    if (nextBtn) nextBtn.disabled = !hasMoreCommits;
+    const shouldDisablePrev = commitsOffset === 0;
+    const shouldDisableNext = !hasMoreCommits;
+    
+    console.log('[commits] Pagination state:', {
+      commitsOffset,
+      commitsLength: commits.length,
+      totalCommitCount,
+      hasMoreCommits,
+      shouldDisablePrev,
+      shouldDisableNext
+    });
+    
+    if (prevBtn) {
+      prevBtn.disabled = shouldDisablePrev;
+      prevBtn.style.opacity = shouldDisablePrev ? '0.5' : '1';
+      prevBtn.style.cursor = shouldDisablePrev ? 'not-allowed' : 'pointer';
+    }
+    if (nextBtn) {
+      nextBtn.disabled = shouldDisableNext;
+      nextBtn.style.opacity = shouldDisableNext ? '0.5' : '1';
+      nextBtn.style.cursor = shouldDisableNext ? 'not-allowed' : 'pointer';
+    }
+    
+    // Return commits data for use by loadInitialCommits
+    return commits;
     
   } catch (err) {
     console.error('[commits] Error loading commits:', err);
-    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:20px;color:var(--fail)">Error: ${esc(err.message)}</td></tr>`;
-    if (status) status.textContent = `Error: ${err.message}`;
+    tbody.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--fail)">⚠️ Error loading commits: ${esc(err.message)}</td></tr>`;
+    if (status) status.innerHTML = `<span style="color:var(--fail)">⚠️ Error: ${esc(err.message)}</span>`;
+    
+    // Re-enable buttons on error with proper state
+    const shouldDisablePrev = commitsOffset === 0;
+    const shouldDisableNext = !hasMoreCommits;
+    
+    if (prevBtn) {
+      prevBtn.disabled = shouldDisablePrev;
+      prevBtn.style.opacity = shouldDisablePrev ? '0.5' : '1';
+      prevBtn.style.cursor = shouldDisablePrev ? 'not-allowed' : 'pointer';
+    }
+    if (nextBtn) {
+      nextBtn.disabled = shouldDisableNext;
+      nextBtn.style.opacity = shouldDisableNext ? '0.5' : '1';
+      nextBtn.style.cursor = shouldDisableNext ? 'not-allowed' : 'pointer';
+    }
+    
+    // Re-throw error so loadInitialCommits can handle it properly
+    throw err;
   }
 }
 
@@ -4487,26 +3926,42 @@ function hideLoader() {
   if (overlay) overlay.classList.remove('show');
 }
 
-async function loadAllRunsForCommit(commitSha, branch, workflow, branchFilters) {
+async function loadAllRunsForCommit(commitSha, branch, workflow, branchFilters, isInitialLoad = false, targetTab = null) {
   if (typeof window.__chLoadAllRunsForCommit !== 'function') {
     toast('ClickHouse integration not available', true);
     return;
   }
   
   const shortSha = commitSha.substring(0, 8);
-  showLoader(`Loading commit ${shortSha}...`);
+  // Show different message for initial load vs manual load
+  const loaderMessage = isInitialLoad ? 'Loading latest commit...' : `Loading commit ${shortSha}...`;
+  showLoader(loaderMessage);
   
   try {
     const loadedCount = await window.__chLoadAllRunsForCommit(commitSha, branch, workflow, branchFilters);
     hideLoader();
-    toast(`✓ Loaded ${loadedCount} run${loadedCount !== 1 ? 's' : ''} for commit ${shortSha}`);
+    toast(`Loaded ${loadedCount} run${loadedCount !== 1 ? 's' : ''} for commit ${shortSha}`);
     
-    // Automatically switch to overview tab to see the loaded data
-    setTimeout(() => {
-      switchTab('overview');
-      // Scroll to top of page
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 300);
+    // Switch to specified tab or default to overview (but not during initial load)
+    if (!isInitialLoad && targetTab) {
+      setTimeout(() => {
+        switchTab(targetTab);
+        // Scroll to top of page
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 300);
+    } else if (!isInitialLoad) {
+      // Default behavior: switch to overview if not already there
+      const overviewPanel = document.getElementById('panel-overview');
+      const isOverviewActive = overviewPanel && overviewPanel.classList.contains('active');
+      
+      if (!isOverviewActive) {
+        setTimeout(() => {
+          switchTab('overview');
+          // Scroll to top of page
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 300);
+      }
+    }
   } catch (err) {
     hideLoader();
     console.error('[commits] Error loading runs for commit:', err);

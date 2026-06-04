@@ -76,7 +76,7 @@ def get_config():
 
 @app.route('/api/commits', methods=['GET'])
 def fetch_commits():
-    """Fetch commits list with aggregated test results."""
+    """Fetch commits list with aggregated test results and total count."""
     try:
         offset = int(request.args.get('offset', 0))
         limit = int(request.args.get('limit', 30))
@@ -86,7 +86,7 @@ def fetch_commits():
         # Build branch filter conditions
         branch_conditions = []
         if not branch_filters:
-            return jsonify({'data': [], 'count': 0})
+            return jsonify({'data': [], 'count': 0, 'total': 0})
         
         if 'push' in branch_filters:
             branch_conditions.append("branch = 'main'")
@@ -98,7 +98,8 @@ def fetch_commits():
         branch_filter = ' OR '.join(branch_conditions)
         workflow_filter = f"AND workflow = '{workflow.replace(chr(39), chr(92)+chr(39))}'" if workflow else ''
         
-        sql = f"""
+        # Query for paginated commits
+        commits_sql = f"""
             SELECT
                 commit_sha,
                 any(branch) AS branch,
@@ -121,8 +122,22 @@ def fetch_commits():
             LIMIT {limit} OFFSET {offset}
         """
         
-        results = execute_clickhouse_query(sql.strip())
-        return jsonify({'data': results, 'count': len(results)})
+        # Query for total count
+        count_sql = f"""
+            SELECT COUNT(DISTINCT commit_sha) AS total
+            FROM {CH_DB}.test_runs
+            WHERE ({branch_filter}) {workflow_filter}
+        """
+        
+        results = execute_clickhouse_query(commits_sql.strip())
+        count_results = execute_clickhouse_query(count_sql.strip())
+        total_count = count_results[0]['total'] if count_results else 0
+        
+        return jsonify({
+            'data': results,
+            'count': len(results),
+            'total': total_count
+        })
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
