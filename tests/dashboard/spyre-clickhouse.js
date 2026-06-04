@@ -82,8 +82,7 @@ async function chQuery(sql) {
     // Build branch filter conditions
     let branchConditions = [];
     if (branchFilters.length === 0) {
-      // No filters selected, return empty
-      return [];
+      return { data: [], count: 0, total: 0 };
     }
     
     if (branchFilters.includes('push')) {
@@ -99,8 +98,8 @@ async function chQuery(sql) {
     const branchFilter = branchConditions.join(' OR ');
     const workflowFilter = cfg.workflow ? `AND workflow = '${cfg.workflow.replace(/'/g, "\\'")}'` : '';
 
-    // Use subquery to filter first, then aggregate
-    const sql = `
+    // Query for paginated commits
+    const commitsSql = `
       SELECT
         commit_sha,
         any(branch) AS branch,
@@ -124,7 +123,23 @@ async function chQuery(sql) {
       LIMIT ${limit}
       OFFSET ${offset}
     `;
-    return chQuery(sql.trim());
+    
+    // Query for total count
+    const countSql = `
+      SELECT COUNT(DISTINCT commit_sha) AS total
+      FROM ${cfg.db}.test_runs
+      WHERE (${branchFilter}) ${workflowFilter}
+    `;
+    
+    const results = await chQuery(commitsSql.trim());
+    const countResults = await chQuery(countSql.trim());
+    const totalCount = countResults.length > 0 ? countResults[0].total : 0;
+    
+    return {
+      data: results,
+      count: results.length,
+      total: totalCount
+    };
   }
 
   // ─── Fetch all runs for a specific commit ─────────────────
