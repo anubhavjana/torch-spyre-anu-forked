@@ -684,7 +684,7 @@ async function chQuery(sql) {
       const run = {
         _commitSha: commitSha,
         _isAggregated: true,
-        filename: `Commit ${shortSha} (${commit.workflows.length} workflows)`,
+        filename: `Commit ${shortSha}`,
         timestamp: new Date(commit.triggered_at).getTime() || Date.now(),
         tests: tests, // Now populated with actual test data for filtering
         modelMap: typeof buildGroupMap === "function" ? buildGroupMap(tests, groupBy) : {},

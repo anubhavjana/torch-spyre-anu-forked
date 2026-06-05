@@ -361,7 +361,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
     <div class="sidebar-title">Test Coverage</div>
     <div class="nav-list">
       <button class="nav-item active" id="nav-overview" onclick="switchTab('overview')" data-tooltip="Test Overview">
-        <span class="nav-icon">📊</span>
+        <span class="nav-icon">🔍</span>
         <span class="nav-text">Test Overview</span>
       </button>
       <button class="nav-item" id="nav-details" onclick="switchTab('details')" data-tooltip="Test Details">
@@ -496,18 +496,18 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
                 <label style="font-size:11px;font-family:var(--mono);color:var(--text3)">FILTER:</label>
                 <div class="multiselect-dropdown" id="commit-type-filter-container">
                   <div class="multiselect-button" onclick="toggleCommitTypeFilter(event)">
-                    <span class="multiselect-button-text" id="commit-filter-text">Push</span>
+                    <span class="multiselect-button-text" id="commit-filter-text">PR Merge</span>
                     <span class="multiselect-arrow">▼</span>
                   </div>
                   <div class="multiselect-menu" id="commit-type-filter-menu">
                     <label class="multiselect-option">
-                      <input type="checkbox" value="push" checked onchange="updateCommitTypeFilter()"> Push (main)
+                      <input type="radio" name="commit-type" value="push" checked onchange="updateCommitTypeFilter()"> PR Merge
                     </label>
                     <label class="multiselect-option">
-                      <input type="checkbox" value="merge-queue" onchange="updateCommitTypeFilter()"> Merge Queue
+                      <input type="radio" name="commit-type" value="merge-queue" onchange="updateCommitTypeFilter()"> PR merge queue
                     </label>
                     <label class="multiselect-option">
-                      <input type="checkbox" value="commit" onchange="updateCommitTypeFilter()"> Commit (others)
+                      <input type="radio" name="commit-type" value="commit" onchange="updateCommitTypeFilter()"> PR Commit
                     </label>
                   </div>
                 </div>
@@ -519,6 +519,7 @@ body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14
                   <tr>
                     <th style="width:40px">#</th>
                     <th>Commit SHA</th>
+                    <th>PR</th>
                     <th>Branch</th>
                     <th>Workflows</th>
                     <th style="text-align:center">Total Tests</th>
@@ -2698,7 +2699,7 @@ function filterTestDetails() {
   } else {
     // Default sort: failures first
     filtered.sort((a, b) => {
-      const order = {failed:0, error:1, xpass:2, passed:3, xfail:4, skipped:5};
+      const order = {failed:0, error:1, xfail:2, xpass:3, passed:4, skipped:5};
       return (order[a.status] ?? 9) - (order[b.status] ?? 9);
     });
   }
@@ -3786,26 +3787,18 @@ function toggleCommitTypeFilter(event) {
 }
 
 function updateCommitTypeFilter() {
-  const checkboxes = document.querySelectorAll('#commit-type-filter-menu input[type="checkbox"]');
-  selectedCommitTypes = Array.from(checkboxes)
-    .filter(cb => cb.checked)
-    .map(cb => cb.value);
+  const selectedRadio = document.querySelector('#commit-type-filter-menu input[type="radio"]:checked');
+  selectedCommitTypes = selectedRadio ? [selectedRadio.value] : ['push'];
   
   // Update button text
   const buttonText = document.getElementById('commit-filter-text');
   if (buttonText) {
-    if (selectedCommitTypes.length === 0) {
-      buttonText.textContent = 'None Selected';
-    } else if (selectedCommitTypes.length === 3) {
-      buttonText.textContent = 'All Types';
-    } else {
-      const labels = {
-        'push': 'Push',
-        'merge-queue': 'Merge Queue',
-        'commit': 'Commit'
-      };
-      buttonText.textContent = selectedCommitTypes.map(t => labels[t]).join(', ');
-    }
+    const labels = {
+      'push': 'PR Merge',
+      'merge-queue': 'PR Merge Queue',
+      'commit': 'PR Commit'
+    };
+    buttonText.textContent = labels[selectedCommitTypes[0]] || 'PR Merge';
   }
   
   // Reset to first page when filter changes
@@ -3823,6 +3816,32 @@ document.addEventListener('click', function(event) {
     menu.classList.remove('show');
   }
 });
+
+// Toggle workflows display between limited and full view
+function toggleWorkflows(workflowId) {
+  const limited = document.getElementById(`${workflowId}-limited`);
+  const all = document.getElementById(`${workflowId}-all`);
+  const more = document.getElementById(`${workflowId}-more`);
+  const less = document.getElementById(`${workflowId}-less`);
+  
+  if (limited && all && more && less) {
+    const isExpanded = all.style.display !== 'none';
+    
+    if (isExpanded) {
+      // Collapse: show limited view
+      limited.style.display = 'block';
+      all.style.display = 'none';
+      more.style.display = 'inline';
+      less.style.display = 'none';
+    } else {
+      // Expand: show all workflows
+      limited.style.display = 'none';
+      all.style.display = 'block';
+      more.style.display = 'none';
+      less.style.display = 'inline';
+    }
+  }
+}
 
 async function loadCommitsPage() {
   const tbody = document.getElementById('commits-table-body');
@@ -3848,6 +3867,22 @@ async function loadCommitsPage() {
   if (nextBtn) nextBtn.disabled = true;
   if (status) status.innerHTML = '<span class="loading-text">Loading commits<span class="loading-dots"></span></span>';
   tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:20px;color:var(--text3)"><span class="loading-text">Loading<span class="loading-dots"></span></span></td></tr>';
+  
+  // Helper function to extract PR number based on branch pattern
+  function extractPRNumber(branch, commitPRNumber) {
+    if (branch === 'main') {
+      // For main branch, use pr_number directly from commit
+      return commitPRNumber || '';
+    } else if (branch && branch.startsWith('gh-readonly-queue/')) {
+      // For gh-readonly-queue branches, extract PR number from pattern
+      // Pattern: gh-readonly-queue/main/pr-2507-5838b3b0bfc2a3a633bdd973e5a3e561042c5aee
+      const match = branch.match(/\/pr-(\d+)-/);
+      return match ? match[1] : (commitPRNumber || '');
+    } else {
+      // For other branches, use pr_number from commit
+      return commitPRNumber || '';
+    }
+  }
   
   try {
     // Pass selected filters to ClickHouse query for server-side filtering
@@ -3890,7 +3925,7 @@ async function loadCommitsPage() {
       const branch = commit.branch || 'N/A';
       const workflows = commit.workflows || [];
       const workflowCount = commit.total_workflows || workflows.length;
-      const prNumber = commit.pr_number || '';
+      const prNumber = extractPRNumber(branch, commit.pr_number);
       const totalTests = commit.total || 0;
       const passed = commit.passed || 0;
       const failed = commit.failed || 0;
@@ -3902,11 +3937,40 @@ async function loadCommitsPage() {
       const triggeredAt = commit.triggered_at ? new Date(commit.triggered_at).toLocaleString() : 'N/A';
       const passColor = passRate >= 90 ? 'var(--pass)' : passRate >= 60 ? 'var(--xfail)' : 'var(--fail)';
       
-      // Format workflows list
+      // Format workflows list with expand/collapse functionality - 2 per line
+      const workflowId = `workflows-${idx}`;
+      
+      // Helper to format workflows in rows of 2
+      const formatWorkflowsInRows = (workflowList) => {
+        let html = '<div style="display:flex;flex-direction:column;gap:4px">';
+        for (let i = 0; i < workflowList.length; i += 2) {
+          html += '<div style="display:flex;gap:4px;flex-wrap:wrap">';
+          html += `<span style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:10px">${esc(workflowList[i])}</span>`;
+          if (i + 1 < workflowList.length) {
+            html += `<span style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:10px">${esc(workflowList[i + 1])}</span>`;
+          }
+          html += '</div>';
+        }
+        html += '</div>';
+        return html;
+      };
+      
+      const limitedWorkflowsHTML = formatWorkflowsInRows(workflows.slice(0, 2));
+      const allWorkflowsHTML = formatWorkflowsInRows(workflows);
+      
       const workflowsDisplay = workflows.length > 0
-        ? workflows.slice(0, 2).map(w => `<span style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:10px;margin-right:4px">${esc(w)}</span>`).join('')
+        ? `<div id="${workflowId}-limited">${limitedWorkflowsHTML}</div>
+           <div id="${workflowId}-all" style="display:none">${allWorkflowsHTML}</div>`
         : '<span style="color:var(--text3)">N/A</span>';
-      const moreWorkflows = workflows.length > 2 ? `<span style="font-size:10px;color:var(--text3)">+${workflows.length - 2} more</span>` : '';
+      
+      // Put +X more and total count on same line
+      const workflowInfo = workflows.length > 2
+        ? `<div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+             <span id="${workflowId}-more" style="font-size:10px;color:var(--accent);cursor:pointer;text-decoration:underline" onclick="toggleWorkflows('${workflowId}')">+${workflows.length - 2} more</span>
+             <span id="${workflowId}-less" style="display:none;font-size:10px;color:var(--accent);cursor:pointer;text-decoration:underline" onclick="toggleWorkflows('${workflowId}')">show less</span>
+             <span style="font-size:10px;color:var(--text3)">(${workflowCount} workflow${workflowCount !== 1 ? 's' : ''})</span>
+           </div>`
+        : `<div style="font-size:10px;color:var(--text3);margin-top:4px">(${workflowCount} workflow${workflowCount !== 1 ? 's' : ''})</div>`;
       
       return `
         <tr>
@@ -3915,13 +3979,18 @@ async function loadCommitsPage() {
             <a href="https://github.com/torch-spyre/torch-spyre/commit/${esc(sha)}" target="_blank" style="text-decoration:none">
               <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;color:var(--accent);cursor:pointer">${esc(shortSha)}</code>
             </a>
-            ${prNumber ? `<span style="margin-left:4px;font-size:10px;color:var(--text3)">#${prNumber}</span>` : ''}
+            </td>
+            <td style="font-family:var(--mono);font-size:11px" title="${prNumber}">
+            ${prNumber ?
+              `<a href="https://github.com/torch-spyre/torch-spyre/pull/${prNumber}" target="_blank" style="text-decoration:none">
+                <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;color:var(--accent);cursor:pointer">#${prNumber}</code>
+              </a>`
+              : '-'}
           </td>
           <td style="font-size:11px">${esc(branch)}</td>
           <td style="font-size:11px">
             ${workflowsDisplay}
-            ${moreWorkflows}
-            <div style="font-size:10px;color:var(--text3);margin-top:2px">${workflowCount} workflow${workflowCount !== 1 ? 's' : ''}</div>
+            ${workflowInfo}
           </td>
           <td style="text-align:center;font-weight:600">${totalTests}</td>
           <td style="text-align:center">
