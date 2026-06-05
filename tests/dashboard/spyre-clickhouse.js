@@ -468,10 +468,11 @@ async function chQuery(sql) {
       };
 
       runs.push(run);
-      runs.sort((a, b) => a.timestamp - b.timestamp);
+      // Don't sort - keep the run at the index where it was pushed
+      const newRunIndex = runs.length - 1;
 
       // Delegate to the existing dashboard functions
-      if (typeof selectRun === "function") selectRun(runs.length - 1);
+      if (typeof selectRun === "function") selectRun(newRunIndex);
       if (typeof updateRunList === "function") updateRunList();
       if (typeof switchTab === "function") switchTab("overview");
 
@@ -607,9 +608,19 @@ async function chQuery(sql) {
       const shortSha = commitSha.substring(0, 8);
       
       // Check for duplicate (same commit already loaded)
-      if (runs.some((r) => r._commitSha === commitSha)) {
-        console.log(`[spyre-clickhouse] Commit ${shortSha} already loaded`);
-        return 0;
+      const existingRunIndex = runs.findIndex((r) => r._commitSha === commitSha);
+      if (existingRunIndex >= 0) {
+        console.log(`[spyre-clickhouse] Commit ${shortSha} already loaded at index ${existingRunIndex}, selecting it`);
+        
+        // Select the existing run and update UI
+        if (typeof selectRun === "function") {
+          selectRun(existingRunIndex);
+        }
+        if (typeof updateRunList === "function") {
+          updateRunList();
+        }
+        
+        return 1; // Return 1 to indicate success (run was found and selected)
       }
 
       // Fetch detailed test cases with properties for filtering
@@ -696,13 +707,12 @@ async function chQuery(sql) {
       console.log("--aggregated results--\n",run);
 
       runs.push(run);
-      runs.sort((a, b) => a.timestamp - b.timestamp);
-
-      // Find the index of the newly added run after sorting
-      const newRunIndex = runs.findIndex(r => r._commitSha === commitSha);
+      // Don't sort - keep the run at the index where it was pushed
+      // This ensures the selected run is displayed correctly
+      const newRunIndex = runs.length - 1;
 
       // Update UI
-      if (typeof selectRun === "function" && newRunIndex >= 0) {
+      if (typeof selectRun === "function") {
         selectRun(newRunIndex);
       }
       if (typeof updateRunList === "function") {
