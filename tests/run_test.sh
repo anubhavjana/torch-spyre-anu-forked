@@ -338,9 +338,10 @@ echo ""
 # ---------------------------------------------------------------------------
 _machine="$(uname -m 2>/dev/null || true)"
 case "$_machine" in
-    ppc64*) _PLATFORM_SLOW_TAG="slow_ppc64"  ;;
-    s390x*) _PLATFORM_SLOW_TAG="slow_s390x"  ;;
+    ppc64*) _PLATFORM_SLOW_TAG="slow__plat_ppc64"  ;;
+    s390x*) _PLATFORM_SLOW_TAG="slow__plat_s390x"  ;;
     aarch64|arm64) _PLATFORM_SLOW_TAG="slow_aarch64" ;;
+    x86_64)        _PLATFORM_SLOW_TAG="slow__plat_x86_64"  ;;
     *)      _PLATFORM_SLOW_TAG="" ;;
 esac
 
