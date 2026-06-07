@@ -327,6 +327,32 @@ echo "  PYTHONPATH                      = $PYTHONPATH"
 echo ""
 
 # ---------------------------------------------------------------------------
+# Auto-inject slow tag filter for non-x86_64 platforms.
+#
+# On platforms where large matmul tests are prohibitively slow, automatically
+# skip tests tagged slow_<arch> without requiring any flag from the caller.
+# x86_64 is the baseline CI platform -- no filtering applied there.
+#
+# To mark a test as slow on a platform, add the tag in the YAML config:
+#   tags: [slow_ppc64]   # skipped automatically on ppc64le
+# ---------------------------------------------------------------------------
+_machine="$(uname -m 2>/dev/null || true)"
+case "$_machine" in
+    ppc64*) _PLATFORM_SLOW_TAG="slow_ppc64"  ;;
+    s390x*) _PLATFORM_SLOW_TAG="slow_s390x"  ;;
+    aarch64|arm64) _PLATFORM_SLOW_TAG="slow_aarch64" ;;
+    *)      _PLATFORM_SLOW_TAG="" ;;
+esac
+
+if [[ -n "$_PLATFORM_SLOW_TAG" ]]; then
+    echo "[torch_oot_device_tests_run] Platform ${_machine}: auto-skipping tests tagged '${_PLATFORM_SLOW_TAG}'"
+    EXTRA_PYTEST_ARGS+=("-m" "not ${_PLATFORM_SLOW_TAG}")
+else
+    echo "[torch_oot_device_tests_run] Platform ${_machine}: no slow tag defined, all tests will run"
+fi
+echo ""
+
+# ---------------------------------------------------------------------------
 # 5. Extract raw file paths from YAML
 # ---------------------------------------------------------------------------
 _extract_file_paths_from_yaml() {
