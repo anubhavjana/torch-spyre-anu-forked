@@ -335,13 +335,19 @@ echo ""
 #
 # To mark a test as slow on a platform, add the tag in the YAML config:
 #   tags: [slow_ppc64]   # skipped automatically on ppc64le
+# WARNING: To add a new platform (e.g. x86_64), BOTH steps must be done
+# together in the same PR:
+#   1. Add the case entry here:   x86_64) _PLATFORM_SLOW_TAG="slow__plat_x86_64" ;;
+#   2. Add the tag in YAML:       tags: [slow__plat_x86_64]
+# Adding the case WITHOUT the YAML tags breaks configs where all listed tests
+# are mode:skip — pytest exits 5 (no tests collected) and CI fails.
+# ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
 _machine="$(uname -m 2>/dev/null || true)"
 case "$_machine" in
     ppc64*) _PLATFORM_SLOW_TAG="slow__plat_ppc64"  ;;
     s390x*) _PLATFORM_SLOW_TAG="slow__plat_s390x"  ;;
     aarch64|arm64) _PLATFORM_SLOW_TAG="slow_aarch64" ;;
-    x86_64)        _PLATFORM_SLOW_TAG="slow__plat_x86_64"  ;;
     *)      _PLATFORM_SLOW_TAG="" ;;
 esac
 
