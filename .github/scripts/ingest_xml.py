@@ -567,7 +567,8 @@ def insert_properties(client, run_id: str, cases: list[dict]):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--xml-dir", required=True)
+    parser.add_argument("--xml-dir", default=None)
+    parser.add_argument("--xml-file", default=None)
     parser.add_argument("--workflow", default="")
     parser.add_argument("--branch", default="")
     parser.add_argument("--sha", default="")
@@ -576,8 +577,13 @@ def main():
     parser.add_argument("--pr-number", default="")
     args = parser.parse_args()
 
-    xml_dir = Path(args.xml_dir)
-    xml_files = sorted(xml_dir.glob("*.xml"))
+    if args.xml_file:
+        xml_files = [Path(args.xml_file)]
+    elif args.xml_dir:
+        xml_files = sorted(Path(args.xml_dir).glob("*.xml"))
+    else:
+        print("Error: provide --xml-dir or --xml-file")
+        sys.exit(1)
 
     if not xml_files:
         print("No XML files found — nothing to ingest.")
