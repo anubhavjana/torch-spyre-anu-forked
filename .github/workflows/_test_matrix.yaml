@@ -233,9 +233,11 @@ jobs:
         id: run_tests
         env:
           MAX_ATTEMPTS: 3
-          STALL_TIMEOUT_SECS: 300   # 5 min with no new stdout → kill as hung
+          STALL_TIMEOUT_SECS: 300   # 5 min with no new stdout --> kill as hung
           STALL_CHECK_INTERVAL: 30  # check every 30s
         run: |
+          set -o pipefail
+
           source "$HOME/.bashrc"
           source /etc/profile.d/ibm-aiu-setup.sh
           cd "$CLONED_TORCH_SPYRE_DIR"
@@ -256,31 +258,20 @@ jobs:
             echo "=== Attempt ${attempt}/${MAX_ATTEMPTS}: ${{ matrix.suite.name }} ==="
 
             LOG_FILE="$(mktemp /tmp/test_output_XXXXXX.log)"
-            LAST_LINE_FILE="$(mktemp /tmp/last_line_XXXXXX.tmp)"
-            echo "0" > "$LAST_LINE_FILE"
+            STALL_FLAG="$(mktemp /tmp/stall_flag_XXXXXX.tmp)"
 
-            # ── Background stall watcher ──────────────────────────────────────
-            # Polls the log file every STALL_CHECK_INTERVAL seconds.
-            # If the line count hasn't changed for STALL_TIMEOUT_SECS seconds,
-            # it kills the test process group.
             stall_watcher() {
-              local pid=$1
               local elapsed_stall=0
               local prev_lines=0
-
-              while kill -0 "$pid" 2>/dev/null; do
+              while [[ ! -f "${STALL_FLAG}.done" ]]; do
                 sleep "$STALL_CHECK_INTERVAL"
                 current_lines=$(wc -l < "$LOG_FILE" 2>/dev/null || echo 0)
-
                 if [[ "$current_lines" -eq "$prev_lines" ]]; then
                   elapsed_stall=$(( elapsed_stall + STALL_CHECK_INTERVAL ))
                   echo "[stall-watcher] No new output for ${elapsed_stall}s (lines=${current_lines})"
                   if [[ $elapsed_stall -ge $STALL_TIMEOUT_SECS ]]; then
-                    echo "[stall-watcher] STALL DETECTED — killing test process (pid=${pid})"
-                    # Kill the entire process group so child procs die too
-                    kill -TERM -"$pid" 2>/dev/null || kill -TERM "$pid" 2>/dev/null
-                    sleep 5
-                    kill -KILL -"$pid" 2>/dev/null || true
+                    echo "[stall-watcher] STALL DETECTED — killing process group"
+                    kill -TERM -$$ 2>/dev/null || true
                     return
                   fi
                 else
@@ -290,49 +281,38 @@ jobs:
               done
             }
 
-            # ── Run test, tee output to log + stdout ──────────────────────────
-            # Run in its own process group (setsid) so the watcher can kill
-            # the whole group (bash + pytest + any spawned workers).
             echo "Running ${{ matrix.suite.name }} tests..."
             echo "  Host Platform : ${_ARCH}"
             echo "  Slow flag     : ${_SLOW_FLAG:-none (all tests will run)}"
             echo "  Extra flags   : ${{ inputs.extra_test_flags }}"
-            setsid bash tests/run_test.sh "$CONFIG" ${{ inputs.extra_test_flags }} ${_SLOW_FLAG} \
-              2>&1 | tee "$LOG_FILE" &
-            TEST_PID=$!
 
-            stall_watcher "$TEST_PID" &
+            stall_watcher &
             WATCHER_PID=$!
 
-            # Wait for the test process; capture its exit code
-            wait "$TEST_PID"
-            TEST_EXIT=$?
+            setsid bash tests/run_test.sh "$CONFIG" ${{ inputs.extra_test_flags }} ${_SLOW_FLAG} \
+              2>&1 | tee "$LOG_FILE"
+            TEST_EXIT=${PIPESTATUS[0]}
 
-            # Watcher is no longer needed
+            touch "${STALL_FLAG}.done"
             kill "$WATCHER_PID" 2>/dev/null || true
             wait "$WATCHER_PID" 2>/dev/null || true
 
             if [[ $TEST_EXIT -eq 0 ]]; then
               echo "=== Attempt ${attempt} PASSED ==="
-              rm -f "$LOG_FILE" "$LAST_LINE_FILE"
+              echo "${{ matrix.suite.name }} tests done"
+              rm -f "$LOG_FILE" "$STALL_FLAG" "${STALL_FLAG}.done"
               exit 0
             fi
 
             echo "=== Attempt ${attempt} FAILED (exit=${TEST_EXIT}) ==="
-
-            # Classify: was this the known RAS/hardware timeout error?
             if grep -qE "ResponseTimeout|Exceeded max iterations|LX logout" "$LOG_FILE"; then
-              echo "    → Hardware RAS timeout detected — will retry"
+              echo "    --> Hardware RAS timeout detected — will retry"
             else
-              echo "    → Non-hardware failure — will retry (up to ${MAX_ATTEMPTS} total)"
+              echo "    --> Non-hardware failure — will retry (up to ${MAX_ATTEMPTS} total)"
             fi
 
-            rm -f "$LOG_FILE" "$LAST_LINE_FILE"
-
-            if [[ $attempt -lt $MAX_ATTEMPTS ]]; then
-              echo "    Waiting 10s before next attempt..."
-              sleep 10
-            fi
+            rm -f "$LOG_FILE" "$STALL_FLAG" "${STALL_FLAG}.done"
+            [[ $attempt -lt $MAX_ATTEMPTS ]] && sleep 10
           done
 
           echo "=== All ${MAX_ATTEMPTS} attempts failed for ${{ matrix.suite.name }} ==="

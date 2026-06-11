@@ -22,7 +22,7 @@ test_suite_config:
             - TestOps::test_eq_scalar_constant_zero
             - TestOps::test_eq_scalar_multidim
             - TestOps::test_eq_scalar_vs_tensor_comparison
-          mode: xfail
+          mode: mandatory_success
           tags:
             - ops__inductor-pointwise
 
