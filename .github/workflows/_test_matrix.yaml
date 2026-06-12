@@ -236,7 +236,8 @@ jobs:
           STALL_TIMEOUT_SECS: 300   # 5 min with no new stdout --> kill as hung
           STALL_CHECK_INTERVAL: 30  # check every 30s
         run: |
-          set -o pipefail
+          set +e
+          set +o pipefail
 
           source "$HOME/.bashrc"
           source /etc/profile.d/ibm-aiu-setup.sh
@@ -289,7 +290,7 @@ jobs:
             stall_watcher &
             WATCHER_PID=$!
 
-            setsid bash tests/run_test.sh "$CONFIG" ${{ inputs.extra_test_flags }} ${_SLOW_FLAG} \
+            bash tests/run_test.sh "$CONFIG" ${{ inputs.extra_test_flags }} ${_SLOW_FLAG} \
               2>&1 | tee "$LOG_FILE"
             TEST_EXIT=${PIPESTATUS[0]}
 
