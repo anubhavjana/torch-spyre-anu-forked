@@ -173,9 +173,23 @@ def _parse_log_ts(line: str) -> str | None:
         return None
 
 
+# Matches ANSI escape sequences (colour codes, cursor moves, resets, etc.)
+# and stray ASCII control characters (NUL, ETX, BEL, BS, ...) that GHA
+# injects into terminal-captured log lines.
+_RE_ANSI = re.compile(r'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+_RE_CTRL = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+')
+
+
+def _clean(s: str) -> str:
+    """Strip ANSI escape codes and non-printable control characters."""
+    s = _RE_ANSI.sub('', s)
+    s = _RE_CTRL.sub('', s)
+    return s.strip()
+
+
 def _first_env(pattern: re.Pattern, text: str) -> str:
     m = pattern.search(text)
-    return m.group("v") if m else ""
+    return _clean(m.group("v")) if m else ""
 
 
 def _first_int(pattern: re.Pattern, text: str, group: str = "n") -> int:
@@ -216,7 +230,7 @@ def _extract_all_ras_events(chunk_lines: list[str]) -> list[dict]:
         event: dict[str, Any] = {"timestamp": ts_str or "", "raw": blob_str}
         try:
             parsed = json.loads(blob_str)
-            event.update({k: str(v) for k, v in parsed.items()})
+            event.update({k: _clean(str(v)) if isinstance(v, str) else str(v) for k, v in parsed.items()})
         except json.JSONDecodeError:
             # Partial parse: pull out fields individually
             for field, pat in [
@@ -289,6 +303,9 @@ def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, An
             #   hardware_pci_busfence | hardware_ras_other |
             #   stall | signal_exit | other
             "failure_reason":   "none",
+            # Full parsed RAS JSON of the primary (first) error, or {} if none.
+            # For non-RAS failures (stall, other) this is {}.
+            "failure_reason_detail": {},
             # Possible values:
             #   collection | firmware_init | runtime_init | execution | (empty)
             "failure_phase":    "",
@@ -358,7 +375,7 @@ def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, An
         # ── Retry trigger banner ──────────────────────────────────────────
         for line in chunk_lines:
             if "-->" in line and ("retry" in line.lower() or "detected" in line.lower()):
-                rec["retry_trigger"] = line.strip()
+                rec["retry_trigger"] = _clean(line)
                 break
 
         # ── Extract ALL RAS events ────────────────────────────────────────
@@ -377,9 +394,14 @@ def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, An
             rec["ras_message"]     = first.get("message", "")
             rec["first_error_ts"]  = first.get("timestamp", "")
 
-        # ── Failure reason ────────────────────────────────────────────────
+        # ── Failure reason + detail ───────────────────────────────────────
         if ras_events:
             rec["failure_reason"] = _ras_name_to_reason(rec["ras_name"])
+            # failure_reason_detail: the full parsed primary RAS event as a dict,
+            # with timestamp and raw blob removed to keep it clean.
+            detail = {k: v for k, v in ras_events[0].items()
+                      if k not in ("timestamp", "raw")}
+            rec["failure_reason_detail"] = detail
         elif RE_STALL_LINE.search(chunk) and rec["outcome"] == "failed":
             rec["failure_reason"] = "stall"
         elif RE_SIGNAL_EXIT.search(chunk) and rec["outcome"] == "failed":
