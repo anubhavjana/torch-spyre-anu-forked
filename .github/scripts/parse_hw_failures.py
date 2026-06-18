@@ -1,28 +1,7 @@
 #!/usr/bin/env python3
 """
-parse_hardware_failures.py
-==========================
 Parses GitHub Actions test log output and produces a structured JSON report
 suitable for ingestion into ClickHouse (hw_failure_diagnostics table).
-
-For each (suite, attempt) pair it captures:
-  - run_id, suite_name, attempt number, total attempts
-  - outcome (passed / failed / unknown) and exit code
-  - ALL RAS errors found in the attempt (stored as a JSON array in ras_events)
-  - Primary failure reason, derived from the first/dominant RAS event:
-      hardware_ras_timeout   code=0xf40a  RAS::CBRB::ResponseTimeout
-      hardware_vfio_error    code=0x332b  RAS::VFIO::DeviceOpenFail
-      hardware_pci_busfence  code=0xa35e  RAS::PCI::BusFence
-      hardware_ras_other     any other RAS error
-      stall                  stall-watcher fired, no RAS
-      signal_exit            pytest signal exit, no RAS
-      other                  failed but nothing above matched
-      none                   passed
-  - failure_phase: where in the stack the error occurred
-  - Hardware identifiers: node, PCI address, card serial, chip ECID/wafer/XY
-  - Timestamps: attempt start, first error
-  - Pytest stats: collected / passed / failed / error counts
-  - Stall info: max stall duration seen
 
 Usage
 -----
@@ -37,19 +16,7 @@ Usage
       --log-dir ./logs/ \\
       --run-id 27674677047
 
-  # Pipe from stdin:
-  cat run.log | python3 parse_hardware_failures.py \\
-      --run-id 27674677047 \\
-      --suite "Inductor Ops Reductions Scalar"
-
-  # Write to file instead of stdout:
-  python3 parse_hardware_failures.py ... --out hw_diagnostics.json
-
-  # Compact JSON (no indentation):
-  python3 parse_hardware_failures.py ... --compact
-
-Notes
------
+Please note:
 - Hardware identifiers (node name, PCI device, card serial, chip info) only
   appear in the env-var dump on the FINAL attempt (when DTLOG_LEVEL=Info is
   enabled).  The parser back-fills those values onto all earlier attempts of
@@ -62,27 +29,24 @@ Notes
 
 import argparse
 import json
-import os
-import re
+import regex as re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ----------------------------
 # Regex patterns
-# ─────────────────────────────────────────────────────────────────────────────
+# ----------------------------
 
 # Attempt banners
 RE_ATTEMPT_START = re.compile(
     r"=== Attempt (?P<attempt>\d+)/(?P<total>\d+):\s*(?P<suite>.+?)\s*==="
 )
-RE_ATTEMPT_FAILED = re.compile(
-    r"=== Attempt \d+ FAILED \(exit=(?P<exit_code>\d+)\)"
-)
+RE_ATTEMPT_FAILED = re.compile(r"=== Attempt \d+ FAILED \(exit=(?P<exit_code>\d+)\)")
 RE_ATTEMPT_PASSED = re.compile(r"=== Attempt \d+ PASSED")
 
-# ── RAS errors ────────────────────────────────────────────────────────────────
+# -------------------- RAS errors ------------------------
 # Matches EVERY ras_base.hpp ERRR line regardless of which fields are present.
 # The JSON object starts at '{' and ends at the first '}' that closes the root
 # object.  All known RAS blobs are single-line, so we match to end-of-line.
@@ -101,22 +65,67 @@ RE_RAS_RUNTIME_ERROR = re.compile(
 
 # Retry / stall signals
 RE_HW_RETRY_BANNER = re.compile(r"Hardware RAS timeout detected", re.IGNORECASE)
-RE_STALL_LINE      = re.compile(r"\[stall-watcher\] No new output for (?P<secs>\d+)s")
-RE_SIGNAL_EXIT     = re.compile(r"SIGNAL EXIT", re.IGNORECASE)
+RE_STALL_LINE = re.compile(r"\[stall-watcher\] No new output for (?P<secs>\d+)s")
+RE_SIGNAL_EXIT = re.compile(r"SIGNAL EXIT", re.IGNORECASE)
+
+# Process crash / signal patterns
+# Matches: "Signal Received: 6 (Aborted)" or "Signal Received: 11 (Segmentation fault)"
+RE_SIGNAL_RECEIVED = re.compile(
+    r"Signal Received:\s*(?P<signum>\d+)\s*\((?P<signame>[^)]+)\)",
+    re.IGNORECASE,
+)
+# Matches: "corrupted double-linked list", "double free or corruption", etc.
+RE_HEAP_CORRUPTION = re.compile(
+    r"(corrupted double-linked list|double free or corruption"
+    r"|malloc(): corrupted top size"
+    r"|free(): invalid pointer"
+    r"|munmap_chunk\(\): invalid pointer)",
+    re.IGNORECASE,
+)
+# Matches backtrace frame lines:  "E   /lib64/libc.so.6(...)[0x...]"
+RE_BACKTRACE_FRAME = re.compile(
+    # Matches GHA log lines like:
+    #   "E           /lib64/libc.so.6(gsignal+0x16)[0x7f4b324be116]"
+    #   "E           /home/senuser/.venv/bin/python3(_start+0x25)[0x561...]"
+    # The "E" prefix + 2+ spaces is how pytest captures stderr in logs.
+    # The path can be any absolute path - no extension restriction.
+    r"^\s*E\s{2,}(?P<lib>/\S+?)(?:\([^)]*\))?\[(?P<addr>0x[0-9a-f]+)\]",
+    re.MULTILINE,
+)
+# Matches backtrace start marker
+RE_BACKTRACE_START = re.compile(r"\*{3,}\s*BACKTRACE\s*\*{3,}", re.IGNORECASE)
+# Signal number -> human name (taken from the logs)
+_SIGNAL_NAMES = {
+    "1": "SIGHUP",
+    "2": "SIGINT",
+    "3": "SIGQUIT",
+    "4": "SIGILL",
+    "6": "SIGABRT",
+    "7": "SIGBUS",
+    "8": "SIGFPE",
+    "9": "SIGKILL",
+    "11": "SIGSEGV",
+    "13": "SIGPIPE",
+    "15": "SIGTERM",
+}
 
 # Hardware environment variables (appear only in final attempt's DTLOG dump)
-RE_NODE_NAME       = re.compile(r"GHA_RUNNER_POD_NODE_NAME\s*->\s*(?P<v>\S+)")
-RE_PCI_DEVICE      = re.compile(r"PCIDEVICE_IBM_COM_AIU_PF\s*->\s*(?P<v>[0-9a-f:.]+)")
-RE_AIU_RANK0       = re.compile(r"AIU_WORLD_RANK_0\s*->\s*(?P<v>[0-9a-f:.]+)")
-RE_PCI_DEV_ID      = re.compile(r"pcidevid\.cpp.*?Device id \(for card idx \d+\):\s*(?P<v>[0-9a-f:.]+)")
-RE_OPENED          = re.compile(r"Opened:\s*SEN:VFIO:TYPE1:(?P<v>[0-9a-f:.]+)")
+RE_NODE_NAME = re.compile(r"GHA_RUNNER_POD_NODE_NAME\s*->\s*(?P<v>\S+)")
+RE_PCI_DEVICE = re.compile(r"PCIDEVICE_IBM_COM_AIU_PF\s*->\s*(?P<v>[0-9a-f:.]+)")
+RE_AIU_RANK0 = re.compile(r"AIU_WORLD_RANK_0\s*->\s*(?P<v>[0-9a-f:.]+)")
+RE_PCI_DEV_ID = re.compile(
+    r"pcidevid\.cpp.*?Device id \(for card idx \d+\):\s*(?P<v>[0-9a-f:.]+)"
+)
+RE_OPENED = re.compile(r"Opened:\s*SEN:VFIO:TYPE1:(?P<v>[0-9a-f:.]+)")
 
 # Chip identifiers (also final-attempt only)
-RE_RAW_ECID        = re.compile(r"Raw ECID\s*=\s*(?P<v>0x[0-9a-fA-F]+\s+0x[0-9a-fA-F]+)")
-RE_CHIP_COORDS     = re.compile(r"CHIPY=(?P<chipy>0x[0-9a-fA-F]+)\s+CHIPX=(?P<chipx>0x[0-9a-fA-F]+)")
-RE_WAFER_ID        = re.compile(r"Mfg WaferID\s*=\s*(?P<v>\S+)")
-RE_MFG_XY          = re.compile(r"Mfg \(X,Y\)\s*=\s*\((?P<x>\d+),(?P<y>\d+)\)")
-RE_CARD_SERIAL     = re.compile(r"Card 11S S/N\s*=\s*(?P<v>\S+)")
+RE_RAW_ECID = re.compile(r"Raw ECID\s*=\s*(?P<v>0x[0-9a-fA-F]+\s+0x[0-9a-fA-F]+)")
+RE_CHIP_COORDS = re.compile(
+    r"CHIPY=(?P<chipy>0x[0-9a-fA-F]+)\s+CHIPX=(?P<chipx>0x[0-9a-fA-F]+)"
+)
+RE_WAFER_ID = re.compile(r"Mfg WaferID\s*=\s*(?P<v>\S+)")
+RE_MFG_XY = re.compile(r"Mfg \(X,Y\)\s*=\s*\((?P<x>\d+),(?P<y>\d+)\)")
+RE_CARD_SERIAL = re.compile(r"Card 11S S/N\s*=\s*(?P<v>\S+)")
 
 # Log-line timestamps
 RE_LOG_TS = re.compile(
@@ -126,25 +135,26 @@ RE_LOG_TS = re.compile(
 )
 
 # Pytest stats
-RE_COLLECTED  = re.compile(r"collected (?P<n>\d+) item")
-RE_PY_PASSED  = re.compile(r"(?P<n>\d+) passed")
-RE_PY_FAILED  = re.compile(r"(?P<n>\d+) failed")
-RE_PY_ERROR   = re.compile(r"(?P<n>\d+) error")
+RE_COLLECTED = re.compile(r"collected (?P<n>\d+) item")
+RE_PY_PASSED = re.compile(r"(?P<n>\d+) passed")
+RE_PY_FAILED = re.compile(r"(?P<n>\d+) failed")
+RE_PY_ERROR = re.compile(r"(?P<n>\d+) error")
 
 # Phase fingerprints
-RE_PHASE_COLLECT  = re.compile(r"ERROR collecting")
+RE_PHASE_COLLECT = re.compile(r"ERROR collecting")
 RE_PHASE_FIRMWARE = re.compile(r"initialize_firmware\.cpp")
-RE_PHASE_RUNTIME  = re.compile(r"start_runtime")
+RE_PHASE_RUNTIME = re.compile(r"start_runtime")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # RAS name → failure_reason mapping
 # Add new entries here as new error codes are discovered.
 # ─────────────────────────────────────────────────────────────────────────────
 _RAS_NAME_TO_REASON = {
-    "RAS::CBRB::ResponseTimeout":   "hardware_ras_timeout",
-    "RAS::VFIO::DeviceOpenFail":    "hardware_vfio_error",
-    "RAS::PCI::BusFence":           "hardware_pci_busfence",
+    "RAS::CBRB::ResponseTimeout": "hardware_ras_timeout",
+    "RAS::VFIO::DeviceOpenFail": "hardware_vfio_error",
+    "RAS::PCI::BusFence": "hardware_pci_busfence",
 }
+
 
 def _ras_name_to_reason(name: str) -> str:
     """Map a RAS name string to a failure_reason label."""
@@ -155,9 +165,10 @@ def _ras_name_to_reason(name: str) -> str:
     return "other"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ----------------
 # Helpers
-# ─────────────────────────────────────────────────────────────────────────────
+# ----------------
+
 
 def _parse_log_ts(line: str) -> str | None:
     m = RE_LOG_TS.search(line)
@@ -176,14 +187,14 @@ def _parse_log_ts(line: str) -> str | None:
 # Matches ANSI escape sequences (colour codes, cursor moves, resets, etc.)
 # and stray ASCII control characters (NUL, ETX, BEL, BS, ...) that GHA
 # injects into terminal-captured log lines.
-_RE_ANSI = re.compile(r'\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
-_RE_CTRL = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+')
+_RE_ANSI = re.compile(r"\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+_RE_CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]+")
 
 
 def _clean(s: str) -> str:
     """Strip ANSI escape codes and non-printable control characters."""
-    s = _RE_ANSI.sub('', s)
-    s = _RE_CTRL.sub('', s)
+    s = _RE_ANSI.sub("", s)
+    s = _RE_CTRL.sub("", s)
     return s.strip()
 
 
@@ -195,6 +206,60 @@ def _first_env(pattern: re.Pattern, text: str) -> str:
 def _first_int(pattern: re.Pattern, text: str, group: str = "n") -> int:
     m = pattern.search(text)
     return int(m.group(group)) if m else 0
+
+
+def _extract_crash_detail(chunk_lines: list[str], chunk: str) -> dict | None:
+    """
+    Detect a process crash (signal abort, segfault, heap corruption, etc.)
+    and return a structured detail dict, or None if no crash found.
+
+    Captured fields:
+      signal_number   : e.g. "6"
+      signal_name     : e.g. "SIGABRT" / "Aborted"
+      error_message   : e.g. "corrupted double-linked list"
+      backtrace_frames: list of the first 10 shared-library frames
+      crash_pid       : pid from "Signal Received from pid=N" if present
+    """
+    sig_m = RE_SIGNAL_RECEIVED.search(chunk)
+    heap_m = RE_HEAP_CORRUPTION.search(chunk)
+
+    if not sig_m and not heap_m:
+        return None
+
+    detail: dict = {"type": "process_crash"}
+
+    if sig_m:
+        signum = sig_m.group("signum")
+        signame_from_log = sig_m.group("signame").strip()
+        detail["signal_number"] = signum
+        detail["signal_name"] = _SIGNAL_NAMES.get(signum, signame_from_log)
+        detail["signal_name_from_log"] = signame_from_log
+
+    pid_m = re.search(r"Signal Received from pid=(?P<pid>\d+)", chunk, re.IGNORECASE)
+    if pid_m:
+        detail["crash_pid"] = pid_m.group("pid")
+
+    if heap_m:
+        detail["error_message"] = heap_m.group(0).strip()
+    elif sig_m:
+        detail["error_message"] = (
+            f"Signal {detail['signal_number']} ({detail['signal_name']})"
+        )
+
+    # Collect backtrace frames (first 10 unique library paths)
+    frames = []
+    seen_libs: set[str] = set()
+    for m in RE_BACKTRACE_FRAME.finditer(chunk):
+        lib = m.group("lib")
+        addr = m.group("addr")
+        if lib not in seen_libs:
+            seen_libs.add(lib)
+            frames.append({"lib": lib, "addr": addr})
+        if len(frames) >= 10:
+            break
+    detail["backtrace_frames"] = frames
+
+    return detail
 
 
 def _extract_all_ras_events(chunk_lines: list[str]) -> list[dict]:
@@ -211,17 +276,17 @@ def _extract_all_ras_events(chunk_lines: list[str]) -> list[dict]:
         # Primary form: ERRR ... [ras_base.hpp] { ... }
         m = RE_RAS_LINE.match(line.strip())
         blob_str = None
-        ts_str   = None
+        ts_str = None
 
         if m:
             blob_str = m.group("blob").strip()
-            ts_str   = _parse_log_ts(line)
+            ts_str = _parse_log_ts(line)
         else:
             # Secondary form: RuntimeError: { ... }  (Python traceback)
             m2 = RE_RAS_RUNTIME_ERROR.search(line)
             if m2:
                 blob_str = m2.group("blob").strip()
-                ts_str   = _parse_log_ts(line)
+                ts_str = _parse_log_ts(line)
 
         if not blob_str or blob_str in seen_blobs:
             continue
@@ -230,17 +295,22 @@ def _extract_all_ras_events(chunk_lines: list[str]) -> list[dict]:
         event: dict[str, Any] = {"timestamp": ts_str or "", "raw": blob_str}
         try:
             parsed = json.loads(blob_str)
-            event.update({k: _clean(str(v)) if isinstance(v, str) else str(v) for k, v in parsed.items()})
+            event.update(
+                {
+                    k: _clean(str(v)) if isinstance(v, str) else str(v)
+                    for k, v in parsed.items()
+                }
+            )
         except json.JSONDecodeError:
             # Partial parse: pull out fields individually
             for field, pat in [
-                ("code",        re.compile(r'"code"\s*:\s*"([^"]+)"')),
-                ("name",        re.compile(r'"name"\s*:\s*"([^"]+)"')),
+                ("code", re.compile(r'"code"\s*:\s*"([^"]+)"')),
+                ("name", re.compile(r'"name"\s*:\s*"([^"]+)"')),
                 ("description", re.compile(r'"description"\s*:\s*"([^"]+)"')),
-                ("action",      re.compile(r'"action"\s*:\s*"([^"]+)"')),
-                ("category",    re.compile(r'"category"\s*:\s*"([^"]+)"')),
-                ("severity",    re.compile(r'"severity"\s*:\s*"([^"]+)"')),
-                ("message",     re.compile(r'"message"\s*:\s*"([^"]+)"')),
+                ("action", re.compile(r'"action"\s*:\s*"([^"]+)"')),
+                ("category", re.compile(r'"category"\s*:\s*"([^"]+)"')),
+                ("severity", re.compile(r'"severity"\s*:\s*"([^"]+)"')),
+                ("message", re.compile(r'"message"\s*:\s*"([^"]+)"')),
             ]:
                 fm = pat.search(blob_str)
                 if fm:
@@ -251,9 +321,10 @@ def _extract_all_ras_events(chunk_lines: list[str]) -> list[dict]:
     return events
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# --------------------------------
 # Core parser
-# ─────────────────────────────────────────────────────────────────────────────
+# --------------------------------
+
 
 def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, Any]]:
     """
@@ -268,8 +339,15 @@ def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, An
     for i, line in enumerate(lines):
         m = RE_ATTEMPT_START.search(line)
         if m:
-            slices.append((i, len(lines), int(m["attempt"]), int(m["total"]),
-                           m["suite"].strip() or suite_hint))
+            slices.append(
+                (
+                    i,
+                    len(lines),
+                    int(m["attempt"]),
+                    int(m["total"]),
+                    m["suite"].strip() or suite_hint,
+                )
+            )
 
     # Fix slice ends
     for idx in range(len(slices) - 1):
@@ -282,126 +360,137 @@ def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, An
 
     for start, end, attempt_num, total_attempts, suite_name in slices:
         chunk_lines = lines[start:end]
-        chunk       = "\n".join(chunk_lines)
+        chunk = "\n".join(chunk_lines)
 
         # ── Template record ───────────────────────────────────────────────
         rec: dict[str, Any] = {
             # Identity
-            "run_id":           run_id,
-            "suite_name":       suite_name,
-            "attempt":          attempt_num,
-            "total_attempts":   total_attempts,
-            "ingested_at":      datetime.now(timezone.utc).isoformat(),
-
+            "run_id": run_id,
+            "suite_name": suite_name,
+            "attempt": attempt_num,
+            "total_attempts": total_attempts,
+            "ingested_at": datetime.now(timezone.utc).isoformat(),
             # Outcome
-            "outcome":          "unknown",
-            "exit_code":        None,
-
+            "outcome": "unknown",
+            "exit_code": None,
             # Failure classification
             # Possible values:
             #   none | hardware_ras_timeout | hardware_vfio_error |
             #   hardware_pci_busfence | hardware_ras_other |
+            #   process_crash (signal/abort/heap corruption) |
             #   stall | signal_exit | other
-            "failure_reason":   "none",
+            "failure_reason": "none",
             # Full parsed RAS JSON of the primary (first) error, or {} if none.
             # For non-RAS failures (stall, other) this is {}.
             "failure_reason_detail": {},
             # Possible values:
             #   collection | firmware_init | runtime_init | execution | (empty)
-            "failure_phase":    "",
-            "retry_trigger":    "",
-
+            "failure_phase": "",
+            "retry_trigger": "",
             # Primary RAS event (first one seen in this attempt)
-            "ras_code":         "",
-            "ras_name":         "",
-            "ras_description":  "",
-            "ras_action":       "",
-            "ras_category":     "",
-            "ras_severity":     "",
-            "ras_message":      "",
-
+            "ras_code": "",
+            "ras_name": "",
+            "ras_description": "",
+            "ras_action": "",
+            "ras_category": "",
+            "ras_severity": "",
+            "ras_message": "",
             # ALL RAS events as a JSON string (array) — for full auditability
-            "ras_events_json":  "[]",
-
+            "ras_events_json": "[]",
             # Hardware identifiers
-            "node_name":        "",
-            "pci_device":       "",
-            "aiu_world_rank0":  "",
-            "card_serial":      "",
-            "chip_ecid_raw":    "",
-            "chip_wafer_id":    "",
-            "chip_mfg_x":       "",
-            "chip_mfg_y":       "",
-            "chip_chipy":       "",
-            "chip_chipx":       "",
-
+            "node_name": "",
+            "pci_device": "",
+            "aiu_world_rank0": "",
+            "card_serial": "",
+            "chip_ecid_raw": "",
+            "chip_wafer_id": "",
+            "chip_mfg_x": "",
+            "chip_mfg_y": "",
+            "chip_chipy": "",
+            "chip_chipx": "",
             # Timestamps
-            "first_error_ts":   "",
+            "first_error_ts": "",
             "attempt_start_ts": "",
-
             # Pytest stats
-            "tests_collected":  0,
-            "tests_passed":     0,
-            "tests_failed":     0,
-            "tests_error":      0,
-
+            "tests_collected": 0,
+            "tests_passed": 0,
+            "tests_failed": 0,
+            "tests_error": 0,
             # Stall info
-            "stall_max_secs":   0,
+            "stall_max_secs": 0,
         }
 
-        # ── Attempt start timestamp ───────────────────────────────────────
+        # -------------------- Attempt start timestamp ----------------------------------------
         for line in chunk_lines[:20]:
             ts = _parse_log_ts(line)
             if ts:
                 rec["attempt_start_ts"] = ts
                 break
 
-        # ── Outcome ───────────────────────────────────────────────────────
+        # -------------------- Outcome --------------------
         for line in chunk_lines:
             mf = RE_ATTEMPT_FAILED.search(line)
             if mf:
-                rec["outcome"]   = "failed"
+                rec["outcome"] = "failed"
                 rec["exit_code"] = int(mf["exit_code"])
                 break
             if RE_ATTEMPT_PASSED.search(line):
                 rec["outcome"] = "passed"
                 break
         if rec["outcome"] == "unknown":
-            if " passed" in chunk and "error" not in chunk.lower():
+            # Prefer explicit pytest summary lines over generic keyword matching.
+            # "N passed" with no "failed" or "error" in the pytest summary → passed.
+            # GHA-level "Error: Process completed" line → failed.
+            # Avoid false positives from INFO/WARN log lines containing "error".
+            has_pytest_passed = bool(re.search(r"\d+ passed", chunk))
+            has_pytest_failed = bool(re.search(r"\d+ failed", chunk))
+            has_pytest_error = bool(re.search(r"\d+ error", chunk))
+            has_gha_exit_error = bool(
+                re.search(r"Error: Process completed with exit code [^0]", chunk)
+            )
+            if has_pytest_passed and not has_pytest_failed and not has_pytest_error:
                 rec["outcome"] = "passed"
-            elif "error" in chunk.lower():
+            elif has_pytest_failed or has_pytest_error or has_gha_exit_error:
                 rec["outcome"] = "failed"
 
-        # ── Retry trigger banner ──────────────────────────────────────────
+        # -------------------- Retry trigger ------------------------
         for line in chunk_lines:
-            if "-->" in line and ("retry" in line.lower() or "detected" in line.lower()):
+            if "-->" in line and (
+                "retry" in line.lower() or "detected" in line.lower()
+            ):
                 rec["retry_trigger"] = _clean(line)
                 break
 
-        # ── Extract ALL RAS events ────────────────────────────────────────
+        # ------------------------ Extract ALL RAS events ------------------------
         ras_events = _extract_all_ras_events(chunk_lines)
         rec["ras_events_json"] = json.dumps(ras_events)
 
         # Populate top-level fields from the FIRST (earliest) RAS event
         if ras_events:
             first = ras_events[0]
-            rec["ras_code"]        = first.get("code", "")
-            rec["ras_name"]        = first.get("name", "")
+            rec["ras_code"] = first.get("code", "")
+            rec["ras_name"] = first.get("name", "")
             rec["ras_description"] = first.get("description", "")
-            rec["ras_action"]      = first.get("action", "")
-            rec["ras_category"]    = first.get("category", "")
-            rec["ras_severity"]    = first.get("severity", "")
-            rec["ras_message"]     = first.get("message", "")
-            rec["first_error_ts"]  = first.get("timestamp", "")
+            rec["ras_action"] = first.get("action", "")
+            rec["ras_category"] = first.get("category", "")
+            rec["ras_severity"] = first.get("severity", "")
+            rec["ras_message"] = first.get("message", "")
+            rec["first_error_ts"] = first.get("timestamp", "")
 
-        # ── Failure reason + detail ───────────────────────────────────────
+        # -------------------- Failure reason + detail ----------------------------
+        crash_detail = _extract_crash_detail(chunk_lines, chunk)
+
         if ras_events:
             rec["failure_reason"] = _ras_name_to_reason(rec["ras_name"])
             # failure_reason_detail: the full parsed primary RAS event as a dict,
             # with timestamp and raw blob removed to keep it clean.
-            detail = {k: v for k, v in ras_events[0].items()
-                      if k not in ("timestamp", "raw")}
+            detail = {
+                k: v for k, v in ras_events[0].items() if k not in ("timestamp", "raw")
+            }
             rec["failure_reason_detail"] = detail
+        elif crash_detail and rec["outcome"] == "failed":
+            rec["failure_reason"] = "process_crash"
+            rec["failure_reason_detail"] = crash_detail
         elif RE_STALL_LINE.search(chunk) and rec["outcome"] == "failed":
             rec["failure_reason"] = "stall"
         elif RE_SIGNAL_EXIT.search(chunk) and rec["outcome"] == "failed":
@@ -410,7 +499,7 @@ def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, An
             rec["failure_reason"] = "other"
         # else: "none" (passed)
 
-        # ── Failure phase ─────────────────────────────────────────────────
+        # ---------------- Failure phase --------------------
         if RE_PHASE_COLLECT.search(chunk):
             rec["failure_phase"] = "collection"
         elif RE_PHASE_FIRMWARE.search(chunk) and ras_events:
@@ -420,17 +509,17 @@ def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, An
         elif rec["failure_reason"] != "none":
             rec["failure_phase"] = "execution"
 
-        # ── Hardware identifiers ──────────────────────────────────────────
-        rec["node_name"]      = _first_env(RE_NODE_NAME,   chunk)
-        rec["pci_device"]     = (
+        # ---------------- Hardware identifiers ------------------------
+        rec["node_name"] = _first_env(RE_NODE_NAME, chunk)
+        rec["pci_device"] = (
             _first_env(RE_PCI_DEVICE, chunk)
             or _first_env(RE_PCI_DEV_ID, chunk)
-            or _first_env(RE_OPENED,    chunk)
+            or _first_env(RE_OPENED, chunk)
         )
-        rec["aiu_world_rank0"] = _first_env(RE_AIU_RANK0,    chunk)
-        rec["card_serial"]     = _first_env(RE_CARD_SERIAL,  chunk)
-        rec["chip_ecid_raw"]   = _first_env(RE_RAW_ECID,     chunk)
-        rec["chip_wafer_id"]   = _first_env(RE_WAFER_ID,     chunk)
+        rec["aiu_world_rank0"] = _first_env(RE_AIU_RANK0, chunk)
+        rec["card_serial"] = _first_env(RE_CARD_SERIAL, chunk)
+        rec["chip_ecid_raw"] = _first_env(RE_RAW_ECID, chunk)
+        rec["chip_wafer_id"] = _first_env(RE_WAFER_ID, chunk)
 
         m_xy = RE_MFG_XY.search(chunk)
         if m_xy:
@@ -442,7 +531,7 @@ def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, An
             rec["chip_chipy"] = m_coords["chipy"]
             rec["chip_chipx"] = m_coords["chipx"]
 
-        # ── Pytest stats ──────────────────────────────────────────────────
+        # -------------------- Pytest stats --------------------------------
         rec["tests_collected"] = _first_int(RE_COLLECTED, chunk)
         for line in chunk_lines:
             if " passed" in line or " failed" in line or " error" in line:
@@ -456,20 +545,30 @@ def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, An
                 if me:
                     rec["tests_error"] = int(me.group("n"))
 
-        # ── Stall info ────────────────────────────────────────────────────
-        stall_secs = [int(m2["secs"]) for line in chunk_lines
-                      if (m2 := RE_STALL_LINE.search(line))]
+        # ---------------------------- Stall info ----------------------------
+        stall_secs = [
+            int(m2["secs"])
+            for line in chunk_lines
+            if (m2 := RE_STALL_LINE.search(line))
+        ]
         rec["stall_max_secs"] = max(stall_secs, default=0)
 
         records.append(rec)
 
-    # ── Back-fill hardware IDs from any attempt that has them ─────────────
+    # -------- Back-fill hardware IDs from any attempt that has them --------
     # (DTLOG_LEVEL=Info only fires on the final attempt, so IDs only appear
     # there — propagate them to all earlier attempts of the same suite.)
     _hw_fields = (
-        "node_name", "pci_device", "aiu_world_rank0",
-        "card_serial", "chip_ecid_raw", "chip_wafer_id",
-        "chip_mfg_x", "chip_mfg_y", "chip_chipy", "chip_chipx",
+        "node_name",
+        "pci_device",
+        "aiu_world_rank0",
+        "card_serial",
+        "chip_ecid_raw",
+        "chip_wafer_id",
+        "chip_mfg_x",
+        "chip_mfg_y",
+        "chip_chipy",
+        "chip_chipx",
     )
     best: dict[str, str] = {f: "" for f in _hw_fields}
     for rec in records:
@@ -484,25 +583,16 @@ def parse_log(text: str, run_id: str, suite_hint: str = "") -> list[dict[str, An
     return records
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# CLI
-# ─────────────────────────────────────────────────────────────────────────────
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Filename → suite name extraction
-#
-# Handles the GHA log download naming convention:
-#   "24_run-tests _ Inductor Ops Reductions Scalar.txt"
-#   "run-tests _ Inductor Ops Reductions Scalar"   (duplicate without number/.txt)
-#   "0_Run Spyre unit tests.txt"                   → skipped (gate job)
-#   "53_Detect changed files.txt"                  → skipped (meta job)
-# ─────────────────────────────────────────────────────────────────────────────
+# --------------------------------------------------------------------------------
+# Filename ---> suite name extraction
+# ------------------------------------------------------------------------------------
 
 # Jobs that are CI infrastructure, not test suites — skip them entirely
 _SKIP_JOB_NAMES = re.compile(
     r"^(detect changed files|run spyre unit tests|ingest|push.*(clickhouse|diagnostics))",
     re.IGNORECASE,
 )
+
 
 def _suite_from_filename(filename: str) -> str | None:
     """
@@ -518,9 +608,9 @@ def _suite_from_filename(filename: str) -> str | None:
     "0_Run Spyre unit tests.txt"                         → None  (skipped)
     """
     # Strip .txt extension (case-insensitive)
-    stem = re.sub(r'\.txt$', '', filename, flags=re.IGNORECASE)
+    stem = re.sub(r"\.txt$", "", filename, flags=re.IGNORECASE)
     # Strip leading numeric prefix  e.g. "24_"
-    stem = re.sub(r'^\d+_', '', stem)
+    stem = re.sub(r"^\d+_", "", stem)
     stem = stem.strip()
 
     # Skip meta/gate jobs
@@ -528,13 +618,18 @@ def _suite_from_filename(filename: str) -> str | None:
         return None
 
     # Strip "run-tests _ " prefix (the GHA job name format)
-    m = re.match(r'^run-tests\s*_\s*(.+)$', stem, re.IGNORECASE)
+    m = re.match(r"^run-tests\s*_\s*(.+)$", stem, re.IGNORECASE)
     if m:
         return m.group(1).strip()
 
-    # If there's no "run-tests _" prefix but it's not a known skip pattern,
-    # return the stem as-is so nothing is silently dropped.
-    return stem
+    # Extension-less files without a "run-tests _ " prefix are almost always
+    # the unnumbered GHA duplicate of a .txt file (same content) OR a stray
+    # system file. Only keep them if they look like a GHA job name (contain spaces
+    # and a capital letter, matching the "Suite Name" pattern).
+    # This prevents oddities like bare filenames without spaces from slipping in.
+    if re.search(r"[A-Z]", stem) and " " in stem:
+        return stem
+    return None
 
 
 def _pick_files_from_dir(log_dir: Path) -> list[tuple[Path, str]]:
@@ -551,7 +646,10 @@ def _pick_files_from_dir(log_dir: Path) -> list[tuple[Path, str]]:
     for fpath in sorted(log_dir.iterdir()):
         if not fpath.is_file():
             continue
-        # Accept .txt files and extension-less files (GHA produces both)
+        # Skip macOS metadata files and other hidden files
+        if fpath.name.startswith("."):
+            continue
+        # Accept .txt and .log files, plus extension-less files (GHA produces both)
         if fpath.suffix not in (".txt", ".log", ""):
             continue
         suite = _suite_from_filename(fpath.name)
@@ -576,6 +674,7 @@ def _pick_files_from_dir(log_dir: Path) -> list[tuple[Path, str]]:
 # CLI
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         description="Parse GHA hardware failure logs → ClickHouse JSON",
@@ -583,29 +682,45 @@ def _build_parser() -> argparse.ArgumentParser:
         epilog=__doc__,
     )
     src = p.add_mutually_exclusive_group()
-    src.add_argument("--log-file", metavar="FILE",
-                     help="Path to a single log file (use '-' for stdin)")
-    src.add_argument("--log-dir",  metavar="DIR",
-                     help=(
-                         "Directory of log files to scan. "
-                         "Accepts the exact folder structure produced by GHA log downloads: "
-                         "files named like '24_run-tests _ Inductor Ops Reductions Scalar.txt'. "
-                         "Meta/gate jobs (Detect changed files, Run Spyre unit tests) are "
-                         "skipped automatically. Duplicate numbered/.txt vs unnumbered files "
-                         "are deduplicated automatically."
-                     ))
-    p.add_argument("--run-id",  required=True,
-                   help="GitHub Actions run ID shown in the Actions URL, e.g. 27674677047")
-    p.add_argument("--suite",   default="",
-                   help=(
-                       "Suite name to use when parsing a single --log-file that has no "
-                       "'=== Attempt N/M: Suite Name ===' banner. "
-                       "Ignored when --log-dir is used (names are derived from filenames)."
-                   ))
-    p.add_argument("--compact", action="store_true",
-                   help="Output compact JSON (no indentation). Smaller files, faster ingest.")
-    p.add_argument("--out",     metavar="FILE",
-                   help="Write JSON output to FILE instead of stdout.")
+    src.add_argument(
+        "--log-file",
+        metavar="FILE",
+        help="Path to a single log file (use '-' for stdin)",
+    )
+    src.add_argument(
+        "--log-dir",
+        metavar="DIR",
+        help=(
+            "Directory of log files to scan. "
+            "Accepts the exact folder structure produced by GHA log downloads: "
+            "files named like '24_run-tests _ Inductor Ops Reductions Scalar.txt'. "
+            "Meta/gate jobs (Detect changed files, Run Spyre unit tests) are "
+            "skipped automatically. Duplicate numbered/.txt vs unnumbered files "
+            "are deduplicated automatically."
+        ),
+    )
+    p.add_argument(
+        "--run-id",
+        required=True,
+        help="GitHub Actions run ID shown in the Actions URL, e.g. 27674677047",
+    )
+    p.add_argument(
+        "--suite",
+        default="",
+        help=(
+            "Suite name to use when parsing a single --log-file that has no "
+            "'=== Attempt N/M: Suite Name ===' banner. "
+            "Ignored when --log-dir is used (names are derived from filenames)."
+        ),
+    )
+    p.add_argument(
+        "--compact",
+        action="store_true",
+        help="Output compact JSON (no indentation). Smaller files, faster ingest.",
+    )
+    p.add_argument(
+        "--out", metavar="FILE", help="Write JSON output to FILE instead of stdout."
+    )
     return p
 
 
@@ -621,18 +736,24 @@ def main() -> None:
 
         file_suite_pairs = _pick_files_from_dir(log_dir)
         if not file_suite_pairs:
-            print(f"[warn] No recognised test-suite log files found in {log_dir}",
-                  file=sys.stderr)
+            print(
+                f"[warn] No recognised test-suite log files found in {log_dir}",
+                file=sys.stderr,
+            )
 
-        print(f"[info] Found {len(file_suite_pairs)} suite log file(s) to parse",
-              file=sys.stderr)
+        print(
+            f"[info] Found {len(file_suite_pairs)} suite log file(s) to parse",
+            file=sys.stderr,
+        )
 
         for fpath, suite_name in file_suite_pairs:
             text = fpath.read_text(errors="replace")
             recs = parse_log(text, run_id=args.run_id, suite_hint=suite_name)
             all_records.extend(recs)
             outcomes = [r["outcome"] for r in recs]
-            reasons  = [r["failure_reason"] for r in recs if r["failure_reason"] != "none"]
+            reasons = [
+                r["failure_reason"] for r in recs if r["failure_reason"] != "none"
+            ]
             print(
                 f"[info]  {fpath.name}",
                 file=sys.stderr,
@@ -652,19 +773,21 @@ def main() -> None:
         all_records = parse_log(text, run_id=args.run_id, suite_hint=args.suite)
 
     else:
-        print("[error] Provide --log-file, --log-dir, or pipe via stdin.", file=sys.stderr)
+        print(
+            "[error] Provide --log-file, --log-dir, or pipe via stdin.", file=sys.stderr
+        )
         sys.exit(1)
 
     # Summary to stderr
     if all_records:
-        total   = len(all_records)
-        failed  = sum(1 for r in all_records if r["outcome"] == "failed")
-        passed  = sum(1 for r in all_records if r["outcome"] == "passed")
+        total = len(all_records)
+        failed = sum(1 for r in all_records if r["outcome"] == "failed")
+        passed = sum(1 for r in all_records if r["outcome"] == "passed")
         by_reason: dict[str, int] = {}
         for r in all_records:
             k = r["failure_reason"]
             by_reason[k] = by_reason.get(k, 0) + 1
-        print(f"\n[info] ── Summary ──────────────────────────────────", file=sys.stderr)
+        print("\n[info] ── Summary ──────────────────────────────────", file=sys.stderr)
         print(f"[info]  Total attempt records : {total}", file=sys.stderr)
         print(f"[info]  Passed                : {passed}", file=sys.stderr)
         print(f"[info]  Failed                : {failed}", file=sys.stderr)
