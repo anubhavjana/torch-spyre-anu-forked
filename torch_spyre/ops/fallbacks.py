@@ -269,6 +269,10 @@ fallback_ops.append(getattr(aten.random_, "from"))
 # index_put_.default decomposes into _index_put_impl_, so registering
 # _index_put_impl_ here prevents Inductor from expanding it away.
 fallback_ops.append(aten._index_put_impl_.default)
+# index.Tensor (gather by index) cannot use register_fallback_default because the
+# registered function would be the op itself and re-enter the Spyre kernel after
+# _move_tensors moves args to CPU. The explicit kernel below avoids the cycle.
+fallback_ops.append(aten.index.Tensor)
 
 
 @register_fallback(["spyre::max_dim_int64_fallback"])
