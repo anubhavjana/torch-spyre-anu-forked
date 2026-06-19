@@ -222,4 +222,18 @@ def spyre__copy_from(self, dst, non_blocking=False):
         return dst
 
 
+@torch.library.register_kernel("aten::_index_put_impl_", ["spyre"])  # type:ignore
+def spyre__index_put_impl_(self, indices, values, accumulate=False, unsafe=False):
+    # _index_put_impl_ is in-place: move self and all tensors to CPU,
+    # run the op, then copy the result back into self.
+    cpu_self = self.to("cpu")
+    cpu_indices = [idx.to("cpu") if idx is not None else None for idx in indices]
+    cpu_values = values.to("cpu")
+    torch.ops.aten._index_put_impl_(
+        cpu_self, cpu_indices, cpu_values, accumulate, unsafe
+    )
+    self.copy_(cpu_self)
+    return self
+
+
 # INSERT_CODEGEN_HERE
