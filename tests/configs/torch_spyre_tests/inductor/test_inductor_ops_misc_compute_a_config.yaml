@@ -1,13 +1,11 @@
-# Misc compute shard A: activations, broadcast/scalar arithmetic, attention,
-# sdpa, rope, qkv.
+# Misc compute shard A: activations and broadcast/scalar arithmetic.
 #
-# Pair with test_inductor_ops_misc_compute_b_config.yaml which covers
-# normalization, embedding, isin, inplace, bitwise, misc, random, and
-# error-path tests.  Together they replace the former
-# test_inductor_ops_misc_compute_config.yaml.
+# Shard C holds attention/sdpa/rope/qkv (split out to reduce job time).
+# Shard B covers normalization, embedding, isin, inplace, bitwise, misc,
+# random, and error-path tests.
 #
 # When a new test is added to test_inductor_ops.py that belongs in the misc
-# compute group, assign it to whichever shard keeps the two jobs balanced.
+# compute group, assign it to whichever shard keeps the jobs balanced.
 
 test_suite_config:
   files:
@@ -28,9 +26,4 @@ test_suite_config:
             - TestOps::test_sub_broadcast.*
             - TestOps::test_sub_scalar.*
             - TestOps::test_scalar_cpu.*
-            # attention / sdpa / rope / qkv
-            - TestOps::test_attention.*
-            - TestOps::test_sdpa.*
-            - TestOps::test_rope_fms.*
-            - TestOps::test_qkv_attn_paths_fms.*
           mode: mandatory_success
