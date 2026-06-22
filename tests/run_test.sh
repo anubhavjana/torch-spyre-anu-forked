@@ -1743,6 +1743,12 @@ _run_parallel_across_cards() {
         (
             set +euo pipefail
             export SPYRE_DEVICES="${_subshell_card}"
+            # Isolate the Inductor / FxGraph cache per card so that concurrent
+            # shutil.rmtree() calls from FxGraphCache.clear() in different card
+            # subshells do not race on the same /tmp/torchinductor_*/fxgraph/
+            # directory (OSError ENOTEMPTY).
+            _base_cache="${TORCHINDUCTOR_CACHE_DIR:-/tmp/torchinductor_${USER:-$(id -un)}}"
+            export TORCHINDUCTOR_CACHE_DIR="${_base_cache}__card_${_subshell_card}"
             local _card_overall=0
 
             # Group the assigned lines by file index using an associative array.
