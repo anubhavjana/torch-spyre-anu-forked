@@ -380,9 +380,9 @@ jobs:
             "/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
             --jq '[.artifacts[] | select(.name | endswith(".xml")) | {id: .id, name: .name}]')
 
-          python3 <<PYEOF
+          ARTIFACTS="$ARTIFACTS" python3 <<'PYEOF'
           import json, os, subprocess
-          artifacts = json.loads(r"""${ARTIFACTS}""")
+          artifacts = json.loads(os.environ['ARTIFACTS'])
           repo = "${{ github.repository }}"
           for a in artifacts:
               zip_path = f"xml_artifacts/{a['name']}.zip"
