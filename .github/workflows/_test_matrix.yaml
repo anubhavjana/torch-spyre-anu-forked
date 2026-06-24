@@ -159,6 +159,7 @@ jobs:
             runner: spyre_pf_x2
           - name: Inductor Ops Misc Shape B
             config: torch_spyre_tests/inductor/test_inductor_ops_misc_shape_b_config.yaml
+          - name: Inductor Ops Misc Shape C
             config: torch_spyre_tests/inductor/test_inductor_ops_misc_shape_c_config.yaml
           - name: Inductor Ops Misc Compute A
             config: torch_spyre_tests/inductor/test_inductor_ops_misc_compute_a_config.yaml
@@ -368,8 +369,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test, test_multi_spyre]
     if: always()
-    permissions:
-      actions: read
 
     steps:
       - name: Download all XML artifacts
