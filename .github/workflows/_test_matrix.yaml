@@ -417,11 +417,10 @@ jobs:
                   tree = ET.parse(xml_file)
                   root = tree.getroot()
                   # Handle both <testsuite> and <testsuites><testsuite ...> forms
-                  suites = (
-                      [root] if root.tag == "testsuite"
-                      else root.findall("testsuite")
-                  )
-                  total_tests = sum(int(s.get("tests", 0)) for s in suites)
+                  # Count <testcase> elements directly — the tests= attribute
+                  # is unreliable when pytest-xdist produced the XML (it writes
+                  # tests="0" in the suite header even when cases are present).
+                  total_tests = len(root.findall(".//testcase"))
                   if total_tests == 0:
                       empty.append(xml_file.stem)
               except ET.ParseError as e:
