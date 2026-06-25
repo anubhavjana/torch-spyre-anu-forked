@@ -13,6 +13,8 @@ dependencies = [
     "pyyaml",
     "pytest",
     "regex",
+    "expecttest",
+    "pytest-xdist",
 ]
 
 [tool.setuptools]
