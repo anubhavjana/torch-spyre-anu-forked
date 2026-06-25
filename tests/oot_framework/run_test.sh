@@ -359,7 +359,23 @@ echo "[torch_oot_device_tests_run]   TORCH_OOT_ROOT=$TORCH_DEVICE_ROOT"
 # 4. Export all framework environment variables
 # ---------------------------------------------------------------------------
 export PYTORCH_TESTING_DEVICE_ONLY_FOR="privateuse1"
-export TORCH_TEST_DEVICES="${TORCH_DEVICE_ROOT}/tests/oot_framework/oot_test_base_common.py"
+# Resolve TORCH_TEST_DEVICES from the installed oot_framework package so this
+# works when TORCH_DEVICE_ROOT points to a repo without oot_framework sources
+# (e.g. hf-adapters). Fall back to the legacy path for uninstalled source-tree
+# runs. A pre-set TORCH_TEST_DEVICES env var is always honoured as-is.
+if [[ -z "${TORCH_TEST_DEVICES:-}" ]]; then
+    _oot_base=$(python3 -c "
+import oot_framework, os
+p = os.path.join(os.path.dirname(oot_framework.__file__), 'oot_test_base_common.py')
+if os.path.isfile(p):
+    print(p)
+" 2>/dev/null) || true
+    if [[ -n "$_oot_base" ]]; then
+        export TORCH_TEST_DEVICES="$_oot_base"
+    else
+        export TORCH_TEST_DEVICES="${TORCH_DEVICE_ROOT}/tests/oot_framework/oot_test_base_common.py"
+    fi
+fi
 export PYTORCH_TEST_CONFIG="$YAML_CONFIG"
 
 _spyre_tests_path="${TORCH_DEVICE_ROOT}/tests"
