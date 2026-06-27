@@ -1472,7 +1472,8 @@ _extract_failed_tests() {
         | sed 's/^FAILED //' \
         | sed 's/ -.*//' \
         | sed 's/^\[TAGS[^]]*\] //' \
-        | sed 's/__oot_wrapper//'
+        | sed 's/__oot_wrapper//' \
+        | grep '::'
 }
 
 # ---------------------------------------------------------------------------
