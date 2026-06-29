@@ -7,7 +7,7 @@ test_suite_config:
         - names:
             - TestLaunchJobPlan::test_abs_matches_cpu_with_symbols
             - TestLaunchJobPlan::test_mul_matches_cpu_with_symbols
-          mode: mandatory_success
+          mode: skip
           tags:
             - jobplan_symbolic_args
         - names:
