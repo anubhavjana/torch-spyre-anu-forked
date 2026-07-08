@@ -775,7 +775,7 @@ class OOTTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa: F
                     setattr(cls, method_name, marked_fn)
                 _tags_to_write[method_name] = method_tags
 
-            # Spyre's custom ops have no registered 
+            # Spyre's custom ops have no registered
             # autograd formula, so upstream's test_forward (which
             # builds modules with ordinary requires_grad=True parameters)
             # must run under torch.no_grad() to avoid AOTAutograd tracing a
