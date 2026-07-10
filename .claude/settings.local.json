@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat /dev/shm/dt-inductor/hf-adapters/tests/configs/module_tests/granite_3_3_8b_instruct_spyre.yaml | head -100)",
+      "Read(//dev/shm/dt-inductor/hf-adapters/tests/configs/module_tests/**)"
+    ]
+  }
+}

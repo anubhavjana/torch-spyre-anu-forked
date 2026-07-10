@@ -35,12 +35,6 @@ def spyre_fuse_nodes(nodes: list[BaseSchedulerNode]) -> list[BaseSchedulerNode]:
     """
     Fuse nodes together to form kernels without changing their order.
     Each kernel will be compiled into a single SuperDSC Bundle.
-
-    Bundles are capped at ``config.max_fused_nodes`` ops (when set) so that
-    op-heavy sequences (e.g. flash attention's tiled softmax) don't get
-    merged wholesale with unrelated neighboring ops into a bundle whose
-    combined tensor-dimension roles overwhelm Deeptools' DDL dimension
-    mapper. See ``config.max_fused_nodes`` for details.
     """
     if len(nodes) == 0:
         return nodes
@@ -53,26 +47,17 @@ def spyre_fuse_nodes(nodes: list[BaseSchedulerNode]) -> list[BaseSchedulerNode]:
     fused_nodes: list[BaseSchedulerNode] = []
     cur_nodes: list[SchedulerNode | CountedLoopSchedulerNode] = []
 
-    def _flush() -> None:
-        if fused := _make_fused(cur_nodes):
-            fused_nodes.append(fused)
-        cur_nodes.clear()
-
     for n in nodes:
         if isinstance(n, (SchedulerNode, CountedLoopSchedulerNode)):
             cur_nodes.append(n)
-            if (
-                config.max_fused_nodes is not None
-                and len(cur_nodes) >= config.max_fused_nodes
-            ):
-                # Bundle is at capacity: close it out now so the next node
-                # starts a fresh bundle rather than growing this one further.
-                _flush()
         else:
             # Other node types (eg Fallback nodes) force a bundle boundary.
-            _flush()
+            if fused := _make_fused(cur_nodes):
+                fused_nodes.append(fused)
             fused_nodes.append(n)
+            cur_nodes = []
 
-    _flush()
+    if fused := _make_fused(cur_nodes):
+        fused_nodes.append(fused)
 
     return fused_nodes
