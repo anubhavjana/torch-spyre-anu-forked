@@ -90,6 +90,24 @@ bundle_symbolic_args: bool = os.environ.get("BUNDLE_SYMBOLIC_ARGS", "1") == "1"
 # for the scf.for / affine.apply path.
 unroll_loops: bool = os.environ.get("UNROLL_LOOPS", "1") == "1"
 
+# Cap on how many SchedulerNode/CountedLoopSchedulerNode ops spyre_fuse_nodes
+# will merge into a single SDSC bundle. Deeptools' DDL dimension mapper
+# (ddc/ddl/ddl_conversion.cpp) does a backtracking search to map each
+# bundle's tensor dimensions onto the fused op's declared dimension roles;
+# sufficiently large/heterogeneous bundles can exhaust that search and abort
+# the compiler (SIGABRT, "Could not find any suitable dimension mapping").
+# This was hit in practice once flash attention (#2363) replaced the old
+# single-op SDPA with a multi-op tiled softmax: fusing that whole sequence
+# together with a neighboring RMSNorm+MLP produced a bundle the mapper
+# couldn't solve. None disables the cap (previous, unbounded behavior).
+# TODO: tune this default against Deeptools' actual mapper limits; it is a
+# conservative starting point, not a measured threshold.
+max_fused_nodes: int | None = (
+    int(os.environ["SPYRE_MAX_FUSED_NODES"])
+    if os.environ.get("SPYRE_MAX_FUSED_NODES")
+    else 8
+)
+
 # Layout solver class used by default in scratchpad.allocator.ScratchpadAllocator.
 # Options:
 #  "greedy":   GreedyLayoutSolver (default),
