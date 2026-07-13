@@ -1,0 +1,115 @@
+name: clickhouse-storage-report
+
+# Reports pod/PVC storage stats for the ClickHouse instance backing the
+# Spyre dashboard (namespace "clickhouse" in the torch-cicd.spyre.res.ibm.com
+# OpenShift cluster). Assumes the self-hosted runner already has `oc`
+# configured with cluster access (no login step here).
+
+on:
+  schedule:
+    - cron: 0 7 * * * # Runs daily at 07:00 UTC 
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: clickhouse-storage-report
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    name: Report ClickHouse pod/PVC storage stats
+    runs-on:
+      - x86_64
+      - spyre_pf_x0
+      - linux
+      - image_spyre_backend
+    timeout-minutes: 10
+
+    env:
+      NAMESPACE: clickhouse
+      POD_NAME: spyre-dashboard-clickhouse-0
+      PVC_NAME: data-spyre-dashboard-clickhouse-0
+
+    steps:
+      - name: Verify oc access
+        run: |
+          oc whoami
+          oc project "${NAMESPACE}"
+
+      - name: Collect PVC stats
+        id: pvc
+        run: |
+          set -euo pipefail
+
+          PVC_JSON=$(oc get pvc "${PVC_NAME}" -n "${NAMESPACE}" -o json)
+
+          CAPACITY=$(echo "${PVC_JSON}" | jq -r '.status.capacity.storage // "unknown"')
+          PHASE=$(echo "${PVC_JSON}" | jq -r '.status.phase // "unknown"')
+          STORAGE_CLASS=$(echo "${PVC_JSON}" | jq -r '.spec.storageClassName // "unknown"')
+          ACCESS_MODES=$(echo "${PVC_JSON}" | jq -r '(.status.accessModes // []) | join(",")')
+          VOLUME_NAME=$(echo "${PVC_JSON}" | jq -r '.spec.volumeName // "unknown"')
+
+          {
+            echo "capacity=${CAPACITY}"
+            echo "phase=${PHASE}"
+            echo "storage_class=${STORAGE_CLASS}"
+            echo "access_modes=${ACCESS_MODES}"
+            echo "volume_name=${VOLUME_NAME}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Collect pod volume usage
+        id: usage
+        run: |
+          set -euo pipefail
+
+          POD_JSON=$(oc get pod "${POD_NAME}" -n "${NAMESPACE}" -o json)
+
+          VOL_ALIAS=$(echo "${POD_JSON}" | jq -r --arg pvc "${PVC_NAME}" \
+            '.spec.volumes[] | select(.persistentVolumeClaim.claimName == $pvc) | .name')
+
+          CONTAINER=$(echo "${POD_JSON}" | jq -r --arg vol "${VOL_ALIAS}" \
+            '.spec.containers[] | select((.volumeMounts // [])[]?.name == $vol) | .name' | head -n1)
+
+          MOUNT_PATH=$(echo "${POD_JSON}" | jq -r --arg vol "${VOL_ALIAS}" --arg c "${CONTAINER}" \
+            '.spec.containers[] | select(.name == $c) | .volumeMounts[] | select(.name == $vol) | .mountPath')
+
+          if [ -z "${MOUNT_PATH}" ] || [ "${MOUNT_PATH}" = "null" ]; then
+            echo "Could not resolve mount path for PVC ${PVC_NAME} in pod ${POD_NAME}" >&2
+            exit 1
+          fi
+
+          DF_LINE=$(oc exec "${POD_NAME}" -n "${NAMESPACE}" -c "${CONTAINER}" -- df -Ph "${MOUNT_PATH}" | tail -n1)
+
+          {
+            echo "mount_path=${MOUNT_PATH}"
+            echo "container=${CONTAINER}"
+            echo "size=$(echo "${DF_LINE}" | awk '{print $2}')"
+            echo "used=$(echo "${DF_LINE}" | awk '{print $3}')"
+            echo "avail=$(echo "${DF_LINE}" | awk '{print $4}')"
+            echo "used_pct=$(echo "${DF_LINE}" | awk '{print $5}')"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Write job summary
+        run: |
+          {
+            echo "## ClickHouse storage report"
+            echo ""
+            echo "Namespace: \`${NAMESPACE}\` · Pod: \`${POD_NAME}\`"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| PVC name | \`${PVC_NAME}\` |"
+            echo "| PVC phase | ${{ steps.pvc.outputs.phase }} |"
+            echo "| PVC capacity | ${{ steps.pvc.outputs.capacity }} |"
+            echo "| Storage class | ${{ steps.pvc.outputs.storage_class }} |"
+            echo "| Access modes | ${{ steps.pvc.outputs.access_modes }} |"
+            echo "| Bound PV | ${{ steps.pvc.outputs.volume_name }} |"
+            echo "| Mount path | ${{ steps.usage.outputs.mount_path }} |"
+            echo "| Volume size | ${{ steps.usage.outputs.size }} |"
+            echo "| Volume used | ${{ steps.usage.outputs.used }} (${{ steps.usage.outputs.used_pct }}) |"
+            echo "| Volume remaining | ${{ steps.usage.outputs.avail }} |"
+          } | tee -a "${GITHUB_STEP_SUMMARY}"
