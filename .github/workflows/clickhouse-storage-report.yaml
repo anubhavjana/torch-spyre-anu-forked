@@ -2,8 +2,9 @@ name: clickhouse-storage-report
 
 # Reports pod/PVC storage stats for the ClickHouse instance backing the
 # Spyre dashboard (namespace "clickhouse" in the torch-cicd.spyre.res.ibm.com
-# OpenShift cluster). Assumes the self-hosted runner already has `oc`
-# configured with cluster access (no login step here).
+# OpenShift cluster). Installs the `oc` CLI if it isn't already on the
+# runner; assumes the runner already has cluster login/context configured
+# (no `oc login` step here).
 
 on:
   schedule:
@@ -35,6 +36,23 @@ jobs:
       PVC_NAME: data-spyre-dashboard-clickhouse-0
 
     steps:
+      - name: Install oc CLI
+        run: |
+          set -euo pipefail
+
+          if command -v oc >/dev/null 2>&1; then
+            echo "oc already installed: $(oc version --client)"
+            exit 0
+          fi
+
+          curl -sSfL \
+            https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable/openshift-client-linux.tar.gz \
+            -o /tmp/openshift-client-linux.tar.gz
+          mkdir -p "${HOME}/.local/bin"
+          tar -xzf /tmp/openshift-client-linux.tar.gz -C "${HOME}/.local/bin" oc
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          "${HOME}/.local/bin/oc" version --client
+
       - name: Verify oc access
         run: |
           oc whoami
