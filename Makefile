@@ -15,7 +15,8 @@ TEST_CONFIGS ?= tests/configs/torch_spyre_tests
 #   device_critical  — device-layer surfaces flex and deeptools/dxp_standalone
 #                       exercise most: streams, job launch plans, codegen,
 #                       LX/scratchpad planning, tensor layout, allocator/GC,
-#                       D2D copies (used as the default in tests.yml CI)
+#                       D2D copies (used as the default in integration-tests.yaml,
+#                       triggered by those upstream repos)
 #   full             — everything (core + LX-planning); default for `make tests`
 #   suite_<group>    — all configs inside the <group>/ sub-directory
 #                      (e.g. suite_inductor, suite_tensors)

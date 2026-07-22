@@ -87,8 +87,8 @@ on:
           deeptools/dxp_standalone exercise most (streams, job launch
           plans, codegen, LX/scratchpad planning, tensor layout,
           allocator/GC, D2D copies). Default: full (every config) -- callers
-          that want the narrower CI default (e.g. tests.yml) pass
-          test_type explicitly.
+          that want the narrower CI default (e.g. integration-tests.yaml)
+          pass test_type explicitly.
         required: false
         type: string
         default: full
@@ -361,10 +361,10 @@ jobs:
   #
   # Only runs for test_type values that include the distributed suite:
   #   full              — includes everything
-  #   device_critical    — the reduced CI default; distributed comms
-  #                        (streams/barrier/broadcast/gather/allgather) are
-  #                        exactly the device-layer surface this label exists
-  #                        to protect, so it always runs alongside it
+  #   device_critical    — used as the reduced default by integration-tests.yaml;
+  #                        distributed comms (streams/barrier/broadcast/gather/
+  #                        allgather) are exactly the device-layer surface this
+  #                        label exists to protect, so it always runs alongside it
   #   suite_distributed — targets the distributed_tests/ directory directly
   #   (empty)           — same as full
   # For smoke / core / suite_<other> the distributed job is skipped entirely
