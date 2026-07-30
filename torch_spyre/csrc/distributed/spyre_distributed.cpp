@@ -213,15 +213,12 @@ at::Tensor spyre_wait_work_impl(const at::Tensor& tensor) {
 
 }  // namespace spyre
 
-// Define the spyre namespace and operations
-TORCH_LIBRARY(spyre, m) {
-  m.def(
-      "broadcast_async(Tensor input, int src_rank, str group_name) -> Tensor");
-  // wait_work mutates the tensor in-place (fills in the broadcasted data)
-  m.def("wait_work(Tensor(a!) tensor) -> Tensor(a)");
-}
-
-// Register the implementations with PyTorch's dispatcher
+// The "broadcast_async"/"wait_work" op schemas are defined in Python
+// (torch_spyre/_inductor/distributed/spyre_library.py), not here, so they
+// exist as soon as torch_spyre is imported -- this extension module is only
+// loaded lazily on first real device use (see _SpyreImpl._lazy_init in
+// torch_spyre/__init__.py). Only the PrivateUse1 kernel implementations are
+// registered here, against the schema Python already defined.
 TORCH_LIBRARY_IMPL(spyre, PrivateUse1, m) {
   m.impl("broadcast_async", &spyre::spyre_broadcast_async_impl);
   m.impl("wait_work", &spyre::spyre_wait_work_impl);
