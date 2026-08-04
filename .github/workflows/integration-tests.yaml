@@ -174,5 +174,6 @@ jobs:
             exit 0
           fi
 
+
           echo "One or more integration test suites failed or were cancelled."
           exit 1
