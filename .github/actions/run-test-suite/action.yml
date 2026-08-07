@@ -219,6 +219,12 @@ runs:
           kill "$WATCHER_PID" 2>/dev/null || true
           wait "$WATCHER_PID" 2>/dev/null || true
 
+          # Reap TEST_PID's whole process group on every attempt end (stall,
+          # test failure/error, or pass alike), since surviving xdist workers
+          # can keep the Spyre device open and cause "device busy" on retry.
+          kill -STOP -- "-$TEST_PID" 2>/dev/null || true
+          kill -KILL -- "-$TEST_PID" 2>/dev/null || true
+
           kill "$TEE_PID" 2>/dev/null || true
           wait "$TEE_PID" 2>/dev/null || true
           rm -f "$FIFO"
