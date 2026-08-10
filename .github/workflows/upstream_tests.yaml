@@ -13,8 +13,8 @@ on:
       - README.md
       - CODEOWNERS
       - .github/workflows/config_integrity_checker.yaml
-  # pull_request:
-  #   branches: [main]
+  pull_request:
+    branches: [main]
     paths-ignore:
       - tests/docs/**
       - docs/**
