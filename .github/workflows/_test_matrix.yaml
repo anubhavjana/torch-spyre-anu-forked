@@ -217,18 +217,24 @@ jobs:
           # trunk covers everything torch-spyre's push-to-main workflows
           # exercise across tests/configs/, not just torch_spyre_tests (see
           # Makefile's TEST_TYPE=trunk docs). Every other tier keeps the
-          # narrower torch_spyre_tests-only scope.
+          # narrower torch_spyre_tests-only scope. --config-dir is kept a
+          # literal path (not a shell variable) in both branches on purpose:
+          # tests/scripts/check_test_coverage.sh greps workflow YAMLs for a
+          # literal `--config-dir <path>` token to detect dynamic coverage,
+          # and can't resolve a variable.
           if [ "${RAW_TEST_TYPE}" = "trunk" ]; then
-            CONFIG_DIR="tests/configs"
+            matrix=$(python3 tests/oot_framework/utils/filter_configs.py \
+              --config-dir tests/configs \
+              --test-type "${RAW_TEST_TYPE}" \
+              --runner-map .github/runner_overrides.yaml \
+              --format matrix-json)
           else
-            CONFIG_DIR="tests/configs/torch_spyre_tests"
+            matrix=$(python3 tests/oot_framework/utils/filter_configs.py \
+              --config-dir tests/configs/torch_spyre_tests \
+              --test-type "${RAW_TEST_TYPE}" \
+              --runner-map .github/runner_overrides.yaml \
+              --format matrix-json)
           fi
-
-          matrix=$(python3 tests/oot_framework/utils/filter_configs.py \
-            --config-dir "${CONFIG_DIR}" \
-            --test-type "${RAW_TEST_TYPE}" \
-            --runner-map .github/runner_overrides.yaml \
-            --format matrix-json)
 
           # distributed_tests configs carry the trunk label too but are
           # exclusively run by the test_multi_spyre job below (multi-card
