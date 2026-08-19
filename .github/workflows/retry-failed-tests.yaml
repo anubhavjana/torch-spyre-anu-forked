@@ -1,27 +1,7 @@
 name: retry-failed-tests
 
-# Test-matrix-level retry: when "tests" or "tests-nightly" finishes with a
-# failure, reschedule the failed jobs (and their dependents) via
-# `gh run rerun --failed`. Unlike run-test-suite's in-suite retry (which
-# reruns inside the SAME pod/card -- see .github/actions/run-test-suite),
-# `gh run rerun` schedules brand-new jobs, so ARC hands them fresh ephemeral
-# pods on different cards. That clears pod- or card-scoped failures (a wedged
-# card, a leftover VFIO holder, a bad node) that the in-suite retry cannot,
-# since it never leaves the pod that produced the failure.
-#
-# Runs as a separate workflow_run-triggered workflow (the same pattern
-# push-to-clickhouse.yaml uses) rather than a job inside _test_matrix.yaml,
-# for two reasons:
-#   1. `gh run rerun` needs a COMPLETED run; a job inside the same run can't
-#      rerun its own still-in-progress workflow.
-#   2. workflow_run always executes with the base repo's permissions, even
-#      when the triggering run came from a fork PR (whose own GITHUB_TOKEN is
-#      read-only) -- so this works for fork PRs without weakening tests.yml's
-#      own token permissions.
-#
-# NOTE: like any workflow_run consumer, GitHub only looks at the copy of this
-# file on the repository's default branch -- a change here has no effect
-# until it lands on main, even for the PR that introduces it.
+# On failure of "tests"/"tests-nightly", reruns the failed jobs via `gh run rerun --failed` so ARC gives them a fresh pod/card (unlike run-test-suite's same-pod in-suite retry).
+# Separate workflow_run workflow, like push-to-clickhouse.yaml (gh run rerun needs a completed run; workflow_run keeps base-repo perms for fork PRs); only picks up changes from the default branch.
 on:
   workflow_run:
     workflows:
@@ -30,7 +10,7 @@ on:
     types: [completed]
 
 concurrency:
-  # One retry decision per triggering run; never cancel a rerun already in flight.
+  # One retry decision per triggering run; never cancel a rerun in flight.
   group: retry-failed-tests-${{ github.event.workflow_run.id }}
   cancel-in-progress: false
 
@@ -41,16 +21,28 @@ permissions:
 jobs:
   retry:
     name: Retry failed jobs on a fresh pod
-    runs-on: ubuntu-latest
-    # Only for an actual failure (not cancelled -- e.g. superseded by a newer
-    # push under tests.yml's cancel-in-progress concurrency group). Capped at
-    # one pod-level retry total: run_attempt is 1 on the original run and 2
-    # after the rerun below, so this condition is false the second time this
-    # workflow fires for the same run, giving exactly one retry.
+    # Cardless pool (like push-to-clickhouse.yaml's ingest job) -- only calls the GitHub API.
+    runs-on:
+      - x86_64
+      - spyre_pf_x0
+      - linux
+      - image_spyre_backend
+    # Only on an actual failure (not cancelled/superseded); run_attempt < 2 caps this at one retry.
     if: >-
       github.event.workflow_run.conclusion == 'failure' &&
       github.event.workflow_run.run_attempt < 2
     steps:
+      - name: Setup the GitHub CLI
+        env:
+          GH_CLI_VERSION: 2.97.0
+        run: |
+          curl -fsSL \
+            "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.tar.gz" \
+            -o "${RUNNER_TEMP}/gh-cli.tar.gz"
+          mkdir -p "${RUNNER_TEMP}/gh-cli"
+          tar -xzf "${RUNNER_TEMP}/gh-cli.tar.gz" -C "${RUNNER_TEMP}/gh-cli" --strip-components=1
+          echo "${RUNNER_TEMP}/gh-cli/bin" >> "${GITHUB_PATH}"
+
       - name: Rerun failed jobs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
