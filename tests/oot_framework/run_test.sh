@@ -2101,9 +2101,17 @@ except Exception as e:
 # ---------------------------------------------------------------------------
 _run_parallel_across_cards() {
     local _n_cards="$1"
+    # The caller now passes only the RUN_FILES indices eligible for round-robin (distributed tests are excluded, see below).
+    shift
+    local -a _target_idx=("$@")
+    # An empty target set (e.g. a distributed-only invocation) means there is nothing to parallelize.
+    if [[ ${#_target_idx[@]} -eq 0 ]]; then
+        echo "[torch_oot_device_tests_run_parallel] No non-distributed files to parallelize -- skipping."
+        return
+    fi
 
     echo ""
-    echo "[torch_oot_device_tests_run_parallel] --parallel: collecting test IDs from ${#RUN_FILES[@]} file(s) to distribute across ${_n_cards} card(s)..."
+    echo "[torch_oot_device_tests_run_parallel] --parallel: collecting test IDs from ${#_target_idx[@]} file(s) to distribute across ${_n_cards} card(s)..."
 
     # Timestamp the collection phase so its cost is visible in the run log.
     # Collection re-imports torch + each OOT wrapper per file, so this phase
@@ -2161,14 +2169,20 @@ _run_parallel_across_cards() {
     # Fan out collection: one background probe per file, bounded to _n_cards
     # concurrent jobs. Each writes matched node IDs to _collect_out_files[i].
     local -a _collect_out_files=()
+    # Parallel array to _collect_out_files, indexed the same way, holding each probe's stderr path.
+    local -a _collect_err_files=()
     local -a _collect_pids=()
-    for i in "${!RUN_FILES[@]}"; do
+    # Only walk the non-distributed subset handed in by the caller, not every resolved file.
+    for i in "${_target_idx[@]}"; do
         local _rf="${RUN_FILES[$i]}"
         local _rd _rb
         _rd="$(dirname "$_rf")"
         _rb="$(basename "$_rf")"
         local _cout="/tmp/_spyre_collect_ids_${$}_${i}.tmp"
         _collect_out_files+=("$_cout")
+        # Captured instead of discarded, so a probe that collects nothing can say why.
+        local _cerr="/tmp/_spyre_collect_err_${$}_${i}.tmp"
+        _collect_err_files+=("$_cerr")
 
         echo "[torch_oot_device_tests_run]   collecting: $(basename "${TEST_FILES[$i]}")"
 
@@ -2177,7 +2191,7 @@ _run_parallel_across_cards() {
             export OOT_TEST_FILE="$_rf"
             cd "$_rd" && python3 -m pytest "$_rb" \
                 "${_collect_args[@]+"${_collect_args[@]}"}" \
-                --collect-only -q --no-header 2>/dev/null \
+                --collect-only -q --no-header 2>"$_cerr" \
             | grep '\.py::' > "$_cout" || true
         ) &
         _collect_pids+=($!)
@@ -2195,9 +2209,11 @@ _run_parallel_across_cards() {
 
     # Read back each file's collected IDs in file order, preserving the exact
     # ordering the original serial loop produced.
-    for i in "${!RUN_FILES[@]}"; do
+    # Same non-distributed subset as the collection loop above, so indices line up.
+    for i in "${_target_idx[@]}"; do
         local _of="${TEST_FILES[$i]}"
         local _cout="${_collect_out_files[$i]}"
+        local _cerr="${_collect_err_files[$i]}"
 
         local _raw_ids=""
         [[ -f "$_cout" ]] && _raw_ids="$(< "$_cout")"
@@ -2205,8 +2221,16 @@ _run_parallel_across_cards() {
 
         if [[ -z "$_raw_ids" ]]; then
             echo "[torch_oot_device_tests_run_serial]   WARNING: no test IDs collected from $(basename "$_of") -- it will be skipped in parallel mode." >&2
+            # The probe's own stderr is the only record of why -- print it here instead of losing it.
+            if [[ -s "$_cerr" ]]; then
+                echo "[torch_oot_device_tests_run_serial]   ----- collect-only stderr for $(basename "$_of") -----" >&2
+                sed 's/^/[torch_oot_device_tests_run_serial]   /' "$_cerr" >&2
+                echo "[torch_oot_device_tests_run_serial]   ----- end stderr -----" >&2
+            fi
+            rm -f "$_cerr"
             continue
         fi
+        rm -f "$_cerr"
 
         while IFS= read -r _id; do
             [[ -z "$_id" ]] && continue
@@ -2228,7 +2252,8 @@ _run_parallel_across_cards() {
     done
 
     local _collect_elapsed=$(( SECONDS - _collect_start ))
-    echo "[torch_oot_device_tests_run_parallel] Collection phase completed in ${_collect_elapsed}s (${#RUN_FILES[@]} file(s), up to ${_n_cards} concurrent probe(s))."
+    # Report against the actual candidate set rather than every resolved file, now that distributed files are routed elsewhere.
+    echo "[torch_oot_device_tests_run_parallel] Collection phase completed in ${_collect_elapsed}s (${#_target_idx[@]} file(s), up to ${_n_cards} concurrent probe(s))."
 
     local _total="${#_all_node_ids[@]}"
     if [[ $_total -eq 0 ]]; then
@@ -2647,6 +2672,21 @@ _run_parallel_across_cards() {
 # ---------------------------------------------------------------------------
 # 13. Parallel or serial execution
 # ---------------------------------------------------------------------------
+# Collective-comm tests need torchrun to assign RANK/WORLD_SIZE per rank, so they can't be split as independent single-card pytest runs the way --parallel splits everything else.
+_DIST_FILE_IDX=()
+# Everything that isn't a distributed test stays eligible for the round-robin card split.
+_NONDIST_FILE_IDX=()
+# Classify every resolved file once, up front, so both execution paths below agree on the split.
+for i in "${!RUN_FILES[@]}"; do
+    _fdir="$(dirname "${RUN_FILES[$i]}")"
+    # Mirrors the distributed check _run_pytest_isolated already uses to decide when to invoke torchrun.
+    if [[ "$_fdir" == *"/distributed"* ]] || [[ "$_fdir" == *"/distributed" ]]; then
+        _DIST_FILE_IDX+=("$i")
+    else
+        _NONDIST_FILE_IDX+=("$i")
+    fi
+done
+
 if [[ $_PARALLEL -eq 1 ]]; then
     _N_CARDS=$(_detect_spyre_card_count)
     echo "[torch_oot_device_tests_run_info] Detected ${_N_CARDS} Spyre card(s)."
@@ -2656,11 +2696,19 @@ if [[ $_PARALLEL -eq 1 ]]; then
     fi
 fi
 
-if [[ $_PARALLEL -eq 1 ]]; then
-    _run_parallel_across_cards "$_N_CARDS"
-else
+# Only the non-distributed subset ever goes through the round-robin card split.
+if [[ $_PARALLEL -eq 1 && ${#_NONDIST_FILE_IDX[@]} -gt 0 ]]; then
+    _run_parallel_across_cards "$_N_CARDS" "${_NONDIST_FILE_IDX[@]}"
+fi
 
-for i in "${!RUN_FILES[@]}"; do
+# Distributed files always run here via the torchrun-aware path; everything runs here when --parallel was never requested.
+if [[ $_PARALLEL -eq 1 ]]; then
+    _SERIAL_FILE_IDX=("${_DIST_FILE_IDX[@]+"${_DIST_FILE_IDX[@]}"}")
+else
+    _SERIAL_FILE_IDX=("${!RUN_FILES[@]}")
+fi
+
+for i in "${_SERIAL_FILE_IDX[@]+"${_SERIAL_FILE_IDX[@]}"}"; do
     run_file="${RUN_FILES[$i]}"
     original_file="${TEST_FILES[$i]}"
     run_dir="$(dirname "$run_file")"
@@ -2849,8 +2897,6 @@ for i in "${!RUN_FILES[@]}"; do
             ;;
     esac
 done
-
-fi  # end of serial-vs-parallel branch
 
 # ---------------------------------------------------------------------------
 # Merge all XML shards into the final output path requested by the caller.
