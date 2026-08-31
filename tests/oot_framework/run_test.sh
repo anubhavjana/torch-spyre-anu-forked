@@ -2189,6 +2189,11 @@ _run_parallel_across_cards() {
         (
             export SPYRE_TEST_FILE="$_rf"
             export OOT_TEST_FILE="$_rf"
+            # Give this probe its own Inductor cache dir so concurrent collect-only imports can't race on the same shutil.rmtree() target (see the identical fix for the per-card execution subshells below).
+            _probe_base_cache="${TORCHINDUCTOR_CACHE_DIR:-/tmp/torchinductor_${USER:-$(id -un)}}"
+            # Bucketed by the same concurrency bound as the probe throttle, not by file, so the directory count stays fixed instead of growing with the file list.
+            _probe_slot=$(( i % _n_cards ))
+            export TORCHINDUCTOR_CACHE_DIR="${_probe_base_cache}__collect_slot${_probe_slot}"
             cd "$_rd" && python3 -m pytest "$_rb" \
                 "${_collect_args[@]+"${_collect_args[@]}"}" \
                 --collect-only -q --no-header 2>"$_cerr" \
