@@ -2171,6 +2171,8 @@ _run_parallel_across_cards() {
     local -a _collect_out_files=()
     # Parallel array to _collect_out_files, indexed the same way, holding each probe's stderr path.
     local -a _collect_err_files=()
+    # Parallel array holding each probe's own exit code, to catch a signal kill (e.g. OOM) even when stdout/stderr are both empty.
+    local -a _collect_exit_files=()
     local -a _collect_pids=()
     # Only walk the non-distributed subset handed in by the caller, not every resolved file.
     for i in "${_target_idx[@]}"; do
@@ -2179,14 +2181,20 @@ _run_parallel_across_cards() {
         _rd="$(dirname "$_rf")"
         _rb="$(basename "$_rf")"
         local _cout="/tmp/_spyre_collect_ids_${$}_${i}.tmp"
-        _collect_out_files+=("$_cout")
+        # Assigned by RUN_FILES index, not appended -- _target_idx can skip values (distributed files excluded), so a plain += would misalign once any index is missing.
+        _collect_out_files[$i]="$_cout"
         # Captured instead of discarded, so a probe that collects nothing can say why.
         local _cerr="/tmp/_spyre_collect_err_${$}_${i}.tmp"
-        _collect_err_files+=("$_cerr")
+        _collect_err_files[$i]="$_cerr"
+        # Same index-alignment reasoning as _collect_out_files above.
+        local _cexit="/tmp/_spyre_collect_exit_${$}_${i}.tmp"
+        _collect_exit_files[$i]="$_cexit"
 
         echo "[torch_oot_device_tests_run]   collecting: $(basename "${TEST_FILES[$i]}")"
 
         (
+            # A 0-match --collect-only (or a killed probe) is expected/handled below, not a script-ending error.
+            set +euo pipefail
             export SPYRE_TEST_FILE="$_rf"
             export OOT_TEST_FILE="$_rf"
             # Give this probe its own Inductor cache dir so concurrent collect-only imports can't race on the same shutil.rmtree() target (see the identical fix for the per-card execution subshells below).
@@ -2197,7 +2205,9 @@ _run_parallel_across_cards() {
             cd "$_rd" && python3 -m pytest "$_rb" \
                 "${_collect_args[@]+"${_collect_args[@]}"}" \
                 --collect-only -q --no-header 2>"$_cerr" \
-            | grep '\.py::' > "$_cout" || true
+            | grep '\.py::' > "$_cout"
+            # python3's own exit code (PIPESTATUS[0], not grep's), so a signal kill shows up even with empty stdout/stderr.
+            echo "${PIPESTATUS[0]}" > "$_cexit"
         ) &
         _collect_pids+=($!)
 
@@ -2219,6 +2229,7 @@ _run_parallel_across_cards() {
         local _of="${TEST_FILES[$i]}"
         local _cout="${_collect_out_files[$i]}"
         local _cerr="${_collect_err_files[$i]}"
+        local _cexit="${_collect_exit_files[$i]}"
 
         local _raw_ids=""
         [[ -f "$_cout" ]] && _raw_ids="$(< "$_cout")"
@@ -2231,11 +2242,21 @@ _run_parallel_across_cards() {
                 echo "[torch_oot_device_tests_run_serial]   ----- collect-only stderr for $(basename "$_of") -----" >&2
                 sed 's/^/[torch_oot_device_tests_run_serial]   /' "$_cerr" >&2
                 echo "[torch_oot_device_tests_run_serial]   ----- end stderr -----" >&2
+            else
+                # Empty stdout AND empty stderr means the probe never got to print anything -- almost
+                # always a signal kill (SIGKILL/OOM being the common case), not a catchable Python error.
+                local _pexit=""
+                [[ -f "$_cexit" ]] && _pexit="$(< "$_cexit")"
+                if [[ "$_pexit" =~ ^[0-9]+$ && "$_pexit" -ge 128 ]]; then
+                    echo "[torch_oot_device_tests_run_serial]   collect-only produced no stderr either -- python3 exited with code ${_pexit} (signal $(( _pexit - 128 )), likely OOM-killed if that's SIGKILL/9)." >&2
+                else
+                    echo "[torch_oot_device_tests_run_serial]   collect-only produced no stderr either -- python3 exit code: ${_pexit:-unknown}." >&2
+                fi
             fi
-            rm -f "$_cerr"
+            rm -f "$_cerr" "$_cexit"
             continue
         fi
-        rm -f "$_cerr"
+        rm -f "$_cerr" "$_cexit"
 
         while IFS= read -r _id; do
             [[ -z "$_id" ]] && continue
