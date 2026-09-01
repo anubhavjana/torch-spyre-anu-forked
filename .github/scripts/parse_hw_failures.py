@@ -69,7 +69,9 @@ RE_STALL_LINE = re.compile(r"\[stall-watcher\] No new output for (?P<secs>\d+)s"
 RE_SIGNAL_EXIT = re.compile(r"SIGNAL EXIT", re.IGNORECASE)
 
 # Matches the "(pod-level retry)" job-name suffix _test_matrix.yaml's test_retry / test_multi_spyre_retry jobs stamp on a suite re-run on a fresh pod; tolerates the parens already being stripped by the upstream sanitizer.
-RE_POD_LEVEL_RETRY_SUFFIX = re.compile(r"\(?\s*pod-level retry\s*\)?\s*$", re.IGNORECASE)
+RE_POD_LEVEL_RETRY_SUFFIX = re.compile(
+    r"\(?\s*pod-level retry\s*\)?\s*$", re.IGNORECASE
+)
 
 # Process crash / signal patterns
 # Matches: "Signal Received: 6 (Aborted)" or "Signal Received: 11 (Segmentation fault)"
