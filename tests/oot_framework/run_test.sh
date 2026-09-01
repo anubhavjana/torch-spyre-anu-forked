@@ -2235,6 +2235,42 @@ _run_parallel_across_cards() {
         [[ -f "$_cout" ]] && _raw_ids="$(< "$_cout")"
         rm -f "$_cout"
 
+        # A signal-killed probe (empty stdout + empty stderr + exit >=128) is usually a concurrent-import
+        # memory spike, not a real 0-match file -- retry it alone, with no concurrent siblings, before giving up.
+        if [[ -z "$_raw_ids" && ! -s "$_cerr" ]]; then
+            local _pexit=""
+            [[ -f "$_cexit" ]] && _pexit="$(< "$_cexit")"
+            if [[ "$_pexit" =~ ^[0-9]+$ && "$_pexit" -ge 128 ]]; then
+                echo "[torch_oot_device_tests_run_serial]   $(basename "$_of") collect-only was signal-killed (exit ${_pexit}) -- retrying alone." >&2
+                local _rf2="${RUN_FILES[$i]}"
+                local _rout="/tmp/_spyre_collect_retry_ids_${$}_${i}.tmp"
+                local _rerr="/tmp/_spyre_collect_retry_err_${$}_${i}.tmp"
+                (
+                    set +euo pipefail
+                    export SPYRE_TEST_FILE="$_rf2"
+                    export OOT_TEST_FILE="$_rf2"
+                    # A dedicated cache dir for the retry too, so it can't collide with whatever else is still running.
+                    export TORCHINDUCTOR_CACHE_DIR="${TORCHINDUCTOR_CACHE_DIR:-/tmp/torchinductor_${USER:-$(id -un)}}__retry_${i}"
+                    cd "$(dirname "$_rf2")" && python3 -m pytest "$(basename "$_rf2")" \
+                        "${_collect_args[@]+"${_collect_args[@]}"}" \
+                        --collect-only -q --no-header 2>"$_rerr" \
+                    | grep '\.py::' > "$_rout"
+                )
+                _raw_ids="$(< "$_rout")"
+                rm -f "$_rout"
+                if [[ -n "$_raw_ids" ]]; then
+                    echo "[torch_oot_device_tests_run_serial]   retry succeeded for $(basename "$_of")." >&2
+                    rm -f "$_rerr"
+                elif [[ -s "$_rerr" ]]; then
+                    # The retry's own stderr is more relevant than the original (empty) one if it failed for a different reason.
+                    # Kept (not removed here) -- the outer block below reads and cleans up whatever _cerr now points to.
+                    _cerr="$_rerr"
+                else
+                    rm -f "$_rerr"
+                fi
+            fi
+        fi
+
         if [[ -z "$_raw_ids" ]]; then
             echo "[torch_oot_device_tests_run_serial]   WARNING: no test IDs collected from $(basename "$_of") -- it will be skipped in parallel mode." >&2
             # The probe's own stderr is the only record of why -- print it here instead of losing it.
