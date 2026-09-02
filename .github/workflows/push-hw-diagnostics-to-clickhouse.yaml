@@ -116,12 +116,28 @@ jobs:
           # prior attempt of this run (a runner-infra retry, not just a user re-run
           # click) leaking into the list would download and parse every one of them
           # twice, doubling every row this run produces in hw_failure_diagnostics.
-          gh api \
-            "/repos/${{ github.repository }}/actions/runs/${TRIGGERING_RUN_ID}/jobs" \
-            --paginate \
-            -f filter=latest \
-            --jq '.jobs[] | {id: .id, name: .name}' \
-          > /tmp/jobs.jsonl
+          # Retry: the Jobs API can briefly 404 right after workflow_run "completed"
+          # fires (GitHub's own eventual consistency), so retry before failing loudly.
+          repo="${{ github.repository }}"
+          max_attempts=5
+          attempt=1
+          until gh api \
+              "/repos/${repo}/actions/runs/${TRIGGERING_RUN_ID}/jobs" \
+              --paginate \
+              -f filter=latest \
+              --jq '.jobs[] | {id: .id, name: .name}' \
+            > /tmp/jobs.jsonl 2>/tmp/jobs_list_err.txt
+          do
+            err="$(cat /tmp/jobs_list_err.txt)"
+            if [ "${attempt}" -ge "${max_attempts}" ]; then
+              echo "::error::failed to list jobs for run ${TRIGGERING_RUN_ID} in ${repo} after ${max_attempts} attempts: ${err}"
+              exit 1
+            fi
+            backoff=$((attempt * 5))
+            echo "[warn] attempt ${attempt}/${max_attempts} listing jobs for run ${TRIGGERING_RUN_ID} in ${repo} failed: ${err}; retrying in ${backoff}s"
+            sleep "${backoff}"
+            attempt=$((attempt + 1))
+          done
 
           python3 - << 'PYEOF'
           import json, os, re, subprocess, sys
