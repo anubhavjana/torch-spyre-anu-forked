@@ -798,6 +798,14 @@ class OOTTestBase(PrivateUse1TestBase):  # type: ignore[name-defined]  # noqa: F
                 def _skip(self, _reason=_skip_reason):
                     raise unittest.SkipTest(_reason)
 
+                # pytest walks __wrapped__ chains to resolve item.obj at
+                # collection time -- @wraps(test) left it pointing at the
+                # original (possibly heavy/unsafe) test function, so pytest
+                # would run that instead of this stub. Same hazard as
+                # _xfail_wrapper below; same fix.
+                if hasattr(_skip, "__wrapped__"):
+                    del _skip.__wrapped__
+
                 setattr(cls, method_name, _skip)
                 continue
 
