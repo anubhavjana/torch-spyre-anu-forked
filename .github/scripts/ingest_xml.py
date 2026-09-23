@@ -535,19 +535,16 @@ def benchmark_tables_present(client, db: str) -> bool:
     if tables_present(client, db, tables=_BENCH_TABLES):
         return True
     for t in _BENCH_TABLES:
-        if not bool(client.command(f"EXISTS TABLE {t.qualified(db)}")):
+        if not t.present(client, db, check_columns=False):
             print(
                 f"  [warn] v2 skipped: {db}.{t.name} does not exist "
                 "-- apply the v2 benchmark DDL",
                 file=sys.stderr,
             )
             continue
-        rows = client.query(
-            "SELECT name FROM system.columns "
-            "WHERE database = {db:String} AND table = {t:String}",
-            parameters={"db": db, "t": t.name},
-        ).result_rows
-        missing = sorted(set(t.columns) - {r[0] for r in rows})
+        missing = sorted(
+            set(t.columns) - schema_model.table_columns(client, db, t.name)
+        )
         if missing:
             print(
                 f"  [warn] v2 skipped: {db}.{t.name} is missing {', '.join(missing)} "
@@ -686,13 +683,10 @@ _PERF_BENCHMARK_COLUMNS = [
 _PERF_BENCHMARK_OPTIONAL_COLUMNS = ("compile_ms", "runtime_ms", "mem_size_mb")
 
 
-def _absent_columns(client, table: str, columns) -> set[str]:
-    rows = client.query(
-        "SELECT name FROM system.columns "
-        "WHERE database = currentDatabase() AND table = {t:String}",
-        parameters={"t": table},
-    ).result_rows
-    present = {r[0] for r in rows}
+def _absent_columns(client, table: str, columns, db: str = "") -> set[str]:
+    """Requested `columns` this v1 `table` does not have, via the schema module's
+    shared introspection rather than a second copy of its column-diff query."""
+    present = schema_model.table_columns(client, db, table)
     return {c for c in columns if c not in present}
 
 
@@ -700,14 +694,10 @@ def _table_exists(client, table: str, db: str = "") -> bool:
     """Does `table` exist in `db` (default: the connection's own database)?
 
     Explicit db rather than currentDatabase(): one client now serves both generations, so
-    "which database" is a property of the CALL, not of the connection.
+    "which database" is a property of the CALL, not of the connection. Delegates to the
+    schema module's shared check rather than a second copy of it.
     """
-    rows = client.query(
-        "SELECT count() FROM system.tables "
-        "WHERE database = {db:String} AND name = {t:String}",
-        parameters={"db": db or client.database, "t": table},
-    ).result_rows
-    return bool(rows and rows[0][0])
+    return schema_model.table_exists(client, db, table)
 
 
 def insert_perf_benchmarks(client, run_id: int, benchmarks: list[dict]) -> None:

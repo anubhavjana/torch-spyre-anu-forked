@@ -70,6 +70,37 @@ class DepEntry:
         return s.rsplit(cls.SEP, 1)[0] if cls.SEP in s else s
 
 
+def table_exists(client, db: str, table: str) -> bool:
+    """Does `table` exist? Resolved in `db`, or the connection's own database when blank.
+
+    Shared so a caller with no `Table` model for its table (a v1 table, say) gets the
+    same existence check `Table.present()` uses below, instead of a second copy of it.
+    """
+    qualified = f"{db}.{table}" if db else table
+    return bool(client.command(f"EXISTS TABLE {qualified}"))
+
+
+def table_columns(client, db: str, table: str) -> set[str]:
+    """Column names system.columns reports for `table`, in `db` or the current database.
+
+    Shared for the same reason as table_exists() above.
+    """
+    if db:
+        where, params = (
+            "database = {db:String} AND table = {t:String}",
+            {"db": db, "t": table},
+        )
+    else:
+        where, params = (
+            "database = currentDatabase() AND table = {t:String}",
+            {"t": table},
+        )
+    rows = client.query(
+        f"SELECT name FROM system.columns WHERE {where}", parameters=params
+    ).result_rows
+    return {r[0] for r in rows}
+
+
 class Table:
     """Base for one v2 table: its columns in DDL order, its CHECKs, its write path."""
 
@@ -151,16 +182,11 @@ class Table:
     @classmethod
     def present(cls, client, db: str, check_columns: bool = True) -> bool:
         """True when the table exists and holds at least the columns modelled here."""
-        if not bool(client.command(f"EXISTS TABLE {cls.qualified(db)}")):
+        if not table_exists(client, db, cls.name):
             return False
         if not check_columns:
             return True
-        rows = client.query(
-            "SELECT name FROM system.columns "
-            "WHERE database = {db:String} AND table = {t:String}",
-            parameters={"db": db, "t": cls.name},
-        ).result_rows
-        return not set(cls.columns) - {r[0] for r in rows}
+        return not set(cls.columns) - table_columns(client, db, cls.name)
 
     @classmethod
     def count_rows(cls, client, db: str, where: str, params: dict) -> int:
