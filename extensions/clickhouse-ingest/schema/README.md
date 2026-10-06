@@ -16,7 +16,7 @@ Applying them in filename order works from an empty database.
 | `40-jenkins-agents.sql` | `jenkins_agents` | — |
 | `50-artifact-views.sql` | 6 `v_tag_*` / `v_artifact_*` / `v_tier_trend` views | 10, 20 |
 | `51-functional-views.sql` | 4 `v_case_*` / `v_run_tier_counters` / `v_tier_report_completeness` views | 10, 20 |
-| `52-cross-views.sql` | `v_run_coverage` | 10, 20 |
+| `52-cross-views.sql` | `v_run_coverage`, `v_tag_case_latest` | 10, 20 |
 | `60-benchmark-views.sql` | 5 `v_benchmark_*` views | 20, 30 |
 | `70-vllm-hud-projection.sql` | `oss_ci_benchmark_v3`, `oss_ci_benchmark_metadata` + their MVs | 30 |
 

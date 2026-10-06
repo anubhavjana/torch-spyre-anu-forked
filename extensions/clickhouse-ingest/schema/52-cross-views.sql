@@ -46,3 +46,66 @@ FROM
     GROUP BY run_id
 )
 GROUP BY day, arch;
+
+-- Latest outcome per test across every run of a tagged artifact; always filter by tag.
+CREATE VIEW IF NOT EXISTS v_tag_case_latest AS
+SELECT
+    tag,
+    tag_family,
+    component,
+    artifact_arch,
+    artifact_id,
+    test_type,
+    run_arch,
+    case_component,
+    classname,
+    name,
+    argMax(o, (rts, rid)).1  AS status,
+    argMax(o, (rts, rid)).2  AS duration_s,
+    argMax(o, (rts, rid)).3  AS fail_message,
+    argMax(rid, (rts, rid))  AS run_id,
+    max(rts)                 AS run_ts,
+    count()                  AS runs
+FROM
+(
+    -- One row per (run, case): the worst outcome when a run's shard files disagree.
+    SELECT
+        leg.tag         AS tag,
+        leg.tag_family  AS tag_family,
+        leg.component   AS component,
+        leg.artifact_arch AS artifact_arch,
+        leg.artifact_id AS artifact_id,
+        leg.test_type   AS test_type,
+        leg.run_arch    AS run_arch,
+        leg.run_ts      AS rts,
+        cr.run_id       AS rid,
+        cr.component    AS case_component,
+        c.classname     AS classname,
+        c.name          AS name,
+        argMax((cr.status, cr.duration_s, cr.fail_message),
+               indexOf(['skipped', 'xfail', 'passed', 'xpass', 'failed', 'error'], cr.status)) AS o
+    FROM test_case_runs AS cr
+    INNER JOIN
+    (
+        SELECT
+            tr.tag         AS tag,
+            tr.tag_family  AS tag_family,
+            tr.component   AS component,
+            tr.arch        AS artifact_arch,
+            tr.artifact_id AS artifact_id,
+            r.run_id       AS run_id,
+            argMax(r.test_type, r.ts) AS test_type,
+            argMax(if(r.arch IN ('amd64', 'x86', 'x86-64'), 'x86_64', r.arch), r.ts) AS run_arch,
+            min(r.ts)      AS run_ts
+        FROM v_tag_resolution AS tr
+        INNER JOIN artifact_results AS r ON r.artifact_id = tr.artifact_id
+        WHERE r.state != 'running' AND r.result_kind = 'functional'
+        GROUP BY tag, tag_family, component, artifact_arch, artifact_id, run_id
+    ) AS leg ON leg.run_id = cr.run_id
+    LEFT JOIN test_cases AS c
+           ON c.test_case_id = cr.test_case_id AND c.component = cr.component
+    GROUP BY tag, tag_family, component, artifact_arch, artifact_id, test_type, run_arch,
+             rts, rid, case_component, classname, name
+)
+GROUP BY tag, tag_family, component, artifact_arch, artifact_id, test_type, run_arch,
+         case_component, classname, name;

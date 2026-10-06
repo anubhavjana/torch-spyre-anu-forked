@@ -121,7 +121,7 @@ one gets its data:
 | Fact tables | `test_case_runs`, `benchmark_runs`, `capability_runs`, `artifact_results`, `hw_failure_diagnostics` | Copied from prod: the rows for the sampled runs |
 | Standalone table | `jenkins_agents` | Copied from prod: every row from the last `days` days, not cut to runs |
 | MV targets | `run_case_counters`, `oss_ci_benchmark_v3`, `oss_ci_benchmark_metadata` | Not copied. Their materialized views (`*_mv`) fill them as fact rows are inserted |
-| Views (21) | `v_artifacts`, `v_tag_*`, `v_tier_trend`, `v_case_*`, `v_run_tier_counters`, `v_tier_report_completeness`, `v_run_coverage`, `v_benchmark_*`, `v_capability_*` | No storage: computed from the tables when queried |
+| Views (22) | `v_artifacts`, `v_tag_*`, `v_tier_trend`, `v_case_*`, `v_run_tier_counters`, `v_tier_report_completeness`, `v_run_coverage`, `v_benchmark_*`, `v_capability_*` | No storage: computed from the tables when queried |
 | OpenTelemetry tables | `otel_traces`, `otel_logs`, `otel_metrics_*` (7) | **Empty**: there is no seed rule for them. They are not created at all if the dev server is older than ClickHouse 25.8 |
 | Migration ledger | `schema_migrations` | Lists the `migrations/NNN_*.sql` files that have run, as on a live database |
 | Seeding scratch | `_seed_runs` (Memory engine) | The sampled run ids. It exists only while a seed runs |
