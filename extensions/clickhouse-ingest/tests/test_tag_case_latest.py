@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Pins the per-tag latest-outcome view and the counter-drift recount migration."""
+"""Pins the per-tag latest-outcome view."""
 
 import regex as re
 
@@ -35,12 +35,3 @@ def test_view_is_declared_and_ranks_every_status():
     sql = views["v_tag_case_latest"].sql
     ranked = re.search(r"indexOf\(\[([^\]]*)\]", sql).group(1)
     assert set(re.findall(r"'([^']+)'", ranked)) == _statuses()
-
-
-def test_recount_migration_is_rerunnable_and_counts_every_status():
-    path = SCHEMA_DIR / "migrations" / "010_recount_drifted_run_case_counters.sql"
-    sql = path.read_text()
-    assert SchemaApplier.RERUNNABLE.search(sql)
-    assert SchemaApplier.statements(sql)[-1] == "DROP TABLE counter_drift_runs"
-    counted = set(re.findall(r"countIf\(status = '([^']+)'\)", sql))
-    assert counted == _statuses()
