@@ -201,6 +201,21 @@ No `capabilities`/`capability_runs` table exists in
 (see [classes.md](classes.md#schemapy)); Jenkins does not currently write
 capability rows.
 
+### pr_ci_timings
+
+`pushPrCiTimings` writes the per-PR CI timeline once per PR-triggered orchestrator run, from
+`Jenkinsfile.orchestrator`'s `post{}`. It hands one JSON batch to `python -m
+spyre_clickhouse_ingest pr-ci-timings write`, so the row shape and every derived `*_ms` column
+come from `pr_ci_timings.py`, not from Groovy. The batch's sources:
+
+| Batch field | Captured by |
+|---|---|
+| `run.comment_at`, `picked_up_at`, `pickup_path` | the `/spyre-test` poller, passed to the orchestrator as `TRIGGER_COMMENT_AT` / `TRIGGER_PICKED_UP_MS` / `TRIGGER_PICKUP_PATH` |
+| `run.queued_at`, `running_at` | `postPrStatusUpdate`, the first time the PR comment shows each state |
+| `nodes[]` | `buildOneNode`, from the component-build's start, its agent-and-lock acquisition (`CB_BUILD_NODE_MS`) and its test-stage start (`CB_TEST_START_MS`); reused nodes from the plan's dropped set |
+| `tests[]` | the test-leg join, from the dispatch, the leg's test-stage start and the leg job's end |
+| `tests[].gha[]` | component-build's `GHA_TIMINGS_JSON`: the runner-set deploy and undeploy around `run_integration_tests.py`, whose result file carries the GHA run's dispatch, creation, first-job start and last-job completion |
+
 ---
 
 ## Identity: one formula, four implementations

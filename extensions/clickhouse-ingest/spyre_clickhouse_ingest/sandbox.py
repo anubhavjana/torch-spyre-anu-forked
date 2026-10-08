@@ -106,6 +106,11 @@ class Sandbox:
             "run_key GLOBAL IN (SELECT run_key FROM {db}.pipeline_runs)",
             "(run_key, arch, component, image, kind)",
         ),
+        (
+            "pr_ci_timings",
+            "run_key GLOBAL IN (SELECT run_key FROM {db}.pipeline_runs)",
+            "(run_key, component, artifact_name, arch)",
+        ),
     )
 
     @classmethod

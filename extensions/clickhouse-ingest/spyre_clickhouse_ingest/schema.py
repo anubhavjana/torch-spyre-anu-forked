@@ -49,6 +49,9 @@ PIPELINE_TYPE_VALUES = frozenset(
     {"orchestrator", "component-build", "product-test", "gha-workflow", "gha-job"}
 )
 RUN_STATE_VALUES = frozenset({"running", "finished"})
+# pr_ci_timings: '' is a row the run did not build, or one with no test leg.
+PR_BUILD_STATE_VALUES = frozenset({"built", "failed", "reused", ""})
+PR_TEST_STATE_VALUES = frozenset({"passed", "failed", "error", ""})
 
 # NOT constrained, deliberately: the DDL declares tag_family and arch without a CHECK.
 
@@ -531,6 +534,78 @@ class PipelineRuns(Table):
     )
 
 
+class PrCiTimings(Table):
+    """One component artifact and arch of a PR-triggered orchestrator run, trigger to teardown."""
+
+    name = "pr_ci_timings"
+    columns = (
+        "run_key",
+        "updated_at",
+        "component",
+        "artifact_name",
+        "arch",
+        "id12",
+        "kind",
+        "trigger_pr",
+        "repo",
+        "pr_number",
+        "is_trigger_component",
+        "trigger_source",
+        "preset",
+        "build_url",
+        "verdict",
+        "run_result",
+        "pickup_path",
+        "comment_at",
+        "picked_up_at",
+        "run_scheduled_at",
+        "run_started_at",
+        "queued_at",
+        "running_at",
+        "run_ended_at",
+        "comment_to_pickup_ms",
+        "comment_to_queued_ms",
+        "queued_to_running_ms",
+        "comment_to_end_ms",
+        "run_ms",
+        "build_state",
+        "build_job_url",
+        "build_agent",
+        "build_queued_at",
+        "build_started_at",
+        "build_ended_at",
+        "build_queue_ms",
+        "build_ms",
+        "test_modes",
+        "test_state",
+        "test_dispatched_at",
+        "test_leg_started_at",
+        "runner_deploy_started_at",
+        "runner_deploy_ended_at",
+        "gha_dispatched_at",
+        "gha_created_at",
+        "gha_first_job_started_at",
+        "gha_completed_at",
+        "test_leg_ended_at",
+        "gha_runs",
+        "gha_jobs",
+        "gha_conclusion",
+        "gha_run_urls",
+        "test_leg_queue_ms",
+        "runner_deploy_ms",
+        "gha_queue_ms",
+        "gha_e2e_ms",
+        "gha_to_leg_end_ms",
+        "test_leg_ms",
+        "props",
+    )
+    required = ("run_key", "component", "arch", "trigger_pr")
+    enums = (
+        ("build_state", PR_BUILD_STATE_VALUES),
+        ("test_state", PR_TEST_STATE_VALUES),
+    )
+
+
 # Constant API, kept so installed consumers name one table model rather than copying it.
 TEST_CASES = TestCases
 TEST_CASE_RUNS = TestCaseRuns
@@ -543,6 +618,7 @@ ARTIFACT_REFS = ArtifactRefs
 ARTIFACT_TAGS = ArtifactTags
 ARTIFACT_RESULTS = ArtifactResults
 PIPELINE_RUNS = PipelineRuns
+PR_CI_TIMINGS = PrCiTimings
 
 TABLES = {
     t.name: t
@@ -558,6 +634,7 @@ TABLES = {
         Capabilities,
         CapabilityRuns,
         PipelineRuns,
+        PrCiTimings,
     )
 }
 

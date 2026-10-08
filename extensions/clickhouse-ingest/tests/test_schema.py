@@ -327,7 +327,7 @@ def test_fact_tables_declare_no_identity_and_dimensions_do():
 
 
 def test_registry_covers_exactly_the_v2_tables():
-    # The functional/benchmark four, the artifact four, the capability two and pipeline_runs. Pinned as an
+    # The functional/benchmark four, the artifact four, the capability two, pipeline_runs and pr_ci_timings. Pinned as an
     # exact set so adding a table to the DDL without modelling it here (or vice versa) fails
     # rather than drifting.
     assert set(TABLES) == {
@@ -342,6 +342,7 @@ def test_registry_covers_exactly_the_v2_tables():
         "capabilities",
         "capability_runs",
         "pipeline_runs",
+        "pr_ci_timings",
     }
 
 
