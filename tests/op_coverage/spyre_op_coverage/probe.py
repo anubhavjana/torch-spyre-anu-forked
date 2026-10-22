@@ -153,8 +153,13 @@ def _run_worker(
         "--device",
         device,
     ]
+    env = dict(os.environ)
+    if not _uses_spyre(device):
+        # Probing on another device must not start the Spyre runtime: the card
+        # may be held by the calling process (one process per card).
+        env["TORCH_DEVICE_BACKEND_AUTOLOAD"] = "0"
     log = open(out_path.with_suffix(".log"), "w")
-    proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT)
+    proc = subprocess.Popen(cmd, stdout=log, stderr=subprocess.STDOUT, env=env)
     current: Optional[int] = None
     any_started = False
     started = time.monotonic()
@@ -374,10 +379,15 @@ def probe_case(case: dict[str, Any], device: str) -> dict[str, Any]:
     }
 
 
-def _worker(cases_path: str, out_path: str, todo_path: str, device: str) -> None:
-    import torch_spyre
+def _uses_spyre(device: str) -> bool:
+    return device.split(":")[0] == "spyre"
 
-    torch_spyre._autoload()  # type: ignore[attr-defined]  # not in the .pyi
+
+def _worker(cases_path: str, out_path: str, todo_path: str, device: str) -> None:
+    if _uses_spyre(device):
+        import torch_spyre
+
+        torch_spyre._autoload()  # type: ignore[attr-defined]  # not in the .pyi
     cases = json.loads(pathlib.Path(cases_path).read_text())
     todo = json.loads(pathlib.Path(todo_path).read_text())
     with open(out_path, "a") as out:
