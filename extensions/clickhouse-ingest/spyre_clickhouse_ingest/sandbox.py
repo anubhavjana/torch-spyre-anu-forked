@@ -112,6 +112,12 @@ class Sandbox:
         ),
         ("hw_failure_diagnostics", "{runs}", "run_id"),
         ("jenkins_agents", "ts >= now() - INTERVAL {days} DAY", "(node, ts)"),
+        # By time: a request rejected by the grammar has no run of its own to be picked by.
+        (
+            "ops_requests",
+            "requested_at >= now() - INTERVAL {days} DAY",
+            "(requested_at, requested_by)",
+        ),
         # By time, not {runs}: a run that failed before publishing has no run_id to be picked by.
         ("pipeline_runs", "started_at >= now() - INTERVAL {days} DAY", "run_key"),
         (
