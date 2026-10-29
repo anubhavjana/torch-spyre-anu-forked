@@ -28,8 +28,11 @@ CREATE TABLE IF NOT EXISTS ops_requests
     approved_by      String DEFAULT '',                  -- the admin-run approver, who is never the requester
     build_url        String DEFAULT '',                  -- the orchestrator build it launched
     job_run          String DEFAULT '',                  -- this trigger build
-    audit_uuid      UUID DEFAULT generateUUIDv7(),
-    audit_timestamp DateTime64(3) DEFAULT now64(3),
+    channel          LowCardinality(String) DEFAULT '',  -- where the request came from: ui | chat | mcp | api; '' = Jenkins UI
+    on_behalf_of     String DEFAULT '',                  -- the person an agent acted for, when requested_by is the agent
+    plan_id          String DEFAULT '',                  -- the dashboard preview this launch was confirmed from (ci_requests.plan_id)
+    audit_uuid       UUID DEFAULT generateUUIDv7(),
+    audit_timestamp  DateTime64(3) DEFAULT now64(3),
 
     -- ops_trigger.AUDIT_STATES; the writer rejects any other state before it inserts.
     CONSTRAINT chk_state CHECK state IN ('dry_run', 'launched', 'rejected', 'failed', 'denied')

@@ -118,6 +118,7 @@ class Sandbox:
             "requested_at >= now() - INTERVAL {days} DAY",
             "(requested_at, requested_by)",
         ),
+        ("ci_requests", "ts >= now() - INTERVAL {days} DAY", "(request_id, ts)"),
         # By time, not {runs}: a run that failed before publishing has no run_id to be picked by.
         ("pipeline_runs", "started_at >= now() - INTERVAL {days} DAY", "run_key"),
         (
