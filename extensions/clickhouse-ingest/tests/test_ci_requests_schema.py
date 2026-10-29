@@ -46,19 +46,22 @@ def test_ci_requests_states_include_the_trigger_job_outcomes():
     assert "launched" in ci and "dry_run" in ops and "previewed" in ci
 
 
-def _session():
+@pytest.fixture
+def chdb_session():
     session = pytest.importorskip("chdb.session")
     s = session.Session()
     for name in (
         "10-functional-tests.sql",
         "20-artifacts.sql",
+        "49-result-uploads.sql",
         "42-ci-requests.sql",
         "50-artifact-views.sql",
         "57-ci-request-views.sql",
     ):
         for stmt in SchemaApplier.statements((SCHEMA_DIR / name).read_text()):
             s.query(stmt)
-    return s
+    yield s
+    s.close()
 
 
 def _request(**over):
@@ -67,8 +70,8 @@ def _request(**over):
     return {**row, **over}
 
 
-def test_rows_are_validated_and_the_view_keeps_the_first_requester():
-    s = _session()
+def test_rows_are_validated_and_the_view_keeps_the_first_requester(chdb_session):
+    s = chdb_session
 
     def insert(row):
         s.query("INSERT INTO ci_requests FORMAT JSONEachRow\n" + json.dumps(row))
@@ -93,8 +96,8 @@ def test_rows_are_validated_and_the_view_keeps_the_first_requester():
                                "job_run": "https://j/1", "build_url": "https://j/2"}  # fmt: skip
 
 
-def test_cell_durations_use_passed_nonzero_legs_and_one_arch_spelling():
-    s = _session()
+def test_cell_durations_use_passed_nonzero_legs_and_one_arch_spelling(chdb_session):
+    s = chdb_session
     s.query(
         "INSERT INTO artifacts (artifact_id, component, arch, kind, artifact_name, origin) "
         f"VALUES ('{ARTIFACT}', 'torch-spyre', 'x86_64', 'image', 'torch-spyre-dev', 'built')"
