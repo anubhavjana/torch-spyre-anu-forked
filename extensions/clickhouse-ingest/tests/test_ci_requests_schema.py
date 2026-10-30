@@ -56,7 +56,7 @@ def chdb_session():
         "49-result-uploads.sql",
         "42-ci-requests.sql",
         "50-artifact-views.sql",
-        "57-ci-request-views.sql",
+        "59-ci-request-views.sql",
     ):
         for stmt in SchemaApplier.statements((SCHEMA_DIR / name).read_text()):
             s.query(stmt)

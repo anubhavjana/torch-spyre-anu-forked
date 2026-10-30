@@ -1,7 +1,7 @@
 -- The dashboard's side of launching CI: one row per event on a request (previewed, launched, refused,
 -- failed, cancelled). `ops_requests` is the trigger job's own audit; this adds what only the dashboard
 -- knows (the plan the person confirmed, the cells it would add or skip, the estimate shown) and joins to it
--- on `job_run`. Append-only, like result_uploads; v_ci_requests (57-) reads the latest event per request.
+-- on `job_run`. Append-only, like result_uploads; v_ci_requests (59-) reads the latest event per request.
 CREATE TABLE IF NOT EXISTS ci_requests
 (
     ts              DateTime64(3, 'UTC') DEFAULT now64(3),
