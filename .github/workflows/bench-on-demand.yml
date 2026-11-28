@@ -176,6 +176,9 @@ jobs:
       # Prod needs a host and the scoped login; guards against a silent skip of a prod request.
       PROD_SET: ${{ (secrets.CLICKHOUSE_V2_HOST || secrets.CLICKHOUSE_HOST) != '' && secrets.CLICKHOUSE_V2_USER != '' && secrets.CLICKHOUSE_V2_PASSWORD
         != '' }}
+      # Both halves of the read-only pair must be set, or the verdict keeps the ingest connection.
+      VERDICT_RO_SET: ${{ (inputs.clickhouse_env == 'prod' && secrets.CLICKHOUSE_V2_RO_USER != '' && secrets.CLICKHOUSE_V2_RO_PASSWORD != '') || (inputs.clickhouse_env
+        != 'prod' && secrets.CLICKHOUSE_V2_RO_USER_DEV != '' && secrets.CLICKHOUSE_V2_RO_PASSWORD_DEV != '') }}
       # Non-secret names the benchmark command needs from the runner setup (the engine passes an allowlist only).
       BENCH_PASS_ENV: ${{ vars.BENCH_PASS_ENV }}
       CH_REQUIRE_V2_HOST: ${{ vars.CH_REQUIRE_V2_HOST }}
@@ -383,7 +386,7 @@ jobs:
           clickhouse-db-v2: ${{ fromJSON(env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_DB_V2) || toJSON(secrets.CLICKHOUSE_DB_V2_DEV))
             }}
 
-      # The verdict only SELECTs, but reads the same connection the ingest used; it is set on this step alone.
+      # The verdict only SELECTs: it takes the read-only login when VERDICT_RO_SET, else the ingest connection.
       - name: Verdict
         id: verdict
         if: ${{ !inputs.smoke && steps.ingest.outcome == 'success' }}
@@ -392,9 +395,11 @@ jobs:
           CLICKHOUSE_PORT: ${{ fromJSON(env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON((secrets.CLICKHOUSE_V2_HOST && secrets.CLICKHOUSE_V2_PORT) || (!secrets.CLICKHOUSE_V2_HOST
             && secrets.CLICKHOUSE_PORT) || '') || toJSON((secrets.CLICKHOUSE_V2_HOST_DEV && secrets.CLICKHOUSE_V2_PORT_DEV) || (!secrets.CLICKHOUSE_V2_HOST_DEV
             && secrets.CLICKHOUSE_PORT_DEV) || '')) }}
-          CLICKHOUSE_USER: ${{ fromJSON(env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_USER) || toJSON(secrets.CLICKHOUSE_V2_USER_DEV))
+          CLICKHOUSE_USER: ${{ fromJSON(env.VERDICT_RO_SET == 'true' && (env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_RO_USER) ||
+            toJSON(secrets.CLICKHOUSE_V2_RO_USER_DEV)) || (env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_USER) || toJSON(secrets.CLICKHOUSE_V2_USER_DEV)))
             }}
-          CLICKHOUSE_PASS: ${{ fromJSON(env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_PASSWORD) || toJSON(secrets.CLICKHOUSE_V2_PASSWORD_DEV))
+          CLICKHOUSE_PASS: ${{ fromJSON(env.VERDICT_RO_SET == 'true' && (env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_RO_PASSWORD)
+            || toJSON(secrets.CLICKHOUSE_V2_RO_PASSWORD_DEV)) || (env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_PASSWORD) || toJSON(secrets.CLICKHOUSE_V2_PASSWORD_DEV)))
             }}
           CLICKHOUSE_DB_V2: ${{ fromJSON(env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_DB_V2) || toJSON(secrets.CLICKHOUSE_DB_V2_DEV))
             }}
@@ -403,9 +408,11 @@ jobs:
           CLICKHOUSE_V2_PORT: ${{ fromJSON(env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON((secrets.CLICKHOUSE_V2_HOST && secrets.CLICKHOUSE_V2_PORT) || (!secrets.CLICKHOUSE_V2_HOST
             && secrets.CLICKHOUSE_PORT) || '') || toJSON((secrets.CLICKHOUSE_V2_HOST_DEV && secrets.CLICKHOUSE_V2_PORT_DEV) || (!secrets.CLICKHOUSE_V2_HOST_DEV
             && secrets.CLICKHOUSE_PORT_DEV) || '')) }}
-          CLICKHOUSE_V2_USER: ${{ fromJSON(env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_USER) || toJSON(secrets.CLICKHOUSE_V2_USER_DEV))
+          CLICKHOUSE_V2_USER: ${{ fromJSON(env.VERDICT_RO_SET == 'true' && (env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_RO_USER)
+            || toJSON(secrets.CLICKHOUSE_V2_RO_USER_DEV)) || (env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_USER) || toJSON(secrets.CLICKHOUSE_V2_USER_DEV)))
             }}
-          CLICKHOUSE_V2_PASSWORD: ${{ fromJSON(env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_PASSWORD) || toJSON(secrets.CLICKHOUSE_V2_PASSWORD_DEV))
+          CLICKHOUSE_V2_PASSWORD: ${{ fromJSON(env.VERDICT_RO_SET == 'true' && (env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_RO_PASSWORD)
+            || toJSON(secrets.CLICKHOUSE_V2_RO_PASSWORD_DEV)) || (env.BENCH_CLICKHOUSE_ENV == 'prod' && toJSON(secrets.CLICKHOUSE_V2_PASSWORD) || toJSON(secrets.CLICKHOUSE_V2_PASSWORD_DEV)))
             }}
           # The ingest threads --run-id verbatim (RunId.for_args), so the engine run id is the stored one; the
           # target fails loudly when no row exists under it.
